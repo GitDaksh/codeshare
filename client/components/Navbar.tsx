@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 
 export function Navbar() {
   return (
@@ -11,12 +12,16 @@ export function Navbar() {
           <Link href="/dashboard" className="hover:text-neutral-100 transition-colors">
             Dashboard
           </Link>
-          <Link
-            href="/login"
-            className="rounded-md border border-neutral-700 px-3 py-1.5 text-neutral-100 hover:border-neutral-500 transition-colors"
-          >
-            Sign in
-          </Link>
+          <Show when="signed-out">
+            <SignInButton>
+              <button className="rounded-md border border-neutral-700 px-3 py-1.5 text-neutral-100 transition-colors hover:border-neutral-500">
+                Sign in
+              </button>
+            </SignInButton>
+          </Show>
+          <Show when="signed-in">
+            <UserButton />
+          </Show>
         </nav>
       </div>
     </header>

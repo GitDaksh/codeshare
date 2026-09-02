@@ -12,13 +12,13 @@ export default function Home() {
       </p>
       <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
         <Link
-          href="/register"
+          href="/sign-up"
           className="w-full rounded-md bg-neutral-100 px-5 py-2.5 text-center text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-200 sm:w-auto"
         >
           Get started
         </Link>
         <Link
-          href="/login"
+          href="/sign-in"
           className="w-full rounded-md border border-neutral-700 px-5 py-2.5 text-center text-sm font-medium transition-colors hover:border-neutral-500 sm:w-auto"
         >
           Sign in

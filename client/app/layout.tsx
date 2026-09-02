@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { ClerkProvider } from "@clerk/nextjs";
+import { dark } from "@clerk/themes";
 import { Navbar } from "@/components/Navbar";
 import "./globals.css";
 
@@ -17,8 +19,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className={`${inter.className} ${jetbrainsMono.variable} bg-neutral-950 text-neutral-100 antialiased`}
       >
-        <Navbar />
-        {children}
+        <ClerkProvider appearance={{ baseTheme: dark }}>
+          <Navbar />
+          {children}
+        </ClerkProvider>
       </body>
     </html>
   );
