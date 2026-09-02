@@ -67,7 +67,7 @@ export default function DashboardPage() {
           {rooms.map((room) => (
             <div
               key={room.id}
-              className="flex items-center justify-between gap-4 px-4 py-3"
+              className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
