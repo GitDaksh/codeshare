@@ -1,49 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
+import { useApi } from "@/lib/api";
 import type { Room } from "@/types/room";
 
-const initialRooms: Room[] = [
-  {
-    id: "a3f9c1",
-    name: "Interview prep",
-    participants: 2,
-    updatedAt: "2 hours ago",
-    ownedByMe: true,
-  },
-  {
-    id: "b7d2e8",
-    name: "Algo study group",
-    participants: 4,
-    updatedAt: "yesterday",
-    ownedByMe: false,
-  },
-  {
-    id: "c4a0f5",
-    name: "React refactor",
-    participants: 1,
-    updatedAt: "3 days ago",
-    ownedByMe: true,
-  },
-];
-
 export default function DashboardPage() {
-  const [rooms, setRooms] = useState<Room[]>(initialRooms);
+  const { userId } = useAuth();
+  const api = useApi();
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  function handleCreateRoom() {
-    const newRoom: Room = {
-      id: Math.random().toString(16).slice(2, 8),
-      name: `Untitled room ${rooms.length + 1}`,
-      participants: 1,
-      updatedAt: "just now",
-      ownedByMe: true,
-    };
-    setRooms([newRoom, ...rooms]);
+  useEffect(() => {
+    api
+      .get<Room[]>("/api/rooms")
+      .then((res) => setRooms(res.data))
+      .catch(() => setError("Could not load your rooms."))
+      .finally(() => setLoading(false));
+  }, [api]);
+
+  async function handleCreateRoom() {
+    try {
+      const res = await api.post<Room>("/api/rooms", {
+        name: `Untitled room ${rooms.length + 1}`,
+        language: "javascript",
+      });
+      setRooms([res.data, ...rooms]);
+    } catch {
+      setError("Could not create the room.");
+    }
   }
 
-  function handleDeleteRoom(id: string) {
-    setRooms(rooms.filter((room) => room.id !== id));
+  async function handleDeleteRoom(id: string) {
+    try {
+      await api.delete(`/api/rooms/${id}`);
+      setRooms(rooms.filter((room) => room._id !== id));
+    } catch {
+      setError("Could not delete the room.");
+    }
   }
 
   return (
@@ -58,7 +54,11 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {rooms.length === 0 ? (
+      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+
+      {loading ? (
+        <p className="text-sm text-neutral-500">Loading your rooms…</p>
+      ) : rooms.length === 0 ? (
         <p className="text-sm text-neutral-500">
           No rooms yet — create one to get started.
         </p>
@@ -66,31 +66,34 @@ export default function DashboardPage() {
         <div className="divide-y divide-neutral-800 rounded-lg border border-neutral-800">
           {rooms.map((room) => (
             <div
-              key={room.id}
+              key={room._id}
               className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate text-sm font-medium">{room.name}</span>
                   <span className="rounded bg-neutral-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-neutral-500">
-                    {room.id}
+                    {room._id}
+                  </span>
+                  <span className="rounded border border-neutral-700 px-1.5 py-0.5 text-xs text-neutral-400">
+                    {room.language}
                   </span>
                 </div>
                 <p className="mt-0.5 text-xs text-neutral-500">
-                  {room.participants} online · updated {room.updatedAt}
+                  updated {new Date(room.updatedAt).toLocaleString()}
                 </p>
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
                 <Link
-                  href={`/room/${room.id}`}
+                  href={`/room/${room._id}`}
                   className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm transition-colors hover:border-neutral-500"
                 >
                   Join
                 </Link>
-                {room.ownedByMe && (
+                {room.ownerId === userId && (
                   <button
-                    onClick={() => handleDeleteRoom(room.id)}
+                    onClick={() => handleDeleteRoom(room._id)}
                     className="rounded-md px-2 py-1.5 text-sm text-neutral-500 transition-colors hover:text-red-400"
                   >
                     Delete

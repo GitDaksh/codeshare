@@ -1,7 +1,9 @@
 export type Room = {
-  id: string;
+  _id: string;
   name: string;
-  participants: number;
+  ownerId: string;
+  language: string;
+  code: string;
+  createdAt: string;
   updatedAt: string;
-  ownedByMe: boolean;
 };
