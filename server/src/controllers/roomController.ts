@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import mongoose from "mongoose";
 import { getAuth } from "@clerk/express";
 import { Room } from "../models/Room";
 
@@ -45,7 +46,13 @@ export async function listMyRooms(req: Request, res: Response, next: NextFunctio
 
 export async function getRoom(req: Request, res: Response, next: NextFunction) {
   try {
-    const room = await Room.findById(req.params.id);
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+
+    const room = await Room.findById(id);
 
     if (!room) {
       return res.status(404).json({ error: "Room not found" });
@@ -65,7 +72,13 @@ export async function deleteRoom(req: Request, res: Response, next: NextFunction
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const room = await Room.findById(req.params.id);
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+
+    const room = await Room.findById(id);
 
     if (!room) {
       return res.status(404).json({ error: "Room not found" });

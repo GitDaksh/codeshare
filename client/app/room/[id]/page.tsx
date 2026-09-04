@@ -1,6 +1,9 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
+import Link from "next/link";
+import { useApi } from "@/lib/api";
+import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
 import type { OnlineUser } from "@/types/presence";
 
@@ -29,17 +32,28 @@ const mockCode = `function twoSum(nums, target) {
   return [];
 }`;
 
-const languages = ["JavaScript", "TypeScript", "Python", "C++", "Java"];
-
 export default function RoomPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [language, setLanguage] = useState(languages[0]);
+  const api = useApi();
+
+  const [room, setRoom] = useState<Room | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
   const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
   const [draft, setDraft] = useState("");
+
+  useEffect(() => {
+    api
+      .get<Room>(`/api/rooms/${id}`)
+      .then((res) => setRoom(res.data))
+      .catch(() => setNotFound(true))
+      .finally(() => setLoading(false));
+  }, [api, id]);
 
   function handleSend() {
     if (!draft.trim()) return;
@@ -55,28 +69,42 @@ export default function RoomPage({
     setDraft("");
   }
 
+  if (loading) {
+    return (
+      <main className="flex h-[calc(100vh-56px)] items-center justify-center">
+        <p className="text-sm text-neutral-500">Loading room…</p>
+      </main>
+    );
+  }
+
+  if (notFound || !room) {
+    return (
+      <main className="flex h-[calc(100vh-56px)] flex-col items-center justify-center gap-2">
+        <p className="text-sm text-neutral-300">This room doesn't exist.</p>
+        <Link
+          href="/dashboard"
+          className="text-sm text-neutral-500 underline transition-colors hover:text-neutral-300"
+        >
+          Back to dashboard
+        </Link>
+      </main>
+    );
+  }
+
   return (
     <main className="flex flex-col md:h-[calc(100vh-56px)]">
       {/* Room header */}
       <div className="flex flex-col gap-2 border-b border-neutral-800 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Room</span>
-          <span className="rounded bg-neutral-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-neutral-500">
-            {id}
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-medium">{room.name}</span>
+          <span className="shrink-0 rounded bg-neutral-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-neutral-500">
+            {room._id}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-300"
-          >
-            {languages.map((lang) => (
-              <option key={lang} value={lang}>
-                {lang}
-              </option>
-            ))}
-          </select>
+          <span className="rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-300">
+            {room.language}
+          </span>
           <button
             onClick={() => navigator.clipboard.writeText(window.location.href)}
             className="rounded-md border border-neutral-700 px-3 py-1 text-xs transition-colors hover:border-neutral-500"
@@ -88,7 +116,7 @@ export default function RoomPage({
 
       {/* Body: editor + sidebar */}
       <div className="flex flex-1 flex-col md:min-h-0 md:flex-row">
-        {/* Editor placeholder */}
+        {/* Editor placeholder — still mock, real editor comes with Monaco */}
         <div className="min-h-[280px] min-w-0 flex-1 overflow-auto bg-neutral-900 p-4 md:h-full md:min-h-0">
           <pre className="font-[family-name:var(--font-mono)] text-sm leading-6 text-neutral-300">
             {mockCode.split("\n").map((line, i) => (
@@ -102,9 +130,8 @@ export default function RoomPage({
           </pre>
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar — still mock, real presence/chat come with Socket.IO */}
         <aside className="flex w-full flex-col border-t border-neutral-800 md:h-full md:w-72 md:shrink-0 md:border-l md:border-t-0">
-          {/* Online users */}
           <div className="border-b border-neutral-800 p-3">
             <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
               Online — {mockUsers.length}
@@ -119,7 +146,6 @@ export default function RoomPage({
             </ul>
           </div>
 
-          {/* Chat */}
           <div className="flex flex-col md:min-h-0 md:flex-1">
             <div className="max-h-64 space-y-3 overflow-y-auto p-3 md:max-h-none md:flex-1">
               {messages.map((msg) => (
