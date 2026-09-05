@@ -6,6 +6,8 @@ import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
 import { getUserColor } from "@/lib/colors";
+import { CodeEditor } from "@/components/CodeEditor";
+import { LANGUAGES } from "@/lib/languages";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
 
@@ -14,7 +16,7 @@ const mockMessages: ChatMessage[] = [
   { id: "m2", sender: "Arjun", text: "looks good, check line 14", timestamp: "10:04 AM" },
 ];
 
-const mockCode = `function twoSum(nums, target) {
+const starterCode = `function twoSum(nums, target) {
   const seen = new Map();
 
   for (let i = 0; i < nums.length; i++) {
@@ -42,6 +44,9 @@ export default function RoomPage({
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  const [code, setCode] = useState("");
+  const [language, setLanguage] = useState("javascript");
+
   const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
   const [draft, setDraft] = useState("");
 
@@ -52,6 +57,13 @@ export default function RoomPage({
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [api, id]);
+
+  useEffect(() => {
+    if (room) {
+      setCode(room.code || starterCode);
+      setLanguage(room.language);
+    }
+  }, [room]);
 
   function handleSend() {
     if (!draft.trim()) return;
@@ -107,9 +119,17 @@ export default function RoomPage({
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-300">
-            {room.language}
-          </span>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-300"
+          >
+            {LANGUAGES.map((lang) => (
+              <option key={lang.value} value={lang.value}>
+                {lang.label}
+              </option>
+            ))}
+          </select>
           <button
             onClick={() => navigator.clipboard.writeText(window.location.href)}
             className="rounded-md border border-neutral-700 px-3 py-1 text-xs transition-colors hover:border-neutral-500"
@@ -121,18 +141,9 @@ export default function RoomPage({
 
       {/* Body: editor + sidebar */}
       <div className="flex flex-1 flex-col md:min-h-0 md:flex-row">
-        {/* Editor placeholder — still mock, real editor comes with Monaco */}
-        <div className="min-h-[280px] min-w-0 flex-1 overflow-auto bg-neutral-900 p-4 md:h-full md:min-h-0">
-          <pre className="font-[family-name:var(--font-mono)] text-sm leading-6 text-neutral-300">
-            {mockCode.split("\n").map((line, i) => (
-              <div key={i} className="flex">
-                <span className="mr-4 w-6 shrink-0 select-none text-right text-neutral-600">
-                  {i + 1}
-                </span>
-                <span>{line}</span>
-              </div>
-            ))}
-          </pre>
+        {/* Real Monaco editor */}
+        <div className="min-h-[400px] min-w-0 flex-1 md:h-full md:min-h-0">
+          <CodeEditor language={language} value={code} onChange={setCode} />
         </div>
 
         {/* Sidebar */}
@@ -157,7 +168,7 @@ export default function RoomPage({
             </ul>
           </div>
 
-          {/* Chat — still mock, real chat is next */}
+          {/* Chat — still mock, real chat comes with backend work */}
           <div className="flex flex-col md:min-h-0 md:flex-1">
             <div className="max-h-64 space-y-3 overflow-y-auto p-3 md:max-h-none md:flex-1">
               {messages.map((msg) => (
