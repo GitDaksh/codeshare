@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useApi } from "@/lib/api";
+import { useSocket } from "@/lib/socket";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
 import type { OnlineUser } from "@/types/presence";
@@ -39,6 +40,7 @@ export default function RoomPage({
 }) {
   const { id } = use(params);
   const api = useApi();
+  const { status } = useSocket(id);
 
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,6 +93,13 @@ export default function RoomPage({
     );
   }
 
+  const statusColor =
+    status === "connected"
+      ? "bg-emerald-500"
+      : status === "connecting"
+        ? "bg-amber-500"
+        : "bg-red-500";
+
   return (
     <main className="flex flex-col md:h-[calc(100vh-56px)]">
       {/* Room header */}
@@ -130,12 +139,18 @@ export default function RoomPage({
           </pre>
         </div>
 
-        {/* Sidebar — still mock, real presence/chat come with Socket.IO */}
+        {/* Sidebar */}
         <aside className="flex w-full flex-col border-t border-neutral-800 md:h-full md:w-72 md:shrink-0 md:border-l md:border-t-0">
           <div className="border-b border-neutral-800 p-3">
-            <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
-              Online — {mockUsers.length}
-            </h2>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+                Online — {mockUsers.length}
+              </h2>
+              <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+                <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
+                {status}
+              </span>
+            </div>
             <ul className="space-y-1.5">
               {mockUsers.map((user) => (
                 <li key={user.id} className="flex items-center gap-2 text-sm">

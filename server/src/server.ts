@@ -1,4 +1,6 @@
 import express from "express";
+import { createServer } from "http";
+import { Server } from "socket.io";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -7,10 +9,19 @@ import { clerkMiddleware } from "@clerk/express";
 import { connectDB } from "./config/db";
 import roomRoutes from "./routes/roomRoutes";
 import { errorHandler } from "./middleware/errorHandler";
+import { setupSocket } from "./sockets";
 
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.CLIENT_URL,
+    credentials: true,
+  },
+});
+
 const PORT = process.env.PORT || 5001;
 
 app.use(helmet());
@@ -27,9 +38,11 @@ app.use("/api/rooms", roomRoutes);
 
 app.use(errorHandler);
 
+setupSocket(io);
+
 async function start() {
   await connectDB();
-  app.listen(PORT, () => {
+  httpServer.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
