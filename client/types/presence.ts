@@ -1,5 +1,5 @@
 export type OnlineUser = {
-  id: string;
+  socketId: string;
+  userId: string;
   name: string;
-  color: string;
 };

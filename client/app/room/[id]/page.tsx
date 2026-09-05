@@ -2,17 +2,12 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
+import { getUserColor } from "@/lib/colors";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
-import type { OnlineUser } from "@/types/presence";
-
-const mockUsers: OnlineUser[] = [
-  { id: "u1", name: "You", color: "bg-emerald-500" },
-  { id: "u2", name: "Priya", color: "bg-sky-500" },
-  { id: "u3", name: "Arjun", color: "bg-amber-500" },
-];
 
 const mockMessages: ChatMessage[] = [
   { id: "m1", sender: "Priya", text: "started on the sort function", timestamp: "10:02 AM" },
@@ -39,8 +34,9 @@ export default function RoomPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const { userId: currentUserId } = useAuth();
   const api = useApi();
-  const { status } = useSocket(id);
+  const { status, onlineUsers } = useSocket(id);
 
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
@@ -144,7 +140,7 @@ export default function RoomPage({
           <div className="border-b border-neutral-800 p-3">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                Online — {mockUsers.length}
+                Online — {onlineUsers.length}
               </h2>
               <span className="flex items-center gap-1.5 text-xs text-neutral-500">
                 <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
@@ -152,15 +148,16 @@ export default function RoomPage({
               </span>
             </div>
             <ul className="space-y-1.5">
-              {mockUsers.map((user) => (
-                <li key={user.id} className="flex items-center gap-2 text-sm">
-                  <span className={`h-2 w-2 rounded-full ${user.color}`} />
-                  {user.name}
+              {onlineUsers.map((u) => (
+                <li key={u.socketId} className="flex items-center gap-2 text-sm">
+                  <span className={`h-2 w-2 rounded-full ${getUserColor(u.userId)}`} />
+                  {u.userId === currentUserId ? "You" : u.name}
                 </li>
               ))}
             </ul>
           </div>
 
+          {/* Chat — still mock, real chat is next */}
           <div className="flex flex-col md:min-h-0 md:flex-1">
             <div className="max-h-64 space-y-3 overflow-y-auto p-3 md:max-h-none md:flex-1">
               {messages.map((msg) => (
