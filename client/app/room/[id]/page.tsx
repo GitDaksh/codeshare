@@ -1,10 +1,19 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import {
+  use,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
+import { Maximize2, Minimize2, Link as LinkIcon } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
+import { useToast } from "@/components/ToastProvider";
 import { getUserColor } from "@/lib/colors";
 import { CodeEditor } from "@/components/CodeEditor";
 import { LANGUAGES } from "@/lib/languages";
@@ -38,6 +47,7 @@ export default function RoomPage({
   const { id } = use(params);
   const { userId: currentUserId } = useAuth();
   const api = useApi();
+  const { toast } = useToast();
   const { status, onlineUsers } = useSocket(id);
 
   const [room, setRoom] = useState<Room | null>(null);
@@ -49,6 +59,10 @@ export default function RoomPage({
 
   const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
   const [draft, setDraft] = useState("");
+
+  const [zenMode, setZenMode] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(288);
+  const isDraggingRef = useRef(false);
 
   useEffect(() => {
     api
@@ -64,6 +78,35 @@ export default function RoomPage({
       setLanguage(room.language);
     }
   }, [room]);
+
+  useEffect(() => {
+    function handleMouseMove(e: MouseEvent) {
+      if (!isDraggingRef.current) return;
+      const newWidth = window.innerWidth - e.clientX;
+      setSidebarWidth(Math.min(480, Math.max(220, newWidth)));
+    }
+    function handleMouseUp() {
+      isDraggingRef.current = false;
+      document.body.style.cursor = "";
+    }
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  function handleDragStart(e: ReactMouseEvent) {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    document.body.style.cursor = "col-resize";
+  }
+
+  function handleCopyLink() {
+    navigator.clipboard.writeText(window.location.href);
+    toast("Link copied to clipboard");
+  }
 
   function handleSend() {
     if (!draft.trim()) return;
@@ -131,73 +174,93 @@ export default function RoomPage({
             ))}
           </select>
           <button
-            onClick={() => navigator.clipboard.writeText(window.location.href)}
-            className="rounded-md border border-neutral-700 px-3 py-1 text-xs transition-colors hover:border-neutral-500"
+            onClick={handleCopyLink}
+            className="flex items-center gap-1.5 rounded-md border border-neutral-700 px-3 py-1 text-xs transition-colors hover:border-neutral-500"
           >
+            <LinkIcon className="h-3 w-3" />
             Copy link
+          </button>
+          <button
+            onClick={() => setZenMode((z) => !z)}
+            title={zenMode ? "Show sidebar" : "Focus mode"}
+            className="hidden rounded-md border border-neutral-700 p-1.5 transition-colors hover:border-neutral-500 md:block"
+          >
+            {zenMode ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
+            )}
           </button>
         </div>
       </div>
 
       {/* Body: editor + sidebar */}
       <div className="flex flex-1 flex-col md:min-h-0 md:flex-row">
-        {/* Real Monaco editor */}
         <div className="min-h-[400px] min-w-0 flex-1 md:h-full md:min-h-0">
           <CodeEditor language={language} value={code} onChange={setCode} />
         </div>
 
-        {/* Sidebar */}
-        <aside className="flex w-full flex-col border-t border-neutral-800 md:h-full md:w-72 md:shrink-0 md:border-l md:border-t-0">
-          <div className="border-b border-neutral-800 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                Online — {onlineUsers.length}
-              </h2>
-              <span className="flex items-center gap-1.5 text-xs text-neutral-500">
-                <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
-                {status}
-              </span>
-            </div>
-            <ul className="space-y-1.5">
-              {onlineUsers.map((u) => (
-                <li key={u.socketId} className="flex items-center gap-2 text-sm">
-                  <span className={`h-2 w-2 rounded-full ${getUserColor(u.userId)}`} />
-                  {u.userId === currentUserId ? "You" : u.name}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Chat — still mock, real chat comes with backend work */}
-          <div className="flex flex-col md:min-h-0 md:flex-1">
-            <div className="max-h-64 space-y-3 overflow-y-auto p-3 md:max-h-none md:flex-1">
-              {messages.map((msg) => (
-                <div key={msg.id} className="text-sm">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-medium">{msg.sender}</span>
-                    <span className="text-xs text-neutral-500">{msg.timestamp}</span>
-                  </div>
-                  <p className="text-neutral-300">{msg.text}</p>
+        {!zenMode && (
+          <>
+            <div
+              onMouseDown={handleDragStart}
+              className="hidden w-1 shrink-0 cursor-col-resize bg-neutral-800 transition-colors hover:bg-neutral-600 md:block"
+            />
+            <aside
+              style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+              className="flex w-full flex-col border-t border-neutral-800 md:h-full md:w-[var(--sidebar-width)] md:shrink-0 md:border-l md:border-t-0"
+            >
+              <div className="border-b border-neutral-800 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <h2 className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+                    Online — {onlineUsers.length}
+                  </h2>
+                  <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+                    <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
+                    {status}
+                  </span>
                 </div>
-              ))}
-            </div>
-            <div className="flex gap-2 border-t border-neutral-800 p-3">
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder="Message the room…"
-                className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm placeholder:text-neutral-600 focus:border-neutral-500 focus:outline-none"
-              />
-              <button
-                onClick={handleSend}
-                className="rounded-md bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-200"
-              >
-                Send
-              </button>
-            </div>
-          </div>
-        </aside>
+                <ul className="space-y-1.5">
+                  {onlineUsers.map((u) => (
+                    <li key={u.socketId} className="flex items-center gap-2 text-sm">
+                      <span className={`h-2 w-2 rounded-full ${getUserColor(u.userId)}`} />
+                      {u.userId === currentUserId ? "You" : u.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="flex flex-col md:min-h-0 md:flex-1">
+                <div className="max-h-64 space-y-3 overflow-y-auto p-3 md:max-h-none md:flex-1">
+                  {messages.map((msg) => (
+                    <div key={msg.id} className="text-sm">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-medium">{msg.sender}</span>
+                        <span className="text-xs text-neutral-500">{msg.timestamp}</span>
+                      </div>
+                      <p className="text-neutral-300">{msg.text}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 border-t border-neutral-800 p-3">
+                  <input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                    placeholder="Message the room…"
+                    className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm placeholder:text-neutral-600 focus:border-neutral-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={handleSend}
+                    className="rounded-md bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-200"
+                  >
+                    Send
+                  </button>
+                </div>
+              </div>
+            </aside>
+          </>
+        )}
       </div>
     </main>
   );
