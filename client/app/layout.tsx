@@ -23,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className={`${inter.className} ${jetbrainsMono.variable} bg-neutral-950 text-neutral-100 antialiased`}
       >
-        <ClerkProvider appearance={{ baseTheme: dark }}>
+        <ClerkProvider appearance={{ theme: dark }}>
           <ToastProvider>
             <Navbar />
             {children}
