@@ -9,7 +9,10 @@ import { useApi } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
 import { Skeleton } from "@/components/Skeleton";
+import { getLanguageBadgeClasses } from "@/lib/languages";
 import type { Room } from "@/types/room";
+
+type SortMode = "updated" | "name";
 
 export default function DashboardPage() {
   const { userId } = useAuth();
@@ -19,7 +22,12 @@ export default function DashboardPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortMode>("updated");
   const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() => {
+    document.title = "Dashboard — CodeShare";
+  }, []);
 
   useEffect(() => {
     api
@@ -50,13 +58,15 @@ export default function DashboardPage() {
     }
   }
 
-  const filteredRooms = useMemo(
-    () =>
-      rooms.filter((room) =>
-        room.name.toLowerCase().includes(query.trim().toLowerCase())
-      ),
-    [rooms, query]
-  );
+  const filteredRooms = useMemo(() => {
+    const result = rooms.filter((room) =>
+      room.name.toLowerCase().includes(query.trim().toLowerCase())
+    );
+    if (sortBy === "name") {
+      return [...result].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return result;
+  }, [rooms, query, sortBy]);
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-12">
@@ -72,14 +82,24 @@ export default function DashboardPage() {
       </div>
 
       {rooms.length > 0 && (
-        <div className="relative mb-4">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-600" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search rooms…"
-            className="w-full rounded-md border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-3 text-sm placeholder:text-neutral-600 focus:border-neutral-600 focus:outline-none"
-          />
+        <div className="mb-4 flex gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-600" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search rooms…"
+              className="w-full rounded-md border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-3 text-sm placeholder:text-neutral-600 focus:border-neutral-600 focus:outline-none"
+            />
+          </div>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortMode)}
+            className="rounded-md border border-neutral-800 bg-neutral-900 px-2 text-sm text-neutral-400 focus:border-neutral-600 focus:outline-none"
+          >
+            <option value="updated">Recently updated</option>
+            <option value="name">Name A–Z</option>
+          </select>
         </div>
       )}
 
@@ -120,7 +140,7 @@ export default function DashboardPage() {
                   <span className="rounded bg-neutral-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-neutral-500">
                     {room._id}
                   </span>
-                  <span className="rounded border border-neutral-700 px-1.5 py-0.5 text-xs text-neutral-400">
+                  <span className={`rounded border px-1.5 py-0.5 text-xs ${getLanguageBadgeClasses(room.language)}`}>
                     {room.language}
                   </span>
                 </div>

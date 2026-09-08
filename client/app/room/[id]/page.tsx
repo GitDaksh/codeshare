@@ -10,7 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
-import { Maximize2, Minimize2, Link as LinkIcon } from "lucide-react";
+import { ArrowLeft, Maximize2, Minimize2, Link as LinkIcon } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
 import { useToast } from "@/components/ToastProvider";
@@ -59,6 +59,7 @@ export default function RoomPage({
 
   const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
   const [draft, setDraft] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [zenMode, setZenMode] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(288);
@@ -76,8 +77,13 @@ export default function RoomPage({
     if (room) {
       setCode(room.code || starterCode);
       setLanguage(room.language);
+      document.title = `${room.name} — CodeShare`;
     }
   }, [room]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   useEffect(() => {
     function handleMouseMove(e: MouseEvent) {
@@ -156,6 +162,13 @@ export default function RoomPage({
       {/* Room header */}
       <div className="flex flex-col gap-2 border-b border-neutral-800 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-2">
+          <Link
+            href="/dashboard"
+            aria-label="Back to dashboard"
+            className="shrink-0 text-neutral-500 transition-colors hover:text-neutral-100"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
           <span className="truncate text-sm font-medium">{room.name}</span>
           <span className="shrink-0 rounded bg-neutral-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-neutral-500">
             {room._id}
@@ -182,6 +195,7 @@ export default function RoomPage({
           </button>
           <button
             onClick={() => setZenMode((z) => !z)}
+            aria-label={zenMode ? "Show sidebar" : "Enter focus mode"}
             title={zenMode ? "Show sidebar" : "Focus mode"}
             className="hidden rounded-md border border-neutral-700 p-1.5 transition-colors hover:border-neutral-500 md:block"
           >
@@ -241,6 +255,7 @@ export default function RoomPage({
                       <p className="text-neutral-300">{msg.text}</p>
                     </div>
                   ))}
+                  <div ref={messagesEndRef} />
                 </div>
                 <div className="flex gap-2 border-t border-neutral-800 p-3">
                   <input
