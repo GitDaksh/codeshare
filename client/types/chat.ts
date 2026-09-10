@@ -1,6 +1,8 @@
 export type ChatMessage = {
-  id: string;
-  sender: string;
+  _id: string;
+  roomId: string;
+  senderId: string;
+  senderName: string;
   text: string;
-  timestamp: string;
+  createdAt: string;
 };

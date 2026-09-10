@@ -2,6 +2,7 @@
 
 import {
   use,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -19,11 +20,6 @@ import { CodeEditor } from "@/components/CodeEditor";
 import { LANGUAGES } from "@/lib/languages";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
-
-const mockMessages: ChatMessage[] = [
-  { id: "m1", sender: "Priya", text: "started on the sort function", timestamp: "10:02 AM" },
-  { id: "m2", sender: "Arjun", text: "looks good, check line 14", timestamp: "10:04 AM" },
-];
 
 const starterCode = `function twoSum(nums, target) {
   const seen = new Map();
@@ -48,7 +44,6 @@ export default function RoomPage({
   const { userId: currentUserId } = useAuth();
   const api = useApi();
   const { toast } = useToast();
-  const { status, onlineUsers } = useSocket(id);
 
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,9 +52,15 @@ export default function RoomPage({
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("javascript");
 
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const handleIncomingMessage = useCallback((message: ChatMessage) => {
+    setMessages((prev) => [...prev, message]);
+  }, []);
+
+  const { status, onlineUsers, sendMessage } = useSocket(id, handleIncomingMessage);
 
   const [zenMode, setZenMode] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(288);
@@ -71,6 +72,13 @@ export default function RoomPage({
       .then((res) => setRoom(res.data))
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
+  }, [api, id]);
+
+  useEffect(() => {
+    api
+      .get<ChatMessage[]>(`/api/rooms/${id}/messages`)
+      .then((res) => setMessages(res.data))
+      .catch(() => toast("Could not load chat history.", "error"));
   }, [api, id]);
 
   useEffect(() => {
@@ -116,15 +124,7 @@ export default function RoomPage({
 
   function handleSend() {
     if (!draft.trim()) return;
-    setMessages([
-      ...messages,
-      {
-        id: Math.random().toString(16).slice(2, 8),
-        sender: "You",
-        text: draft,
-        timestamp: "just now",
-      },
-    ]);
+    sendMessage(draft.trim());
     setDraft("");
   }
 
@@ -246,15 +246,26 @@ export default function RoomPage({
 
               <div className="flex flex-col md:min-h-0 md:flex-1">
                 <div className="max-h-64 space-y-3 overflow-y-auto p-3 md:max-h-none md:flex-1">
-                  {messages.map((msg) => (
-                    <div key={msg.id} className="text-sm">
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-medium">{msg.sender}</span>
-                        <span className="text-xs text-neutral-500">{msg.timestamp}</span>
+                  {messages.length === 0 ? (
+                    <p className="text-xs text-neutral-600">No messages yet — say hi.</p>
+                  ) : (
+                    messages.map((msg) => (
+                      <div key={msg._id} className="text-sm">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-medium">
+                            {msg.senderId === currentUserId ? "You" : msg.senderName}
+                          </span>
+                          <span className="text-xs text-neutral-500">
+                            {new Date(msg.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-neutral-300">{msg.text}</p>
                       </div>
-                      <p className="text-neutral-300">{msg.text}</p>
-                    </div>
-                  ))}
+                    ))
+                  )}
                   <div ref={messagesEndRef} />
                 </div>
                 <div className="flex gap-2 border-t border-neutral-800 p-3">

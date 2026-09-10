@@ -1,5 +1,6 @@
 import type { Server, Socket } from "socket.io";
 import { verifyToken } from "@clerk/backend";
+import { Message } from "../models/Message";
 
 type PresenceUser = {
   socketId: string;
@@ -54,6 +55,7 @@ export function setupSocket(io: Server) {
     socket.on("room:join", ({ roomId, name }: { roomId: string; name: string }) => {
       socket.join(roomId);
       socket.data.roomId = roomId;
+      socket.data.userName = name || "Anonymous";
 
       if (!roomPresence.has(roomId)) {
         roomPresence.set(roomId, new Map());
@@ -62,7 +64,7 @@ export function setupSocket(io: Server) {
       roomPresence.get(roomId)!.set(socket.id, {
         socketId: socket.id,
         userId: socket.data.userId,
-        name: name || "Anonymous",
+        name: socket.data.userName,
       });
 
       broadcastPresence(io, roomId);
@@ -73,6 +75,23 @@ export function setupSocket(io: Server) {
       socket.leave(roomId);
       removeFromRoom(io, socket, roomId);
       console.log(`User ${socket.data.userId} left room ${roomId}`);
+    });
+
+    socket.on("chat:message", async ({ roomId, text }: { roomId: string; text: string }) => {
+      if (!text?.trim() || !socket.rooms.has(roomId)) return;
+
+      try {
+        const message = await Message.create({
+          roomId,
+          senderId: socket.data.userId,
+          senderName: socket.data.userName || "Anonymous",
+          text: text.trim(),
+        });
+
+        io.to(roomId).emit("chat:message", message);
+      } catch (err) {
+        console.error("Failed to save chat message:", err);
+      }
     });
 
     socket.on("disconnect", () => {

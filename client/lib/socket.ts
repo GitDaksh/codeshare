@@ -4,23 +4,33 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import type { OnlineUser } from "@/types/presence";
+import type { ChatMessage } from "@/types/chat";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
-export function useSocket(roomId: string) {
+export function useSocket(roomId: string, onChatMessage?: (message: ChatMessage) => void) {
   const { getToken } = useAuth();
   const { user, isLoaded } = useUser();
   const socketRef = useRef<Socket | null>(null);
+  const onChatMessageRef = useRef(onChatMessage);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
 
   useEffect(() => {
+    onChatMessageRef.current = onChatMessage;
+  }, [onChatMessage]);
+
+  useEffect(() => {
     if (!isLoaded) return;
 
+    let cancelled = false;
     let socket: Socket;
 
     async function connect() {
       const token = await getToken();
+
+      if (cancelled) return;
+
       const displayName = user?.fullName || user?.username || "Anonymous";
 
       socket = io(process.env.NEXT_PUBLIC_API_URL!, {
@@ -38,6 +48,10 @@ export function useSocket(roomId: string) {
         setOnlineUsers(users);
       });
 
+      socket.on("chat:message", (message: ChatMessage) => {
+        onChatMessageRef.current?.(message);
+      });
+
       socket.on("disconnect", () => setStatus("disconnected"));
       socket.on("connect_error", (err) => {
         console.error("Socket connection error:", err.message);
@@ -48,10 +62,15 @@ export function useSocket(roomId: string) {
     connect();
 
     return () => {
+      cancelled = true;
       socket?.emit("room:leave", roomId);
       socket?.disconnect();
     };
   }, [roomId, getToken, isLoaded, user?.id]);
 
-  return { status, onlineUsers };
+  function sendMessage(text: string) {
+    socketRef.current?.emit("chat:message", { roomId, text });
+  }
+
+  return { status, onlineUsers, sendMessage };
 }
