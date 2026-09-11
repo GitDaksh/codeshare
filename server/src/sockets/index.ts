@@ -1,6 +1,7 @@
 import type { Server, Socket } from "socket.io";
 import { verifyToken } from "@clerk/backend";
 import { Message } from "../models/Message";
+import { Room } from "../models/Room";
 
 type PresenceUser = {
   socketId: string;
@@ -8,12 +9,57 @@ type PresenceUser = {
   name: string;
 };
 
+type PendingCodeSave = {
+  timer: NodeJS.Timeout;
+  code: string;
+};
+
+const CODE_SAVE_DEBOUNCE_MS = 1500;
+
 const roomPresence = new Map<string, Map<string, PresenceUser>>();
+const pendingCodeSaves = new Map<string, PendingCodeSave>();
 
 function broadcastPresence(io: Server, roomId: string) {
   const room = roomPresence.get(roomId);
   const users = room ? Array.from(room.values()) : [];
   io.to(roomId).emit("presence:update", users);
+}
+
+async function saveRoomCode(roomId: string, code: string) {
+  try {
+    await Room.findByIdAndUpdate(roomId, { code });
+  } catch (err) {
+    console.error(`Failed to save code for room ${roomId}:`, err);
+  }
+}
+
+function scheduleCodeSave(roomId: string, code: string) {
+  const existing = pendingCodeSaves.get(roomId);
+  if (existing) clearTimeout(existing.timer);
+
+  const timer = setTimeout(() => {
+    pendingCodeSaves.delete(roomId);
+    saveRoomCode(roomId, code);
+  }, CODE_SAVE_DEBOUNCE_MS);
+
+  pendingCodeSaves.set(roomId, { timer, code });
+}
+
+function flushCodeSave(roomId: string) {
+  const pending = pendingCodeSaves.get(roomId);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pendingCodeSaves.delete(roomId);
+  saveRoomCode(roomId, pending.code);
+}
+
+export async function flushAllPendingCodeSaves() {
+  const saves = Array.from(pendingCodeSaves.entries()).map(([roomId, pending]) => {
+    clearTimeout(pending.timer);
+    return saveRoomCode(roomId, pending.code);
+  });
+  pendingCodeSaves.clear();
+  await Promise.all(saves);
 }
 
 function removeFromRoom(io: Server, socket: Socket, roomId: string) {
@@ -23,6 +69,7 @@ function removeFromRoom(io: Server, socket: Socket, roomId: string) {
   room.delete(socket.id);
   if (room.size === 0) {
     roomPresence.delete(roomId);
+    flushCodeSave(roomId);
   }
 
   broadcastPresence(io, roomId);
@@ -92,6 +139,13 @@ export function setupSocket(io: Server) {
       } catch (err) {
         console.error("Failed to save chat message:", err);
       }
+    });
+
+    socket.on("code:change", ({ roomId, code }: { roomId: string; code: string }) => {
+      if (typeof code !== "string" || !socket.rooms.has(roomId)) return;
+
+      socket.to(roomId).emit("code:change", code);
+      scheduleCodeSave(roomId, code);
     });
 
     socket.on("disconnect", () => {

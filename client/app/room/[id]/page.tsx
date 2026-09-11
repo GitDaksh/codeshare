@@ -60,7 +60,15 @@ export default function RoomPage({
     setMessages((prev) => [...prev, message]);
   }, []);
 
-  const { status, onlineUsers, sendMessage } = useSocket(id, handleIncomingMessage);
+  const handleIncomingCodeChange = useCallback((incomingCode: string) => {
+    setCode(incomingCode);
+  }, []);
+
+  const { status, onlineUsers, sendMessage, sendCodeChange } = useSocket(
+    id,
+    handleIncomingMessage,
+    handleIncomingCodeChange
+  );
 
   const [zenMode, setZenMode] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(288);
@@ -115,6 +123,11 @@ export default function RoomPage({
     e.preventDefault();
     isDraggingRef.current = true;
     document.body.style.cursor = "col-resize";
+  }
+
+  function handleCodeChange(newCode: string) {
+    setCode(newCode);
+    sendCodeChange(newCode);
   }
 
   function handleCopyLink() {
@@ -211,7 +224,7 @@ export default function RoomPage({
       {/* Body: editor + sidebar */}
       <div className="flex flex-1 flex-col md:min-h-0 md:flex-row">
         <div className="min-h-[400px] min-w-0 flex-1 md:h-full md:min-h-0">
-          <CodeEditor language={language} value={code} onChange={setCode} />
+          <CodeEditor language={language} value={code} onChange={handleCodeChange} />
         </div>
 
         {!zenMode && (

@@ -8,17 +8,26 @@ import type { ChatMessage } from "@/types/chat";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
-export function useSocket(roomId: string, onChatMessage?: (message: ChatMessage) => void) {
+export function useSocket(
+  roomId: string,
+  onChatMessage?: (message: ChatMessage) => void,
+  onCodeChange?: (code: string) => void
+) {
   const { getToken } = useAuth();
   const { user, isLoaded } = useUser();
   const socketRef = useRef<Socket | null>(null);
   const onChatMessageRef = useRef(onChatMessage);
+  const onCodeChangeRef = useRef(onCodeChange);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
 
   useEffect(() => {
     onChatMessageRef.current = onChatMessage;
   }, [onChatMessage]);
+
+  useEffect(() => {
+    onCodeChangeRef.current = onCodeChange;
+  }, [onCodeChange]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -52,6 +61,10 @@ export function useSocket(roomId: string, onChatMessage?: (message: ChatMessage)
         onChatMessageRef.current?.(message);
       });
 
+      socket.on("code:change", (code: string) => {
+        onCodeChangeRef.current?.(code);
+      });
+
       socket.on("disconnect", () => setStatus("disconnected"));
       socket.on("connect_error", (err) => {
         console.error("Socket connection error:", err.message);
@@ -72,5 +85,9 @@ export function useSocket(roomId: string, onChatMessage?: (message: ChatMessage)
     socketRef.current?.emit("chat:message", { roomId, text });
   }
 
-  return { status, onlineUsers, sendMessage };
+  function sendCodeChange(code: string) {
+    socketRef.current?.emit("code:change", { roomId, code });
+  }
+
+  return { status, onlineUsers, sendMessage, sendCodeChange };
 }

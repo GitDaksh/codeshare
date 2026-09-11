@@ -9,7 +9,7 @@ import { clerkMiddleware } from "@clerk/express";
 import { connectDB } from "./config/db";
 import roomRoutes from "./routes/roomRoutes";
 import { errorHandler } from "./middleware/errorHandler";
-import { setupSocket } from "./sockets";
+import { setupSocket, flushAllPendingCodeSaves } from "./sockets";
 
 dotenv.config();
 
@@ -39,6 +39,15 @@ app.use("/api/rooms", roomRoutes);
 app.use(errorHandler);
 
 setupSocket(io);
+
+async function shutdown() {
+  console.log("Shutting down — flushing pending code saves...");
+  await flushAllPendingCodeSaves();
+  process.exit(0);
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 async function start() {
   await connectDB();
