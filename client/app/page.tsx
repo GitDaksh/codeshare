@@ -2,38 +2,20 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Code2, Users, MessageSquare, Share2, Globe2, ShieldCheck } from "lucide-react";
+import { LiveDemoPreview } from "@/components/LiveDemoPreview";
 
-const FEATURES = [
+const SMALL_FEATURES = [
   {
-    icon: Code2,
-    title: "Real-time editing",
-    description: "Every keystroke syncs instantly across everyone in the room.",
-  },
-  {
-    icon: Users,
-    title: "Live presence",
-    description: "See exactly who's online in your room, in real time.",
-  },
-  {
-    icon: MessageSquare,
     title: "Built-in chat",
     description: "Talk through the problem without leaving the editor.",
   },
   {
-    icon: Globe2,
     title: "Multi-language",
     description: "JavaScript, TypeScript, Python, C++, and Java, with real syntax highlighting.",
   },
   {
-    icon: Share2,
     title: "One link to share",
     description: "Send a room link — no downloads, no setup for the other side.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Secure by default",
-    description: "Authentication and room access are verified on every request.",
   },
 ];
 
@@ -45,135 +27,120 @@ const STEPS = [
 
 export default function Home() {
   return (
-    <main>
+    <main className="bg-[#0B0B14]">
       {/* Hero */}
-      <section className="mx-auto flex max-w-6xl flex-col items-center px-4 pb-20 pt-28 text-center">
-        <h1 className="text-4xl font-semibold tracking-tight sm:text-6xl">
-          Code together,
-          <br />
-          in real time.
-        </h1>
-        <p className="mt-4 max-w-xl text-neutral-400">
-          Create a room, share the link, and edit code with your team live —
-          no setup, no friction.
-        </p>
-        <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-          <Link
-            href="/sign-up"
-            className="w-full rounded-md bg-neutral-100 px-5 py-2.5 text-center text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-200 sm:w-auto"
-          >
-            Get started
-          </Link>
-          <Link
-            href="/sign-in"
-            className="w-full rounded-md border border-neutral-700 px-5 py-2.5 text-center text-sm font-medium transition-colors hover:border-neutral-500 sm:w-auto"
-          >
-            Sign in
-          </Link>
-        </div>
-
-        {/* Decorative editor preview */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="mt-16 w-full max-w-3xl overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 text-left shadow-2xl"
-        >
-          <div className="flex items-center gap-1.5 border-b border-neutral-800 px-4 py-2.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-neutral-700" />
-            <span className="h-2.5 w-2.5 rounded-full bg-neutral-700" />
-            <span className="h-2.5 w-2.5 rounded-full bg-neutral-700" />
-            <span className="ml-3 text-xs text-neutral-500">interview-prep — twoSum.js</span>
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-24 pt-20 lg:grid-cols-[1fr_1.1fr] lg:pt-28"
+      >
+        <div>
+          <h1 className="font-[family-name:var(--font-display)] text-4xl font-semibold leading-[1.1] tracking-tight text-[#E8E8F0] sm:text-5xl">
+            Code together, in real time.
+          </h1>
+          <p className="mt-5 max-w-md text-[#8888A0]">
+            Create a room, share the link, and edit code with your team live —
+            no setup, no friction.
+          </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/sign-up"
+              className="rounded-md bg-[#E8E8F0] px-5 py-2.5 text-center text-sm font-medium text-[#0B0B14] transition-colors hover:bg-white"
+            >
+              Get started
+            </Link>
+            <Link
+              href="/sign-in"
+              className="rounded-md border border-[#26263A] px-5 py-2.5 text-center text-sm font-medium text-[#E8E8F0] transition-colors hover:border-[#3A3A52]"
+            >
+              Sign in
+            </Link>
           </div>
-          <pre className="overflow-x-auto p-5 font-[family-name:var(--font-mono)] text-sm leading-6">
-            <code>
-              <span className="text-violet-400">function</span>{" "}
-              <span className="text-sky-400">twoSum</span>
-              <span className="text-neutral-300">(nums, target) {"{"}</span>
-              {"\n  "}
-              <span className="text-violet-400">const</span> seen ={" "}
-              <span className="text-violet-400">new</span>{" "}
-              <span className="text-sky-400">Map</span>();
-              {"\n\n  "}
-              <span className="text-violet-400">for</span> (
-              <span className="text-violet-400">let</span> i = 0; i {"<"} nums.length; i++) {"{"}
-              {"\n    "}
-              <span className="text-violet-400">const</span> complement = target - nums[i];
-              {"\n    "}
-              <span className="text-violet-400">if</span> (seen.has(complement)) {"{"}
-              {"\n      "}
-              <span className="text-violet-400">return</span> [seen.get(complement), i];
-              {"\n    "}
-              {"}"}
-              {"\n    "}
-              seen.set(nums[i], i);
-              {"\n  "}
-              {"}"}
-              {"\n\n  "}
-              <span className="text-violet-400">return</span> [];
-              {"\n"}
-              {"}"}
-            </code>
-          </pre>
-        </motion.div>
-      </section>
+        </div>
+        <LiveDemoPreview />
+      </motion.section>
 
       {/* How it works */}
-      <section className="border-t border-neutral-900 px-4 py-20">
+      <section className="border-t border-[#1C1C2A] px-4 py-20">
         <div className="mx-auto max-w-5xl">
-          <h2 className="text-center text-2xl font-semibold">How it works</h2>
+          <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-[#E8E8F0]">
+            How it works
+          </h2>
           <div className="mt-10 grid gap-8 sm:grid-cols-3">
-            {STEPS.map((s, i) => (
-              <motion.div
-                key={s.step}
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.3, delay: i * 0.1 }}
-              >
-                <span className="font-[family-name:var(--font-mono)] text-sm text-neutral-600">
+            {STEPS.map((s) => (
+              <div key={s.step}>
+                <span className="font-[family-name:var(--font-mono)] text-sm text-[#4A4A62]">
                   {s.step}
                 </span>
-                <h3 className="mt-2 font-medium">{s.title}</h3>
-                <p className="mt-1 text-sm text-neutral-500">{s.description}</p>
-              </motion.div>
+                <h3 className="mt-2 font-medium text-[#E8E8F0]">{s.title}</h3>
+                <p className="mt-1 text-sm text-[#8888A0]">{s.description}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Feature grid */}
-      <section className="border-t border-neutral-900 px-4 py-20">
+      {/* Bento feature section */}
+      <section className="border-t border-[#1C1C2A] px-4 py-20">
         <div className="mx-auto max-w-5xl">
-          <h2 className="text-center text-2xl font-semibold">Everything you need to pair</h2>
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f, i) => (
-              <motion.div
-                key={f.title}
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.3, delay: i * 0.05 }}
-                className="rounded-lg border border-neutral-800 p-5 transition-colors hover:border-neutral-700"
-              >
-                <f.icon className="h-5 w-5 text-neutral-400" />
-                <h3 className="mt-3 text-sm font-medium">{f.title}</h3>
-                <p className="mt-1 text-sm text-neutral-500">{f.description}</p>
-              </motion.div>
+          <h2 className="max-w-md font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[#E8E8F0]">
+            Everything happens together
+          </h2>
+
+          <div className="mt-10 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-[#26263A] bg-[#14141F] p-8">
+              <div className="flex gap-1.5">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+                <span
+                  className="h-2 w-2 animate-pulse rounded-full bg-amber-400"
+                  style={{ animationDelay: "200ms" }}
+                />
+                <span
+                  className="h-2 w-2 animate-pulse rounded-full bg-emerald-400"
+                  style={{ animationDelay: "400ms" }}
+                />
+              </div>
+              <h3 className="mt-6 text-lg font-medium text-[#E8E8F0]">Real-time editing</h3>
+              <p className="mt-2 text-sm text-[#8888A0]">
+                Every keystroke syncs instantly. No refresh, no merge conflicts, no waiting.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#26263A] bg-[#14141F] p-8">
+              <div className="flex -space-x-2">
+                <span className="h-7 w-7 rounded-full border-2 border-[#14141F] bg-sky-400" />
+                <span className="h-7 w-7 rounded-full border-2 border-[#14141F] bg-amber-400" />
+                <span className="h-7 w-7 rounded-full border-2 border-[#14141F] bg-emerald-400" />
+              </div>
+              <h3 className="mt-6 text-lg font-medium text-[#E8E8F0]">Live presence</h3>
+              <p className="mt-2 text-sm text-[#8888A0]">
+                See exactly who's in the room and who's typing, at all times.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            {SMALL_FEATURES.map((f) => (
+              <div key={f.title} className="rounded-2xl border border-[#26263A] p-6">
+                <h3 className="text-sm font-medium text-[#E8E8F0]">{f.title}</h3>
+                <p className="mt-1.5 text-sm text-[#8888A0]">{f.description}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
       {/* Final CTA */}
-      <section className="border-t border-neutral-900 px-4 py-20 text-center">
-        <h2 className="text-2xl font-semibold">Ready to start a room?</h2>
-        <p className="mt-2 text-sm text-neutral-500">
-          It takes about ten seconds — no credit card, no install.
+      <section className="border-t border-[#1C1C2A] px-4 py-24 text-center">
+        <h2 className="font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-[#E8E8F0]">
+          Ready to start a room?
+        </h2>
+        <p className="mt-3 text-sm text-[#8888A0]">
+          Every room is authenticated, and access is verified on every request.
         </p>
         <Link
           href="/sign-up"
-          className="mt-6 inline-block rounded-md bg-neutral-100 px-6 py-2.5 text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-200"
+          className="mt-8 inline-block rounded-md bg-[#E8E8F0] px-6 py-2.5 text-sm font-medium text-[#0B0B14] transition-colors hover:bg-white"
         >
           Get started free
         </Link>

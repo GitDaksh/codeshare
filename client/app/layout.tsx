@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 import { Navbar } from "@/components/Navbar";
@@ -8,6 +8,7 @@ import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-display" });
 
 export const metadata: Metadata = {
   title: {
@@ -21,7 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body
-        className={`${inter.className} ${jetbrainsMono.variable} bg-neutral-950 text-neutral-100 antialiased`}
+        className={`${inter.className} ${jetbrainsMono.variable} ${spaceGrotesk.variable} bg-neutral-950 text-neutral-100 antialiased`}
       >
         <ClerkProvider appearance={{ theme: dark }}>
           <ToastProvider>
