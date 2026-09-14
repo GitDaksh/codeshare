@@ -15,5 +15,5 @@ const LANGUAGE_BADGE_CLASSES: Record<string, string> = {
 };
 
 export function getLanguageBadgeClasses(language: string): string {
-  return LANGUAGE_BADGE_CLASSES[language] || "border-neutral-700 bg-neutral-900 text-neutral-400";
+  return LANGUAGE_BADGE_CLASSES[language] || "border-ink-700 bg-ink-900 text-ink-400";
 }

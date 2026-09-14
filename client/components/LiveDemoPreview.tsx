@@ -50,21 +50,21 @@ export function LiveDemoPreview() {
   );
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-[#26263A] bg-[#14141F] text-left shadow-2xl shadow-black/40">
-      <div className="flex items-center justify-between border-b border-[#26263A] px-4 py-2.5">
+    <div className="w-full overflow-hidden rounded-xl border border-ink-700 bg-ink-900 text-left shadow-2xl shadow-black/40">
+      <div className="flex items-center justify-between border-b border-ink-700 px-4 py-2.5">
         <div className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#26263A]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#26263A]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#26263A]" />
-          <span className="ml-3 text-xs text-[#8888A0]">interview-prep — twoSum.js</span>
+          <span className="h-2.5 w-2.5 rounded-full bg-ink-700" />
+          <span className="h-2.5 w-2.5 rounded-full bg-ink-700" />
+          <span className="h-2.5 w-2.5 rounded-full bg-ink-700" />
+          <span className="ml-3 text-xs text-ink-400">interview-prep — twoSum.js</span>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-[#8888A0]">
+        <div className="flex items-center gap-1.5 text-xs text-ink-400">
           <span className={`h-1.5 w-1.5 rounded-full ${AUTHORS[currentAuthor].dot}`} />
           <span className={AUTHORS[currentAuthor].text}>{AUTHORS[currentAuthor].name}</span>
           <span>is typing</span>
         </div>
       </div>
-      <pre className="min-h-[280px] overflow-x-auto p-5 font-[family-name:var(--font-mono)] text-sm leading-6 text-[#C8C8D8]">
+      <pre className="min-h-[280px] overflow-x-auto p-5 font-[family-name:var(--font-mono)] text-sm leading-6 text-ink-300">
         {visibleText}
         {!reducedMotion && (
           <span

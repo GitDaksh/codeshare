@@ -14,8 +14,8 @@ function handleEditorWillMount(monaco: Monaco) {
     inherit: true,
     rules: [],
     colors: {
-      "editor.background": "#171717",
-      "editor.lineHighlightBackground": "#1f1f1f",
+      "editor.background": "#14141F",
+      "editor.lineHighlightBackground": "#1C1C2A",
     },
   });
 }

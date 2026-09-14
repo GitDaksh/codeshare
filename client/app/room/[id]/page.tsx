@@ -144,7 +144,7 @@ export default function RoomPage({
   if (loading) {
     return (
       <main className="flex h-[calc(100vh-56px)] items-center justify-center">
-        <p className="text-sm text-neutral-500">Loading room…</p>
+        <p className="text-sm text-ink-500">Loading room…</p>
       </main>
     );
   }
@@ -152,10 +152,10 @@ export default function RoomPage({
   if (notFound || !room) {
     return (
       <main className="flex h-[calc(100vh-56px)] flex-col items-center justify-center gap-2">
-        <p className="text-sm text-neutral-300">This room doesn't exist.</p>
+        <p className="text-sm text-ink-300">This room doesn't exist.</p>
         <Link
           href="/dashboard"
-          className="text-sm text-neutral-500 underline transition-colors hover:text-neutral-300"
+          className="text-sm text-ink-500 underline transition-colors hover:text-ink-300"
         >
           Back to dashboard
         </Link>
@@ -173,17 +173,17 @@ export default function RoomPage({
   return (
     <main className="flex flex-col md:h-[calc(100vh-56px)]">
       {/* Room header */}
-      <div className="flex flex-col gap-2 border-b border-neutral-800 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 border-b border-ink-800 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <Link
             href="/dashboard"
             aria-label="Back to dashboard"
-            className="shrink-0 text-neutral-500 transition-colors hover:text-neutral-100"
+            className="shrink-0 text-ink-500 transition-colors hover:text-ink-100"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <span className="truncate text-sm font-medium">{room.name}</span>
-          <span className="shrink-0 rounded bg-neutral-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-neutral-500">
+          <span className="truncate text-sm font-medium text-ink-100">{room.name}</span>
+          <span className="shrink-0 rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500">
             {room._id}
           </span>
         </div>
@@ -191,7 +191,7 @@ export default function RoomPage({
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-neutral-300"
+            className="rounded-md border border-ink-700 bg-ink-950 px-2 py-1 text-xs text-ink-300"
           >
             {LANGUAGES.map((lang) => (
               <option key={lang.value} value={lang.value}>
@@ -201,7 +201,7 @@ export default function RoomPage({
           </select>
           <button
             onClick={handleCopyLink}
-            className="flex items-center gap-1.5 rounded-md border border-neutral-700 px-3 py-1 text-xs transition-colors hover:border-neutral-500"
+            className="flex items-center gap-1.5 rounded-md border border-ink-700 px-3 py-1 text-xs text-ink-300 transition-colors hover:border-ink-500"
           >
             <LinkIcon className="h-3 w-3" />
             Copy link
@@ -210,7 +210,7 @@ export default function RoomPage({
             onClick={() => setZenMode((z) => !z)}
             aria-label={zenMode ? "Show sidebar" : "Enter focus mode"}
             title={zenMode ? "Show sidebar" : "Focus mode"}
-            className="hidden rounded-md border border-neutral-700 p-1.5 transition-colors hover:border-neutral-500 md:block"
+            className="hidden rounded-md border border-ink-700 p-1.5 text-ink-300 transition-colors hover:border-ink-500 md:block"
           >
             {zenMode ? (
               <Minimize2 className="h-3.5 w-3.5" />
@@ -231,25 +231,25 @@ export default function RoomPage({
           <>
             <div
               onMouseDown={handleDragStart}
-              className="hidden w-1 shrink-0 cursor-col-resize bg-neutral-800 transition-colors hover:bg-neutral-600 md:block"
+              className="hidden w-1 shrink-0 cursor-col-resize bg-ink-800 transition-colors hover:bg-ink-600 md:block"
             />
             <aside
               style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
-              className="flex w-full flex-col border-t border-neutral-800 md:h-full md:w-[var(--sidebar-width)] md:shrink-0 md:border-l md:border-t-0"
+              className="flex w-full flex-col border-t border-ink-800 md:h-full md:w-[var(--sidebar-width)] md:shrink-0 md:border-l md:border-t-0"
             >
-              <div className="border-b border-neutral-800 p-3">
+              <div className="border-b border-ink-800 p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <h2 className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+                  <h2 className="text-xs font-medium uppercase tracking-wide text-ink-500">
                     Online — {onlineUsers.length}
                   </h2>
-                  <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+                  <span className="flex items-center gap-1.5 text-xs text-ink-500">
                     <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
                     {status}
                   </span>
                 </div>
                 <ul className="space-y-1.5">
                   {onlineUsers.map((u) => (
-                    <li key={u.socketId} className="flex items-center gap-2 text-sm">
+                    <li key={u.socketId} className="flex items-center gap-2 text-sm text-ink-100">
                       <span className={`h-2 w-2 rounded-full ${getUserColor(u.userId)}`} />
                       {u.userId === currentUserId ? "You" : u.name}
                     </li>
@@ -260,38 +260,38 @@ export default function RoomPage({
               <div className="flex flex-col md:min-h-0 md:flex-1">
                 <div className="max-h-64 space-y-3 overflow-y-auto p-3 md:max-h-none md:flex-1">
                   {messages.length === 0 ? (
-                    <p className="text-xs text-neutral-600">No messages yet — say hi.</p>
+                    <p className="text-xs text-ink-600">No messages yet — say hi.</p>
                   ) : (
                     messages.map((msg) => (
                       <div key={msg._id} className="text-sm">
                         <div className="flex items-baseline gap-2">
-                          <span className="font-medium">
+                          <span className="font-medium text-ink-100">
                             {msg.senderId === currentUserId ? "You" : msg.senderName}
                           </span>
-                          <span className="text-xs text-neutral-500">
+                          <span className="text-xs text-ink-500">
                             {new Date(msg.createdAt).toLocaleTimeString([], {
                               hour: "2-digit",
                               minute: "2-digit",
                             })}
                           </span>
                         </div>
-                        <p className="text-neutral-300">{msg.text}</p>
+                        <p className="text-ink-300">{msg.text}</p>
                       </div>
                     ))
                   )}
                   <div ref={messagesEndRef} />
                 </div>
-                <div className="flex gap-2 border-t border-neutral-800 p-3">
+                <div className="flex gap-2 border-t border-ink-800 p-3">
                   <input
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSend()}
                     placeholder="Message the room…"
-                    className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm placeholder:text-neutral-600 focus:border-neutral-500 focus:outline-none"
+                    className="min-w-0 flex-1 rounded-md border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none"
                   />
                   <button
                     onClick={handleSend}
-                    className="rounded-md bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-200"
+                    className="rounded-md bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-950 transition-colors hover:bg-white"
                   >
                     Send
                   </button>

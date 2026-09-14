@@ -21,9 +21,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body
-        className={`${inter.className} ${jetbrainsMono.variable} ${spaceGrotesk.variable} bg-neutral-950 text-neutral-100 antialiased`}
-      >
+      <body className={`${inter.className} ${jetbrainsMono.variable} ${spaceGrotesk.variable} antialiased`}>
         <ClerkProvider appearance={{ theme: dark }}>
           <ToastProvider>
             <Navbar />

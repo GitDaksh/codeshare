@@ -71,10 +71,12 @@ export default function DashboardPage() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-12">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Your rooms</h1>
+        <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100">
+          Your rooms
+        </h1>
         <button
           onClick={() => setModalOpen(true)}
-          className="flex items-center gap-1.5 rounded-md bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-950 transition-colors hover:bg-neutral-200"
+          className="flex items-center gap-1.5 rounded-md bg-ink-100 px-4 py-2 text-sm font-medium text-ink-950 transition-colors hover:bg-white"
         >
           <Plus className="h-4 w-4" />
           New room
@@ -84,18 +86,18 @@ export default function DashboardPage() {
       {rooms.length > 0 && (
         <div className="mb-4 flex gap-2">
           <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-600" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-600" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search rooms…"
-              className="w-full rounded-md border border-neutral-800 bg-neutral-900 py-2 pl-9 pr-3 text-sm placeholder:text-neutral-600 focus:border-neutral-600 focus:outline-none"
+              className="w-full rounded-md border border-ink-800 bg-ink-900 py-2 pl-9 pr-3 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-600 focus:outline-none"
             />
           </div>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortMode)}
-            className="rounded-md border border-neutral-800 bg-neutral-900 px-2 text-sm text-neutral-400 focus:border-neutral-600 focus:outline-none"
+            className="rounded-md border border-ink-800 bg-ink-900 px-2 text-sm text-ink-400 focus:border-ink-600 focus:outline-none"
           >
             <option value="updated">Recently updated</option>
             <option value="name">Name A–Z</option>
@@ -106,26 +108,26 @@ export default function DashboardPage() {
       {loading ? (
         <div className="space-y-2">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="rounded-lg border border-neutral-800 p-4">
+            <div key={i} className="rounded-lg border border-ink-800 p-4">
               <Skeleton className="mb-2 h-4 w-40" />
               <Skeleton className="h-3 w-24" />
             </div>
           ))}
         </div>
       ) : rooms.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-neutral-800 py-16 text-center">
-          <p className="text-sm text-neutral-400">No rooms yet.</p>
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-ink-800 py-16 text-center">
+          <p className="text-sm text-ink-400">No rooms yet.</p>
           <button
             onClick={() => setModalOpen(true)}
-            className="text-sm font-medium text-neutral-100 underline underline-offset-4 hover:text-neutral-300"
+            className="text-sm font-medium text-ink-100 underline underline-offset-4 hover:text-ink-300"
           >
             Create your first room
           </button>
         </div>
       ) : filteredRooms.length === 0 ? (
-        <p className="text-sm text-neutral-500">No rooms match "{query}".</p>
+        <p className="text-sm text-ink-500">No rooms match "{query}".</p>
       ) : (
-        <div className="divide-y divide-neutral-800 rounded-lg border border-neutral-800">
+        <div className="divide-y divide-ink-800 rounded-lg border border-ink-800">
           {filteredRooms.map((room, i) => (
             <motion.div
               key={room._id}
@@ -136,15 +138,15 @@ export default function DashboardPage() {
             >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate text-sm font-medium">{room.name}</span>
-                  <span className="rounded bg-neutral-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-neutral-500">
+                  <span className="truncate text-sm font-medium text-ink-100">{room.name}</span>
+                  <span className="rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500">
                     {room._id}
                   </span>
                   <span className={`rounded border px-1.5 py-0.5 text-xs ${getLanguageBadgeClasses(room.language)}`}>
                     {room.language}
                   </span>
                 </div>
-                <p className="mt-0.5 text-xs text-neutral-500">
+                <p className="mt-0.5 text-xs text-ink-500">
                   updated {new Date(room.updatedAt).toLocaleString()}
                 </p>
               </div>
@@ -152,14 +154,14 @@ export default function DashboardPage() {
               <div className="flex shrink-0 items-center gap-2">
                 <Link
                   href={`/room/${room._id}`}
-                  className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm transition-colors hover:border-neutral-500"
+                  className="rounded-md border border-ink-700 px-3 py-1.5 text-sm text-ink-100 transition-colors hover:border-ink-500"
                 >
                   Join
                 </Link>
                 {room.ownerId === userId && (
                   <button
                     onClick={() => handleDeleteRoom(room._id, room.name)}
-                    className="rounded-md px-2 py-1.5 text-sm text-neutral-500 transition-colors hover:text-red-400"
+                    className="rounded-md px-2 py-1.5 text-sm text-ink-500 transition-colors hover:text-red-400"
                   >
                     Delete
                   </button>

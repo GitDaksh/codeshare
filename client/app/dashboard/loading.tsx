@@ -6,7 +6,7 @@ export default function DashboardLoading() {
       <Skeleton className="mb-6 h-7 w-32" />
       <div className="space-y-2">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="rounded-lg border border-neutral-800 p-4">
+          <div key={i} className="rounded-lg border border-ink-800 p-4">
             <Skeleton className="mb-2 h-4 w-40" />
             <Skeleton className="h-3 w-24" />
           </div>
