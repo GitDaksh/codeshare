@@ -50,7 +50,11 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 async function start() {
-  await connectDB();
+  const connected = await connectDB();
+  if (!connected) {
+    process.exitCode = 1;
+    return;
+  }
   httpServer.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
