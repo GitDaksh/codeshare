@@ -6,6 +6,6 @@ export const LANGUAGES = [
   { value: "java", label: "Java" },
 ] as const;
 
-export function getLanguageBadgeClasses(): string {
+export function getLanguageBadgeClasses(_language: string): string {
   return "border-ink-700 bg-ink-900 text-ink-400";
 }
