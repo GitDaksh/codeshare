@@ -25,9 +25,9 @@ const ICONS: Record<ToastType, ElementType> = {
 };
 
 const COLORS: Record<ToastType, string> = {
-  success: "text-emerald-400",
+  success: "text-ink-100",
   error: "text-red-400",
-  info: "text-sky-400",
+  info: "text-ink-400",
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {

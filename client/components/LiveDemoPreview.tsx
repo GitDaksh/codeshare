@@ -13,8 +13,8 @@ const SCRIPT: { author: Author; text: string }[] = [
 ];
 
 const AUTHORS: Record<Author, { name: string; dot: string; text: string }> = {
-  priya: { name: "Priya", dot: "bg-sky-400", text: "text-sky-400" },
-  arjun: { name: "Arjun", dot: "bg-amber-400", text: "text-amber-400" },
+  priya: { name: "Priya", dot: "bg-ink-100", text: "text-ink-100" },
+  arjun: { name: "Arjun", dot: "bg-ink-400", text: "text-ink-400" },
 };
 
 const CHARS = SCRIPT.flatMap((segment) =>

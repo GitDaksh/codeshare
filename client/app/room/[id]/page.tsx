@@ -15,9 +15,9 @@ import { ArrowLeft, Maximize2, Minimize2, Link as LinkIcon } from "lucide-react"
 import { useApi } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
 import { useToast } from "@/components/ToastProvider";
-import { getUserColor } from "@/lib/colors";
+import { getAvatarShade } from "@/lib/colors";
 import { CodeEditor } from "@/components/CodeEditor";
-import { LANGUAGES } from "@/lib/languages";
+import { LanguageDropdown } from "@/components/LanguageDropdown";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
 
@@ -35,6 +35,8 @@ const starterCode = `function twoSum(nums, target) {
   return [];
 }`;
 
+const SAVE_INDICATOR_DELAY_MS = 1800;
+
 export default function RoomPage({
   params,
 }: {
@@ -51,9 +53,12 @@ export default function RoomPage({
 
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("javascript");
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [activeTab, setActiveTab] = useState<"chat" | "online">("chat");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const handleIncomingMessage = useCallback((message: ChatMessage) => {
@@ -119,6 +124,12 @@ export default function RoomPage({
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, []);
+
   function handleDragStart(e: ReactMouseEvent) {
     e.preventDefault();
     isDraggingRef.current = true;
@@ -128,6 +139,10 @@ export default function RoomPage({
   function handleCodeChange(newCode: string) {
     setCode(newCode);
     sendCodeChange(newCode);
+
+    setSaveStatus("saving");
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => setSaveStatus("saved"), SAVE_INDICATOR_DELAY_MS);
   }
 
   function handleCopyLink() {
@@ -165,9 +180,9 @@ export default function RoomPage({
 
   const statusColor =
     status === "connected"
-      ? "bg-emerald-500"
+      ? "bg-ink-100 animate-pulse"
       : status === "connecting"
-        ? "bg-amber-500"
+        ? "bg-ink-500"
         : "bg-red-500";
 
   return (
@@ -186,19 +201,14 @@ export default function RoomPage({
           <span className="shrink-0 rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500">
             {room._id}
           </span>
+          <span className="hidden shrink-0 items-center gap-1.5 text-xs text-ink-500 sm:flex">
+            <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
+            {status}
+          </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="rounded-md border border-ink-700 bg-ink-950 px-2 py-1 text-xs text-ink-300"
-          >
-            {LANGUAGES.map((lang) => (
-              <option key={lang.value} value={lang.value}>
-                {lang.label}
-              </option>
-            ))}
-          </select>
+          <LanguageDropdown value={language} onChange={setLanguage} />
+          <span className="hidden h-4 w-px bg-ink-800 sm:block" />
           <button
             onClick={handleCopyLink}
             className="flex items-center gap-1.5 rounded-md border border-ink-700 px-3 py-1 text-xs text-ink-300 transition-colors hover:border-ink-500"
@@ -224,7 +234,12 @@ export default function RoomPage({
       {/* Body: editor + sidebar */}
       <div className="flex flex-1 flex-col md:min-h-0 md:flex-row">
         <div className="min-h-[400px] min-w-0 flex-1 md:h-full md:min-h-0">
-          <CodeEditor language={language} value={code} onChange={handleCodeChange} />
+          <CodeEditor
+            language={language}
+            value={code}
+            onChange={handleCodeChange}
+            saveStatus={saveStatus}
+          />
         </div>
 
         {!zenMode && (
@@ -237,66 +252,93 @@ export default function RoomPage({
               style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
               className="flex w-full flex-col border-t border-ink-800 md:h-full md:w-[var(--sidebar-width)] md:shrink-0 md:border-l md:border-t-0"
             >
-              <div className="border-b border-ink-800 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <h2 className="text-xs font-medium uppercase tracking-wide text-ink-500">
-                    Online — {onlineUsers.length}
-                  </h2>
-                  <span className="flex items-center gap-1.5 text-xs text-ink-500">
-                    <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
-                    {status}
-                  </span>
-                </div>
-                <ul className="space-y-1.5">
-                  {onlineUsers.map((u) => (
-                    <li key={u.socketId} className="flex items-center gap-2 text-sm text-ink-100">
-                      <span className={`h-2 w-2 rounded-full ${getUserColor(u.userId)}`} />
-                      {u.userId === currentUserId ? "You" : u.name}
-                    </li>
-                  ))}
-                </ul>
+              <div className="flex border-b border-ink-800">
+                <button
+                  onClick={() => setActiveTab("chat")}
+                  className={`flex-1 px-3 py-2.5 text-xs font-medium transition-colors ${
+                    activeTab === "chat"
+                      ? "border-b-2 border-ink-100 text-ink-100"
+                      : "text-ink-500 hover:text-ink-300"
+                  }`}
+                >
+                  Chat
+                </button>
+                <button
+                  onClick={() => setActiveTab("online")}
+                  className={`flex-1 px-3 py-2.5 text-xs font-medium transition-colors ${
+                    activeTab === "online"
+                      ? "border-b-2 border-ink-100 text-ink-100"
+                      : "text-ink-500 hover:text-ink-300"
+                  }`}
+                >
+                  Online — {onlineUsers.length}
+                </button>
               </div>
 
-              <div className="flex flex-col md:min-h-0 md:flex-1">
-                <div className="max-h-64 space-y-3 overflow-y-auto p-3 md:max-h-none md:flex-1">
-                  {messages.length === 0 ? (
-                    <p className="text-xs text-ink-600">No messages yet — say hi.</p>
-                  ) : (
-                    messages.map((msg) => (
-                      <div key={msg._id} className="text-sm">
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-medium text-ink-100">
-                            {msg.senderId === currentUserId ? "You" : msg.senderName}
-                          </span>
-                          <span className="text-xs text-ink-500">
-                            {new Date(msg.createdAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
+              {activeTab === "online" ? (
+                <ul className="max-h-96 flex-1 space-y-2 overflow-y-auto p-3 md:max-h-none">
+                  {onlineUsers.map((u) => {
+                    const label = u.userId === currentUserId ? "You" : u.name;
+                    return (
+                      <li
+                        key={u.socketId}
+                        className="flex items-center gap-2 text-sm text-ink-100"
+                      >
+                        <span
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${getAvatarShade(u.userId)}`}
+                        >
+                          {label.charAt(0).toUpperCase()}
+                        </span>
+                        {label}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="max-h-96 flex-1 space-y-1 overflow-y-auto p-3 md:max-h-none">
+                    {messages.length === 0 ? (
+                      <p className="text-xs text-ink-600">No messages yet — say hi.</p>
+                    ) : (
+                      messages.map((msg) => (
+                        <div
+                          key={msg._id}
+                          className="-mx-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-ink-900/60"
+                        >
+                          <div className="flex items-baseline gap-2">
+                            <span className="font-medium text-ink-100">
+                              {msg.senderId === currentUserId ? "You" : msg.senderName}
+                            </span>
+                            <span className="text-xs text-ink-500">
+                              {new Date(msg.createdAt).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                          <p className="text-ink-300">{msg.text}</p>
                         </div>
-                        <p className="text-ink-300">{msg.text}</p>
-                      </div>
-                    ))
-                  )}
-                  <div ref={messagesEndRef} />
+                      ))
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                  <div className="flex gap-2 border-t border-ink-800 p-3">
+                    <input
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                      placeholder="Message the room…"
+                      className="min-w-0 flex-1 rounded-md border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none"
+                    />
+                    <button
+                      onClick={handleSend}
+                      className="rounded-md bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-950 transition-colors hover:bg-white"
+                    >
+                      Send
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2 border-t border-ink-800 p-3">
-                  <input
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                    placeholder="Message the room…"
-                    className="min-w-0 flex-1 rounded-md border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none"
-                  />
-                  <button
-                    onClick={handleSend}
-                    className="rounded-md bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-950 transition-colors hover:bg-white"
-                  >
-                    Send
-                  </button>
-                </div>
-              </div>
+              )}
             </aside>
           </>
         )}
