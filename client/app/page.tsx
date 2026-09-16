@@ -33,32 +33,45 @@ export default function Home() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-24 pt-20 lg:grid-cols-[1fr_1.1fr] lg:pt-28"
+        className="relative overflow-hidden"
       >
-        <div>
-          <h1 className="font-[family-name:var(--font-display)] text-4xl font-semibold leading-[1.1] tracking-tight text-ink-100 sm:text-5xl">
-            Code together, in real time.
-          </h1>
-          <p className="mt-5 max-w-md text-ink-400">
-            Create a room, share the link, and edit code with your team live —
-            no setup, no friction.
-          </p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/sign-up"
-              className="rounded-md bg-ink-100 px-5 py-2.5 text-center text-sm font-medium text-ink-950 transition-colors hover:bg-white"
-            >
-              Get started
-            </Link>
-            <Link
-              href="/sign-in"
-              className="rounded-md border border-ink-700 px-5 py-2.5 text-center text-sm font-medium text-ink-100 transition-colors hover:border-ink-500"
-            >
-              Sign in
-            </Link>
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, #fff 1px, transparent 1px), linear-gradient(to bottom, #fff 1px, transparent 1px)",
+            backgroundSize: "48px 48px",
+            maskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, black 40%, transparent 100%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 60% 50% at 50% 0%, black 40%, transparent 100%)",
+          }}
+        />
+        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-24 pt-20 lg:grid-cols-[1fr_1.1fr] lg:pt-28">
+          <div>
+            <h1 className="font-[family-name:var(--font-display)] text-5xl font-semibold leading-[1.05] tracking-tight text-ink-100 sm:text-6xl lg:text-7xl">
+              Code together, in real time.
+            </h1>
+            <p className="mt-6 max-w-md text-ink-400">
+              Create a room, share the link, and edit code with your team live —
+              no setup, no friction.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/sign-up"
+                className="rounded-md bg-ink-100 px-5 py-2.5 text-center text-sm font-medium text-ink-950 transition-colors hover:bg-white"
+              >
+                Get started
+              </Link>
+              <Link
+                href="/sign-in"
+                className="rounded-md border border-ink-700 px-5 py-2.5 text-center text-sm font-medium text-ink-100 transition-colors hover:border-ink-500"
+              >
+                Sign in
+              </Link>
+            </div>
           </div>
+          <LiveDemoPreview />
         </div>
-        <LiveDemoPreview />
       </motion.section>
 
       {/* How it works */}
@@ -89,15 +102,15 @@ export default function Home() {
           </h2>
 
           <div className="mt-10 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-8">
+            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-8 transition-colors hover:border-ink-500">
               <div className="flex gap-1.5">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-ink-100" />
                 <span
-                  className="h-2 w-2 animate-pulse rounded-full bg-amber-400"
+                  className="h-2 w-2 animate-pulse rounded-full bg-ink-400"
                   style={{ animationDelay: "200ms" }}
                 />
                 <span
-                  className="h-2 w-2 animate-pulse rounded-full bg-emerald-400"
+                  className="h-2 w-2 animate-pulse rounded-full bg-ink-600"
                   style={{ animationDelay: "400ms" }}
                 />
               </div>
@@ -106,11 +119,11 @@ export default function Home() {
                 Every keystroke syncs instantly. No refresh, no merge conflicts, no waiting.
               </p>
             </div>
-            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-8">
+            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-8 transition-colors hover:border-ink-500">
               <div className="flex -space-x-2">
-                <span className="h-7 w-7 rounded-full border-2 border-ink-900 bg-sky-400" />
-                <span className="h-7 w-7 rounded-full border-2 border-ink-900 bg-amber-400" />
-                <span className="h-7 w-7 rounded-full border-2 border-ink-900 bg-emerald-400" />
+                <span className="h-7 w-7 rounded-full border-2 border-ink-900 bg-ink-100" />
+                <span className="h-7 w-7 rounded-full border-2 border-ink-900 bg-ink-400" />
+                <span className="h-7 w-7 rounded-full border-2 border-ink-900 bg-ink-600" />
               </div>
               <h3 className="mt-6 text-lg font-medium text-ink-100">Live presence</h3>
               <p className="mt-2 text-sm text-ink-400">
@@ -121,7 +134,10 @@ export default function Home() {
 
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             {SMALL_FEATURES.map((f) => (
-              <div key={f.title} className="rounded-2xl border border-ink-700 p-6">
+              <div
+                key={f.title}
+                className="rounded-2xl border border-ink-700 p-6 transition-colors hover:border-ink-500"
+              >
                 <h3 className="text-sm font-medium text-ink-100">{f.title}</h3>
                 <p className="mt-1.5 text-sm text-ink-400">{f.description}</p>
               </div>
@@ -145,6 +161,14 @@ export default function Home() {
           Get started free
         </Link>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t border-ink-800 px-4 py-8">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 text-xs text-ink-500 sm:flex-row">
+          <span>Built by Daksh.</span>
+          <span>CodeShare</span>
+        </div>
+      </footer>
     </main>
   );
 }

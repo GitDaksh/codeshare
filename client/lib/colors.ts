@@ -1,16 +1,14 @@
-const COLORS = [
-  "bg-emerald-500",
-  "bg-sky-500",
-  "bg-amber-500",
-  "bg-rose-500",
-  "bg-violet-500",
-  "bg-teal-500",
+const SHADES = [
+  "bg-ink-100 text-ink-950",
+  "bg-ink-400 text-ink-950",
+  "bg-ink-600 text-ink-100",
+  "bg-ink-800 text-ink-100 border border-ink-500",
 ];
 
-export function getUserColor(userId: string): string {
+export function getAvatarShade(userId: string): string {
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
-    hash = (hash * 31 + userId.charCodeAt(i)) % COLORS.length;
+    hash = (hash * 31 + userId.charCodeAt(i)) % SHADES.length;
   }
-  return COLORS[Math.abs(hash) % COLORS.length];
+  return SHADES[Math.abs(hash) % SHADES.length];
 }
