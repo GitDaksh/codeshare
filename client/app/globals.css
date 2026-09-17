@@ -16,3 +16,44 @@ body {
   background: var(--color-ink-950);
   color: var(--color-ink-100);
 }
+
+.remote-cursor-flag {
+  position: relative;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.remote-cursor-line {
+  width: 2px;
+  height: 19px;
+}
+
+.remote-cursor-tag {
+  margin-bottom: 2px;
+  padding: 1px 6px;
+  border-radius: 4px 4px 4px 0;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--color-ink-950);
+}
+
+.remote-cursor-ink-100.remote-cursor-line,
+.remote-cursor-ink-100.remote-cursor-tag {
+  background: var(--color-ink-100);
+}
+.remote-cursor-ink-400.remote-cursor-line,
+.remote-cursor-ink-400.remote-cursor-tag {
+  background: var(--color-ink-400);
+}
+.remote-cursor-ink-600.remote-cursor-line,
+.remote-cursor-ink-600.remote-cursor-tag {
+  background: var(--color-ink-600);
+  color: var(--color-ink-100);
+}
+.remote-cursor-ink-300.remote-cursor-line,
+.remote-cursor-ink-300.remote-cursor-tag {
+  background: var(--color-ink-300);
+}

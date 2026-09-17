@@ -148,6 +148,17 @@ export function setupSocket(io: Server) {
       scheduleCodeSave(roomId, code);
     });
 
+    socket.on("cursor:move", ({ roomId, line, column }: { roomId: string; line: number; column: number }) => {
+      if (!socket.rooms.has(roomId)) return;
+
+      socket.to(roomId).emit("cursor:move", {
+        userId: socket.data.userId,
+        name: socket.data.userName || "Anonymous",
+        line,
+        column,
+      });
+    });
+
     socket.on("disconnect", () => {
       console.log(`Socket disconnected: ${socket.id}`);
       if (socket.data.roomId) {
