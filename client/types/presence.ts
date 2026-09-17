@@ -3,3 +3,10 @@ export type OnlineUser = {
   userId: string;
   name: string;
 };
+
+export type RemoteCursorEvent = {
+  userId: string;
+  name: string;
+  line: number;
+  column: number;
+};

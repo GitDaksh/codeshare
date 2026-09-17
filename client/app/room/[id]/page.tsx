@@ -16,10 +16,11 @@ import { useApi } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
 import { useToast } from "@/components/ToastProvider";
 import { getAvatarShade } from "@/lib/colors";
-import { CodeEditor } from "@/components/CodeEditor";
+import { CodeEditor, type RemoteCursor } from "@/components/CodeEditor";
 import { LanguageDropdown } from "@/components/LanguageDropdown";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
+import type { RemoteCursorEvent } from "@/types/presence";
 
 const starterCode = `function twoSum(nums, target) {
   const seen = new Map();
@@ -61,6 +62,8 @@ export default function RoomPage({
   const [activeTab, setActiveTab] = useState<"chat" | "online">("chat");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const [remoteCursors, setRemoteCursors] = useState<RemoteCursor[]>([]);
+
   const handleIncomingMessage = useCallback((message: ChatMessage) => {
     setMessages((prev) => [...prev, message]);
   }, []);
@@ -69,10 +72,15 @@ export default function RoomPage({
     setCode(incomingCode);
   }, []);
 
-  const { status, onlineUsers, sendMessage, sendCodeChange } = useSocket(
+  const handleCursorMove = useCallback((cursor: RemoteCursorEvent) => {
+    setRemoteCursors((prev) => [...prev.filter((c) => c.userId !== cursor.userId), cursor]);
+  }, []);
+
+  const { status, onlineUsers, sendMessage, sendCodeChange, sendCursorMove } = useSocket(
     id,
     handleIncomingMessage,
-    handleIncomingCodeChange
+    handleIncomingCodeChange,
+    handleCursorMove
   );
 
   const [zenMode, setZenMode] = useState(false);
@@ -105,6 +113,11 @@ export default function RoomPage({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const onlineIds = new Set(onlineUsers.map((u) => u.userId));
+    setRemoteCursors((prev) => prev.filter((c) => onlineIds.has(c.userId)));
+  }, [onlineUsers]);
 
   useEffect(() => {
     function handleMouseMove(e: MouseEvent) {
@@ -206,26 +219,27 @@ export default function RoomPage({
             {status}
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1">
           <LanguageDropdown value={language} onChange={setLanguage} />
-          <span className="hidden h-4 w-px bg-ink-800 sm:block" />
+          <span className="mx-1 hidden h-4 w-px bg-ink-800 sm:block" />
           <button
             onClick={handleCopyLink}
-            className="flex items-center gap-1.5 rounded-md border border-ink-700 px-3 py-1 text-xs text-ink-300 transition-colors hover:border-ink-500"
+            aria-label="Copy room link"
+            title="Copy room link"
+            className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100"
           >
-            <LinkIcon className="h-3 w-3" />
-            Copy link
+            <LinkIcon className="h-4 w-4" />
           </button>
           <button
             onClick={() => setZenMode((z) => !z)}
             aria-label={zenMode ? "Show sidebar" : "Enter focus mode"}
             title={zenMode ? "Show sidebar" : "Focus mode"}
-            className="hidden rounded-md border border-ink-700 p-1.5 text-ink-300 transition-colors hover:border-ink-500 md:block"
+            className="hidden rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 md:block"
           >
             {zenMode ? (
-              <Minimize2 className="h-3.5 w-3.5" />
+              <Minimize2 className="h-4 w-4" />
             ) : (
-              <Maximize2 className="h-3.5 w-3.5" />
+              <Maximize2 className="h-4 w-4" />
             )}
           </button>
         </div>
@@ -238,6 +252,8 @@ export default function RoomPage({
             language={language}
             value={code}
             onChange={handleCodeChange}
+            onCursorMove={sendCursorMove}
+            remoteCursors={remoteCursors.filter((c) => c.userId !== currentUserId)}
             saveStatus={saveStatus}
           />
         </div>

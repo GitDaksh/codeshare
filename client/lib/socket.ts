@@ -3,7 +3,7 @@
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import type { OnlineUser } from "@/types/presence";
+import type { OnlineUser, RemoteCursorEvent } from "@/types/presence";
 import type { ChatMessage } from "@/types/chat";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
@@ -11,13 +11,15 @@ type ConnectionStatus = "connecting" | "connected" | "disconnected";
 export function useSocket(
   roomId: string,
   onChatMessage?: (message: ChatMessage) => void,
-  onCodeChange?: (code: string) => void
+  onCodeChange?: (code: string) => void,
+  onCursorMove?: (cursor: RemoteCursorEvent) => void
 ) {
   const { getToken } = useAuth();
   const { user, isLoaded } = useUser();
   const socketRef = useRef<Socket | null>(null);
   const onChatMessageRef = useRef(onChatMessage);
   const onCodeChangeRef = useRef(onCodeChange);
+  const onCursorMoveRef = useRef(onCursorMove);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
 
@@ -28,6 +30,10 @@ export function useSocket(
   useEffect(() => {
     onCodeChangeRef.current = onCodeChange;
   }, [onCodeChange]);
+
+  useEffect(() => {
+    onCursorMoveRef.current = onCursorMove;
+  }, [onCursorMove]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -65,6 +71,10 @@ export function useSocket(
         onCodeChangeRef.current?.(code);
       });
 
+      socket.on("cursor:move", (cursor: RemoteCursorEvent) => {
+        onCursorMoveRef.current?.(cursor);
+      });
+
       socket.on("disconnect", () => setStatus("disconnected"));
       socket.on("connect_error", (err) => {
         console.error("Socket connection error:", err.message);
@@ -89,5 +99,9 @@ export function useSocket(
     socketRef.current?.emit("code:change", { roomId, code });
   }
 
-  return { status, onlineUsers, sendMessage, sendCodeChange };
+  function sendCursorMove(line: number, column: number) {
+    socketRef.current?.emit("cursor:move", { roomId, line, column });
+  }
+
+  return { status, onlineUsers, sendMessage, sendCodeChange, sendCursorMove };
 }
