@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { Code2 } from "lucide-react";
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
+import { NavbarAvatar } from "@/components/NavbarAvatar";
 
 export function Navbar() {
   return (
-    <header className="sticky top-0 z-30 border-b border-ink-700 bg-ink-950/80 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-ink-800 bg-ink-950/80 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         <Link
           href="/"
@@ -25,7 +26,10 @@ export function Navbar() {
             </SignInButton>
           </Show>
           <Show when="signed-in">
-            <UserButton />
+            <div className="flex items-center gap-2.5">
+              <NavbarAvatar />
+              <UserButton />
+            </div>
           </Show>
         </nav>
       </div>
