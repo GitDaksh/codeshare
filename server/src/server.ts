@@ -8,6 +8,7 @@ import dotenv from "dotenv";
 import { clerkMiddleware } from "@clerk/express";
 import { connectDB } from "./config/db";
 import roomRoutes from "./routes/roomRoutes";
+import profileRoutes from "./routes/profileRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import { setupSocket, flushAllPendingCodeSaves } from "./sockets";
 
@@ -35,6 +36,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/rooms", roomRoutes);
+app.use("/api/profile", profileRoutes);
 
 app.use(errorHandler);
 
