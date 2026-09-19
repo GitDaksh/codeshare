@@ -1,105 +1,243 @@
 import type { ReactNode } from "react";
 
-type PatternFn = (fg: string) => ReactNode;
-
-const PALETTES: { bg: [string, string]; fg: string }[] = [
-  { bg: ["#000000", "#262626"], fg: "#f5f5f5" },
-  { bg: ["#0d0d0d", "#404040"], fg: "#f5f5f5" },
-  { bg: ["#f5f5f5", "#cccccc"], fg: "#0d0d0d" },
-  { bg: ["#1a1a1a", "#666666"], fg: "#f5f5f5" },
-  { bg: ["#262626", "#0d0d0d"], fg: "#cccccc" },
-  { bg: ["#404040", "#1a1a1a"], fg: "#f5f5f5" },
-];
-
-const PATTERNS: Record<string, PatternFn> = {
-  orbit: (fg) => (
-    <>
-      <circle cx="20" cy="20" r="14" fill="none" stroke={fg} strokeWidth="1.5" opacity="0.55" />
-      <circle cx="29" cy="14" r="4.5" fill={fg} />
-    </>
-  ),
-  bloom: (fg) => (
-    <>
-      <circle cx="14" cy="16" r="9" fill={fg} opacity="0.35" />
-      <circle cx="24" cy="14" r="7" fill={fg} opacity="0.5" />
-      <circle cx="20" cy="26" r="8" fill={fg} opacity="0.65" />
-    </>
-  ),
-  facet: (fg) => (
-    <>
-      <path d="M20 4 L34 24 L20 20 Z" fill={fg} opacity="0.85" />
-      <path d="M20 20 L34 24 L22 36 Z" fill={fg} opacity="0.5" />
-      <path d="M6 24 L20 4 L20 20 Z" fill={fg} opacity="0.65" />
-    </>
-  ),
-  halo: (fg) => (
-    <>
-      <circle cx="20" cy="20" r="15" fill="none" stroke={fg} strokeWidth="1" opacity="0.3" />
-      <circle cx="20" cy="20" r="10" fill="none" stroke={fg} strokeWidth="2" opacity="0.55" />
-      <circle cx="20" cy="20" r="4" fill={fg} opacity="0.9" />
-    </>
-  ),
-  terrain: (fg) => (
-    <>
-      <path d="M-2 30 Q10 20 20 27 T42 24 L42 42 L-2 42 Z" fill={fg} opacity="0.4" />
-      <path d="M-2 34 Q12 26 20 32 T42 30 L42 42 L-2 42 Z" fill={fg} opacity="0.65" />
-      <path d="M-2 38 Q14 32 22 37 T42 36 L42 42 L-2 42 Z" fill={fg} opacity="0.9" />
-    </>
-  ),
-  fragment: (fg) => (
-    <>
-      <path d="M6 6 L22 10 L14 22 Z" fill={fg} opacity="0.5" />
-      <path d="M22 10 L36 16 L24 26 L14 22 Z" fill={fg} opacity="0.75" />
-      <path d="M14 22 L24 26 L18 36 L8 30 Z" fill={fg} opacity="0.9" />
-    </>
-  ),
-  lattice: (fg) => (
-    <>
-      {[10, 20, 30].flatMap((cx) =>
-        [10, 20, 30].map((cy) => (
-          <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2.2" fill={fg} opacity="0.55" />
-        ))
-      )}
-      <line x1="6" y1="34" x2="34" y2="6" stroke={fg} strokeWidth="2" opacity="0.9" />
-    </>
-  ),
-  prism: (fg) => (
-    <>
-      <path d="M20 5 L35 33 L5 33 Z" fill={fg} opacity="0.35" />
-      <path d="M20 14 L28 30 L12 30 Z" fill={fg} opacity="0.7" />
-      <path d="M20 21 L23 28 L17 28 Z" fill={fg} />
-    </>
-  ),
-  comet: (fg) => (
-    <>
-      <path d="M6 30 Q16 26 34 10" fill="none" stroke={fg} strokeWidth="2.5" strokeLinecap="round" opacity="0.35" />
-      <path d="M12 28 Q20 22 32 12" fill="none" stroke={fg} strokeWidth="2.5" strokeLinecap="round" opacity="0.6" />
-      <circle cx="33" cy="10" r="4" fill={fg} />
-    </>
-  ),
-  mosaic: (fg) => (
-    <>
-      <rect x="9" y="9" width="16" height="16" fill={fg} opacity="0.4" transform="rotate(8 17 17)" />
-      <rect x="15" y="15" width="16" height="16" fill={fg} opacity="0.65" transform="rotate(-10 23 23)" />
-      <rect x="17" y="8" width="10" height="10" fill={fg} opacity="0.9" transform="rotate(20 22 13)" />
-    </>
-  ),
+type Rng = {
+  float: (min?: number, max?: number) => number;
+  int: (min: number, max: number) => number;
+  bool: (p?: number) => boolean;
 };
 
-export const AVATAR_IDS = Object.keys(PATTERNS).flatMap((pattern) =>
-  PALETTES.map((_, paletteIndex) => `${pattern}-${paletteIndex}`)
-);
+function hashSeed(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
 
-export const DEFAULT_AVATAR_ID = AVATAR_IDS[0];
+function mulberry32(seed: number) {
+  let a = seed;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
-export function getAvatarDefinition(avatarId: string) {
-  const [pattern, paletteIndexStr] = avatarId.split("-");
-  const paletteIndex = Number(paletteIndexStr);
-  const palette = PALETTES[paletteIndex] ?? PALETTES[0];
-  const patternFn = PATTERNS[pattern] ?? PATTERNS.orbit;
+function createRng(seed: string): Rng {
+  const rand = mulberry32(hashSeed(seed));
+  return {
+    float: (min = 0, max = 1) => min + rand() * (max - min),
+    int: (min: number, max: number) => Math.floor(min + rand() * (max - min + 1)),
+    bool: (p = 0.5) => rand() < p,
+  };
+}
+
+function shuffle<T>(arr: T[], rng: Rng): T[] {
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = rng.int(0, i);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+const PALETTES: { bg: [string, string]; fg: string; fg2: string }[] = [
+  { bg: ["#000000", "#262626"], fg: "#f5f5f5", fg2: "#999999" },
+  { bg: ["#0d0d0d", "#404040"], fg: "#f5f5f5", fg2: "#cccccc" },
+  { bg: ["#f5f5f5", "#cccccc"], fg: "#0d0d0d", fg2: "#404040" },
+  { bg: ["#1a1a1a", "#666666"], fg: "#f5f5f5", fg2: "#999999" },
+  { bg: ["#262626", "#0d0d0d"], fg: "#cccccc", fg2: "#666666" },
+  { bg: ["#404040", "#1a1a1a"], fg: "#f5f5f5", fg2: "#cccccc" },
+  { bg: ["#666666", "#262626"], fg: "#f5f5f5", fg2: "#cccccc" },
+];
+
+type LayerFn = (rng: Rng, fg: string, fg2: string, key: string) => ReactNode;
+
+const layerFragments: LayerFn = (rng, fg, fg2, key) => {
+  const count = rng.int(3, 5);
+  return (
+    <g key={key}>
+      {Array.from({ length: count }).map((_, i) => {
+        const cx = rng.float(4, 36);
+        const cy = rng.float(4, 36);
+        const size = rng.float(6, 16);
+        const rotation = rng.float(0, 360);
+        return (
+          <polygon
+            key={i}
+            points={`${cx},${cy - size} ${cx + size * 0.86},${cy + size * 0.5} ${cx - size * 0.86},${cy + size * 0.5}`}
+            fill={rng.bool(0.7) ? fg : fg2}
+            opacity={rng.float(0.35, 0.95)}
+            transform={`rotate(${rotation} ${cx} ${cy})`}
+          />
+        );
+      })}
+    </g>
+  );
+};
+
+const layerOrbits: LayerFn = (rng, fg, fg2, key) => {
+  const count = rng.int(3, 6);
+  return (
+    <g key={key}>
+      {Array.from({ length: count }).map((_, i) => {
+        const cx = rng.float(6, 34);
+        const cy = rng.float(6, 34);
+        const r = rng.float(2, 9);
+        const color = rng.bool(0.7) ? fg : fg2;
+        return rng.bool(0.6) ? (
+          <circle key={i} cx={cx} cy={cy} r={r} fill={color} opacity={rng.float(0.4, 1)} />
+        ) : (
+          <circle
+            key={i}
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={rng.float(1, 2.2)}
+            opacity={rng.float(0.5, 1)}
+          />
+        );
+      })}
+    </g>
+  );
+};
+
+const layerFlowLines: LayerFn = (rng, fg, fg2, key) => {
+  const count = rng.int(2, 4);
+  return (
+    <g key={key}>
+      {Array.from({ length: count }).map((_, i) => {
+        const x1 = rng.float(-4, 20);
+        const y1 = rng.float(2, 38);
+        const x2 = rng.float(20, 44);
+        const y2 = rng.float(2, 38);
+        const cx1 = rng.float(10, 30);
+        const cy1 = rng.float(-4, 44);
+        return (
+          <path
+            key={i}
+            d={`M ${x1} ${y1} Q ${cx1} ${cy1} ${x2} ${y2}`}
+            fill="none"
+            stroke={rng.bool(0.7) ? fg : fg2}
+            strokeWidth={rng.float(1.5, 4)}
+            strokeLinecap="round"
+            opacity={rng.float(0.5, 1)}
+          />
+        );
+      })}
+    </g>
+  );
+};
+
+const layerArcBand: LayerFn = (rng, fg, fg2, key) => {
+  const cx = 20;
+  const cy = 20;
+  const r = rng.float(10, 16);
+  const startAngle = rng.float(0, 360);
+  const sweep = rng.float(80, 220);
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const x1 = cx + r * Math.cos(toRad(startAngle));
+  const y1 = cy + r * Math.sin(toRad(startAngle));
+  const x2 = cx + r * Math.cos(toRad(startAngle + sweep));
+  const y2 = cy + r * Math.sin(toRad(startAngle + sweep));
+  const largeArc = sweep > 180 ? 1 : 0;
+  return (
+    <path
+      key={key}
+      d={`M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`}
+      fill="none"
+      stroke={rng.bool(0.7) ? fg : fg2}
+      strokeWidth={rng.float(3, 7)}
+      strokeLinecap="round"
+      opacity={rng.float(0.7, 1)}
+    />
+  );
+};
+
+const layerHalftone: LayerFn = (rng, fg, _fg2, key) => {
+  const focusX = rng.float(8, 32);
+  const focusY = rng.float(8, 32);
+  const dots: ReactNode[] = [];
+  for (let ix = 0; ix < 6; ix++) {
+    for (let iy = 0; iy < 6; iy++) {
+      const x = 3 + ix * 6.2;
+      const y = 3 + iy * 6.2;
+      const dist = Math.hypot(x - focusX, y - focusY);
+      const r = Math.max(0.4, 3.2 - dist * 0.28);
+      if (r > 0.5) {
+        dots.push(<circle key={`${ix}-${iy}`} cx={x} cy={y} r={r} fill={fg} opacity={0.85} />);
+      }
+    }
+  }
+  return <g key={key}>{dots}</g>;
+};
+
+const layerBar: LayerFn = (rng, fg, fg2, key) => {
+  const cx = rng.float(10, 30);
+  const cy = rng.float(10, 30);
+  const w = rng.float(14, 30);
+  const h = rng.float(3, 7);
+  return (
+    <rect
+      key={key}
+      x={cx - w / 2}
+      y={cy - h / 2}
+      width={w}
+      height={h}
+      rx={h / 2}
+      fill={rng.bool(0.7) ? fg : fg2}
+      opacity={rng.float(0.6, 0.95)}
+      transform={`rotate(${rng.float(0, 360)} ${cx} ${cy})`}
+    />
+  );
+};
+
+const layerHalo: LayerFn = (rng, fg, fg2, key) => {
+  const cx = rng.float(10, 30);
+  const cy = rng.float(10, 30);
+  return (
+    <circle
+      key={key}
+      cx={cx}
+      cy={cy}
+      r={rng.float(8, 17)}
+      fill="none"
+      stroke={rng.bool(0.6) ? fg : fg2}
+      strokeWidth={rng.float(0.8, 1.8)}
+      opacity={rng.float(0.35, 0.7)}
+    />
+  );
+};
+
+const LAYER_POOL: LayerFn[] = [
+  layerFragments,
+  layerOrbits,
+  layerFlowLines,
+  layerArcBand,
+  layerHalftone,
+  layerBar,
+  layerHalo,
+];
+
+export const DEFAULT_AVATAR_ID = "codeshare";
+
+export function generateSeedBatch(count: number): string[] {
+  return Array.from({ length: count }, () => Math.random().toString(36).slice(2, 10));
+}
+
+export function getAvatarDefinition(seed: string) {
+  const rng = createRng(seed || DEFAULT_AVATAR_ID);
+  const palette = PALETTES[rng.int(0, PALETTES.length - 1)];
+  const layerCount = rng.int(2, 3);
+  const chosen = shuffle(LAYER_POOL, rng).slice(0, layerCount);
 
   return {
     bg: palette.bg,
-    pattern: patternFn(palette.fg),
+    pattern: <>{chosen.map((layerFn, i) => layerFn(rng, palette.fg, palette.fg2, `layer-${i}`))}</>,
   };
 }

@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { getAuth } from "@clerk/express";
 import { Profile } from "../models/Profile";
 
-const DEFAULT_AVATAR_ID = "orbit-0";
+const DEFAULT_AVATAR_ID = "round-0";
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
 
 export async function getProfile(req: Request, res: Response, next: NextFunction) {

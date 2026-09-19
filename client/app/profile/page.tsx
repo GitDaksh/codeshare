@@ -8,7 +8,7 @@ import { useToast } from "@/components/ToastProvider";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { GithubIcon } from "@/components/GithubIcon";
 import { UsernameInput } from "@/components/UsernameInput";
-import { AVATAR_IDS } from "@/lib/avatars";
+import { AvatarPicker } from "@/components/AvatarPicker";
 import { LANGUAGES, getLanguageBadgeClasses } from "@/lib/languages";
 import type { Profile } from "@/types/profile";
 import type { Room } from "@/types/room";
@@ -202,22 +202,10 @@ export default function ProfilePage() {
       </div>
 
       {pickerOpen && (
-        <div className="mt-6 grid max-h-64 grid-cols-6 gap-2.5 overflow-y-auto rounded-lg border border-ink-800 p-4 sm:grid-cols-8">
-          {AVATAR_IDS.map((id) => (
-            <button
-              key={id}
-              onClick={() => handleAvatarSelect(id)}
-              aria-label={`Select avatar ${id}`}
-              aria-pressed={id === profile.avatarId}
-              className={`rounded-full transition-transform hover:scale-105 ${
-                id === profile.avatarId ? "ring-2 ring-ink-100 ring-offset-2 ring-offset-ink-950" : ""
-              }`}
-            >
-              <AvatarIcon avatarId={id} className="h-full w-full rounded-full" />
-            </button>
-          ))}
-        </div>
-      )}
+  <div className="mt-6 rounded-lg border border-ink-800 p-4">
+    <AvatarPicker value={profile.avatarId} onChange={handleAvatarSelect} />
+  </div>
+)}
 
       <div className="mt-8 rounded-lg border border-ink-800 p-4">
         {editingDetails ? (
