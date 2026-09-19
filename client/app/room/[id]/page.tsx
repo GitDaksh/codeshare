@@ -17,7 +17,7 @@ import { useSocket } from "@/lib/socket";
 import { useOnboardingGate } from "@/lib/useOnboardingGate";
 import { useToast } from "@/components/ToastProvider";
 import { getAvatarShade } from "@/lib/colors";
-import { CodeEditor, type RemoteCursor } from "@/components/CodeEditor";
+import { CodeEditor, type RemoteCursor, type RemoteCodeUpdate } from "@/components/CodeEditor";
 import { LanguageDropdown } from "@/components/LanguageDropdown";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
@@ -54,7 +54,8 @@ export default function RoomPage({
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const [code, setCode] = useState("");
+  const [initialCode, setInitialCode] = useState<string | null>(null);
+  const [remoteUpdate, setRemoteUpdate] = useState<RemoteCodeUpdate | null>(null);
   const [language, setLanguage] = useState("javascript");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,7 +72,7 @@ export default function RoomPage({
   }, []);
 
   const handleIncomingCodeChange = useCallback((incomingCode: string) => {
-    setCode(incomingCode);
+    setRemoteUpdate((prev) => ({ code: incomingCode, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
 
   const handleCursorMove = useCallback((cursor: RemoteCursorEvent) => {
@@ -92,7 +93,12 @@ export default function RoomPage({
   useEffect(() => {
     api
       .get<Room>(`/api/rooms/${id}`)
-      .then((res) => setRoom(res.data))
+      .then((res) => {
+        setRoom(res.data);
+        setLanguage(res.data.language);
+        setInitialCode(res.data.code || starterCode);
+        document.title = `${res.data.name} — CodeShare`;
+      })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [api, id]);
@@ -103,14 +109,6 @@ export default function RoomPage({
       .then((res) => setMessages(res.data))
       .catch(() => toast("Could not load chat history.", "error"));
   }, [api, id]);
-
-  useEffect(() => {
-    if (room) {
-      setCode(room.code || starterCode);
-      setLanguage(room.language);
-      document.title = `${room.name} — CodeShare`;
-    }
-  }, [room]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -152,7 +150,6 @@ export default function RoomPage({
   }
 
   function handleCodeChange(newCode: string) {
-    setCode(newCode);
     sendCodeChange(newCode);
 
     setSaveStatus("saving");
@@ -171,7 +168,7 @@ export default function RoomPage({
     setDraft("");
   }
 
-  if (checking || loading) {
+  if (checking || loading || initialCode === null) {
     return (
       <main className="flex h-[calc(100vh-56px)] items-center justify-center">
         <p className="text-sm text-ink-500">Loading room…</p>
@@ -246,7 +243,8 @@ export default function RoomPage({
         <div className="min-h-[400px] min-w-0 flex-1 md:h-full md:min-h-0">
           <CodeEditor
             language={language}
-            value={code}
+            initialValue={initialCode}
+            remoteUpdate={remoteUpdate}
             onChange={handleCodeChange}
             onCursorMove={sendCursorMove}
             remoteCursors={remoteCursors.filter((c) => c.userId !== currentUserId)}

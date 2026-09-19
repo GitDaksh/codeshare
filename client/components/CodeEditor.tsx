@@ -12,11 +12,18 @@ export type RemoteCursor = {
   column: number;
 };
 
+export type RemoteCodeUpdate = {
+  code: string;
+  nonce: number;
+};
+
 type MonacoEditorInstance = Parameters<OnMount>[0];
+type MonacoModel = NonNullable<ReturnType<MonacoEditorInstance["getModel"]>>;
 
 type CodeEditorProps = {
   language: string;
-  value: string;
+  initialValue: string;
+  remoteUpdate: RemoteCodeUpdate | null;
   onChange: (value: string) => void;
   onCursorMove: (line: number, column: number) => void;
   remoteCursors: RemoteCursor[];
@@ -33,6 +40,29 @@ function handleEditorWillMount(monaco: Monaco) {
       "editor.lineHighlightBackground": "#1A1A1A",
     },
   });
+}
+
+function computeMinimalEdit(oldText: string, newText: string) {
+  let prefixLen = 0;
+  const maxPrefix = Math.min(oldText.length, newText.length);
+  while (prefixLen < maxPrefix && oldText[prefixLen] === newText[prefixLen]) {
+    prefixLen++;
+  }
+
+  let suffixLen = 0;
+  const maxSuffix = Math.min(oldText.length - prefixLen, newText.length - prefixLen);
+  while (
+    suffixLen < maxSuffix &&
+    oldText[oldText.length - 1 - suffixLen] === newText[newText.length - 1 - suffixLen]
+  ) {
+    suffixLen++;
+  }
+
+  return {
+    startOffset: prefixLen,
+    endOffset: oldText.length - suffixLen,
+    insertedText: newText.slice(prefixLen, newText.length - suffixLen),
+  };
 }
 
 class RemoteCursorWidget {
@@ -81,7 +111,8 @@ class RemoteCursorWidget {
 
 export function CodeEditor({
   language,
-  value,
+  initialValue,
+  remoteUpdate,
   onChange,
   onCursorMove,
   remoteCursors,
@@ -92,6 +123,7 @@ export function CodeEditor({
   const monacoRef = useRef<Monaco | null>(null);
   const widgetsRef = useRef<Map<string, RemoteCursorWidget>>(new Map());
   const lastEmitRef = useRef(0);
+  const isApplyingRemoteRef = useRef(false);
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -107,6 +139,33 @@ export function CodeEditor({
       }
     });
   };
+
+  // Apply remote edits surgically — only the changed range, never the whole buffer.
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco || !remoteUpdate) return;
+
+    const model: MonacoModel | null = editor.getModel();
+    if (!model) return;
+
+    const oldText = model.getValue();
+    if (oldText === remoteUpdate.code) return;
+
+    const { startOffset, endOffset, insertedText } = computeMinimalEdit(oldText, remoteUpdate.code);
+    const startPos = model.getPositionAt(startOffset);
+    const endPos = model.getPositionAt(endOffset);
+
+    isApplyingRemoteRef.current = true;
+    editor.executeEdits("remote-sync", [
+      {
+        range: new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column),
+        text: insertedText,
+      },
+    ]);
+    isApplyingRemoteRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteUpdate?.nonce]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -153,8 +212,11 @@ export function CodeEditor({
           height="100%"
           language={language}
           theme="codeshare-dark"
-          value={value}
-          onChange={(val) => onChange(val ?? "")}
+          defaultValue={initialValue}
+          onChange={(val) => {
+            if (isApplyingRemoteRef.current) return;
+            onChange(val ?? "");
+          }}
           beforeMount={handleEditorWillMount}
           onMount={handleMount}
           options={{
