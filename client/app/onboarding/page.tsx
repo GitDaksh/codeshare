@@ -7,7 +7,8 @@ import { useApi } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { UsernameInput } from "@/components/UsernameInput";
-import { AVATAR_IDS, DEFAULT_AVATAR_ID } from "@/lib/avatars";
+import { AvatarPicker } from "@/components/AvatarPicker";
+import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import { LANGUAGES, getLanguageBadgeClasses } from "@/lib/languages";
 import type { Profile } from "@/types/profile";
 
@@ -55,7 +56,7 @@ export default function OnboardingPage() {
         favoriteLanguage,
         githubUsername: githubUsername.trim(),
       });
-      toast(`Welcome, @${username}`);
+      toast(`Welcome, @${username}!`);
       router.push("/dashboard");
     } catch (err: unknown) {
       const message =
@@ -79,6 +80,13 @@ export default function OnboardingPage() {
   return (
     <main className="flex min-h-[calc(100vh-56px)] items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
+        {step > 0 && (
+          <div className="mb-4 flex items-center gap-2 text-xs text-ink-500">
+            <AvatarIcon avatarId={avatarId} className="h-6 w-6 rounded-full" />
+            <span>{username ? `@${username}` : "Setting up your profile…"}</span>
+          </div>
+        )}
+
         <div className="mb-8 flex items-center gap-1.5">
           {STEPS.map((label, i) => (
             <div
@@ -100,10 +108,10 @@ export default function OnboardingPage() {
               transition={{ duration: 0.2 }}
             >
               <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-ink-100">
-                Welcome to CodeShare
+                Welcome to CodeShare!
               </h1>
               <p className="mt-1.5 text-sm text-ink-500">
-                Let's set up your profile — takes about a minute.
+                Let's get your profile set up — it only takes a minute.
               </p>
               <div className="mt-8 flex justify-center">
                 <AvatarIcon avatarId={avatarId} className="h-20 w-20 rounded-full" />
@@ -132,41 +140,32 @@ export default function OnboardingPage() {
                   onValidityChange={setUsernameValid}
                 />
               </div>
+              <p className="mt-3 text-xs text-ink-600">
+                Don't overthink it — you can always change this later.
+              </p>
             </motion.div>
           )}
 
           {step === 2 && (
-            <motion.div
-              key="avatar"
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -16 }}
-              transition={{ duration: 0.2 }}
-            >
-              <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-ink-100">
-                Choose an avatar
-              </h1>
-              <p className="mt-1.5 text-sm text-ink-500">You can change this any time.</p>
-              <div className="mt-6 flex justify-center">
-                <AvatarIcon avatarId={avatarId} className="h-20 w-20 rounded-full" />
-              </div>
-              <div className="mt-6 grid max-h-64 grid-cols-6 gap-2.5 overflow-y-auto pr-1">
-                {AVATAR_IDS.map((id) => (
-                  <button
-                    key={id}
-                    onClick={() => setAvatarId(id)}
-                    aria-label={`Select avatar ${id}`}
-                    aria-pressed={id === avatarId}
-                    className={`rounded-full transition-transform hover:scale-105 ${
-                      id === avatarId ? "ring-2 ring-ink-100 ring-offset-2 ring-offset-ink-950" : ""
-                    }`}
-                  >
-                    <AvatarIcon avatarId={id} className="h-full w-full rounded-full" />
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
+  <motion.div
+    key="avatar"
+    initial={{ opacity: 0, x: 16 }}
+    animate={{ opacity: 1, x: 0 }}
+    exit={{ opacity: 0, x: -16 }}
+    transition={{ duration: 0.2 }}
+  >
+    <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-ink-100">
+      Choose an avatar
+    </h1>
+    <p className="mt-1.5 text-sm text-ink-500">Shuffle until one feels right — infinite options.</p>
+    <div className="mt-6 flex justify-center">
+      <AvatarIcon avatarId={avatarId} className="h-20 w-20 rounded-full" />
+    </div>
+    <div className="mt-6">
+      <AvatarPicker value={avatarId} onChange={setAvatarId} />
+    </div>
+  </motion.div>
+)}
 
           {step === 3 && (
             <motion.div
@@ -235,7 +234,7 @@ export default function OnboardingPage() {
               transition={{ duration: 0.2 }}
             >
               <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-ink-100">
-                Ready to go
+                Looking good!
               </h1>
               <p className="mt-1.5 text-sm text-ink-500">
                 Here's your profile — you can change any of this later.

@@ -1,6 +1,6 @@
 import { Schema, model, Document } from "mongoose";
 
-const DEFAULT_AVATAR_ID = "orbit-0";
+const DEFAULT_AVATAR_ID = "round-0";
 
 export interface IProfile extends Document {
   clerkUserId: string;
