@@ -9,11 +9,17 @@ type CreateRoomModalProps = {
   open: boolean;
   onClose: () => void;
   onCreate: (name: string, language: string) => Promise<void>;
+  defaultLanguage?: string;
 };
 
-export function CreateRoomModal({ open, onClose, onCreate }: CreateRoomModalProps) {
+export function CreateRoomModal({
+  open,
+  onClose,
+  onCreate,
+  defaultLanguage = "javascript",
+}: CreateRoomModalProps) {
   const [name, setName] = useState("");
-  const [language, setLanguage] = useState("javascript");
+  const [language, setLanguage] = useState(defaultLanguage);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
@@ -24,7 +30,7 @@ export function CreateRoomModal({ open, onClose, onCreate }: CreateRoomModalProp
     try {
       await onCreate(name.trim(), language);
       setName("");
-      setLanguage("javascript");
+      setLanguage(defaultLanguage);
       onClose();
     } finally {
       setSubmitting(false);
@@ -46,7 +52,7 @@ export function CreateRoomModal({ open, onClose, onCreate }: CreateRoomModalProp
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 8 }}
             transition={{ duration: 0.15 }}
-            className="w-full max-w-sm rounded-xl border border-ink-700 bg-ink-900 p-5 shadow-2xl"
+            className="w-full max-w-sm rounded-xl border border-ink-800 bg-ink-900 p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -62,18 +68,18 @@ export function CreateRoomModal({ open, onClose, onCreate }: CreateRoomModalProp
 
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs text-ink-400">Room name</label>
+                <label className="mb-1 block text-xs text-ink-500">Room name</label>
                 <input
                   autoFocus
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Interview prep"
-                  className="w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 focus:border-ink-500 focus:outline-none"
+                  className="w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs text-ink-400">Language</label>
+                <label className="mb-1 block text-xs text-ink-500">Language</label>
                 <select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}

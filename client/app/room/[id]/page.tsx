@@ -14,6 +14,7 @@ import { useAuth } from "@clerk/nextjs";
 import { ArrowLeft, Maximize2, Minimize2, Link as LinkIcon } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
+import { useOnboardingGate } from "@/lib/useOnboardingGate";
 import { useToast } from "@/components/ToastProvider";
 import { getAvatarShade } from "@/lib/colors";
 import { CodeEditor, type RemoteCursor } from "@/components/CodeEditor";
@@ -47,6 +48,7 @@ export default function RoomPage({
   const { userId: currentUserId } = useAuth();
   const api = useApi();
   const { toast } = useToast();
+  const { checking } = useOnboardingGate();
 
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
@@ -169,7 +171,7 @@ export default function RoomPage({
     setDraft("");
   }
 
-  if (loading) {
+  if (checking || loading) {
     return (
       <main className="flex h-[calc(100vh-56px)] items-center justify-center">
         <p className="text-sm text-ink-500">Loading room…</p>
@@ -200,7 +202,6 @@ export default function RoomPage({
 
   return (
     <main className="flex flex-col md:h-[calc(100vh-56px)]">
-      {/* Room header */}
       <div className="flex flex-col gap-2 border-b border-ink-800 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <Link
@@ -236,16 +237,11 @@ export default function RoomPage({
             title={zenMode ? "Show sidebar" : "Focus mode"}
             className="hidden rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 md:block"
           >
-            {zenMode ? (
-              <Minimize2 className="h-4 w-4" />
-            ) : (
-              <Maximize2 className="h-4 w-4" />
-            )}
+            {zenMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
         </div>
       </div>
 
-      {/* Body: editor + sidebar */}
       <div className="flex flex-1 flex-col md:min-h-0 md:flex-row">
         <div className="min-h-[400px] min-w-0 flex-1 md:h-full md:min-h-0">
           <CodeEditor
@@ -296,10 +292,7 @@ export default function RoomPage({
                   {onlineUsers.map((u) => {
                     const label = u.userId === currentUserId ? "You" : u.name;
                     return (
-                      <li
-                        key={u.socketId}
-                        className="flex items-center gap-2 text-sm text-ink-100"
-                      >
+                      <li key={u.socketId} className="flex items-center gap-2 text-sm text-ink-100">
                         <span
                           className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${getAvatarShade(u.userId)}`}
                         >
