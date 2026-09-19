@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Search, Plus } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/api";
+import { useOnboardingGate } from "@/lib/useOnboardingGate";
 import { useToast } from "@/components/ToastProvider";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
 import { Skeleton } from "@/components/Skeleton";
@@ -18,6 +19,7 @@ export default function DashboardPage() {
   const { userId } = useAuth();
   const api = useApi();
   const { toast } = useToast();
+  const { checking, profile } = useOnboardingGate();
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +69,14 @@ export default function DashboardPage() {
     }
     return result;
   }, [rooms, query, sortBy]);
+
+  if (checking) {
+    return (
+      <main className="flex min-h-[calc(100vh-56px)] items-center justify-center">
+        <p className="text-sm text-ink-500">Loading…</p>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-12">
@@ -176,6 +186,7 @@ export default function DashboardPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onCreate={handleCreateRoom}
+        defaultLanguage={profile?.favoriteLanguage || "javascript"}
       />
     </main>
   );

@@ -2,63 +2,86 @@ import type { ReactNode } from "react";
 
 type PatternFn = (fg: string) => ReactNode;
 
-const PALETTES: { bg: string; fg: string }[] = [
-  { bg: "#000000", fg: "#f5f5f5" },
-  { bg: "#0d0d0d", fg: "#999999" },
-  { bg: "#f5f5f5", fg: "#0d0d0d" },
-  { bg: "#1a1a1a", fg: "#cccccc" },
-  { bg: "#262626", fg: "#666666" },
+const PALETTES: { bg: [string, string]; fg: string }[] = [
+  { bg: ["#000000", "#262626"], fg: "#f5f5f5" },
+  { bg: ["#0d0d0d", "#404040"], fg: "#f5f5f5" },
+  { bg: ["#f5f5f5", "#cccccc"], fg: "#0d0d0d" },
+  { bg: ["#1a1a1a", "#666666"], fg: "#f5f5f5" },
+  { bg: ["#262626", "#0d0d0d"], fg: "#cccccc" },
+  { bg: ["#404040", "#1a1a1a"], fg: "#f5f5f5" },
 ];
 
 const PATTERNS: Record<string, PatternFn> = {
-  rings: (fg) => (
+  orbit: (fg) => (
     <>
-      <circle cx="20" cy="20" r="15" fill="none" stroke={fg} strokeWidth="3.5" />
-      <circle cx="20" cy="20" r="7" fill={fg} />
+      <circle cx="20" cy="20" r="14" fill="none" stroke={fg} strokeWidth="1.5" opacity="0.55" />
+      <circle cx="29" cy="14" r="4.5" fill={fg} />
     </>
   ),
-  stripes: (fg) => (
-    <g transform="rotate(35 20 20)">
-      {[-8, 4, 16, 28, 40].map((x) => (
-        <rect key={x} x={x} y="-10" width="6" height="60" fill={fg} />
-      ))}
-    </g>
-  ),
-  dots: (fg) => (
+  bloom: (fg) => (
     <>
-      {[9, 20, 31].flatMap((cx) =>
-        [9, 20, 31].map((cy) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="3.2" fill={fg} />)
+      <circle cx="14" cy="16" r="9" fill={fg} opacity="0.35" />
+      <circle cx="24" cy="14" r="7" fill={fg} opacity="0.5" />
+      <circle cx="20" cy="26" r="8" fill={fg} opacity="0.65" />
+    </>
+  ),
+  facet: (fg) => (
+    <>
+      <path d="M20 4 L34 24 L20 20 Z" fill={fg} opacity="0.85" />
+      <path d="M20 20 L34 24 L22 36 Z" fill={fg} opacity="0.5" />
+      <path d="M6 24 L20 4 L20 20 Z" fill={fg} opacity="0.65" />
+    </>
+  ),
+  halo: (fg) => (
+    <>
+      <circle cx="20" cy="20" r="15" fill="none" stroke={fg} strokeWidth="1" opacity="0.3" />
+      <circle cx="20" cy="20" r="10" fill="none" stroke={fg} strokeWidth="2" opacity="0.55" />
+      <circle cx="20" cy="20" r="4" fill={fg} opacity="0.9" />
+    </>
+  ),
+  terrain: (fg) => (
+    <>
+      <path d="M-2 30 Q10 20 20 27 T42 24 L42 42 L-2 42 Z" fill={fg} opacity="0.4" />
+      <path d="M-2 34 Q12 26 20 32 T42 30 L42 42 L-2 42 Z" fill={fg} opacity="0.65" />
+      <path d="M-2 38 Q14 32 22 37 T42 36 L42 42 L-2 42 Z" fill={fg} opacity="0.9" />
+    </>
+  ),
+  fragment: (fg) => (
+    <>
+      <path d="M6 6 L22 10 L14 22 Z" fill={fg} opacity="0.5" />
+      <path d="M22 10 L36 16 L24 26 L14 22 Z" fill={fg} opacity="0.75" />
+      <path d="M14 22 L24 26 L18 36 L8 30 Z" fill={fg} opacity="0.9" />
+    </>
+  ),
+  lattice: (fg) => (
+    <>
+      {[10, 20, 30].flatMap((cx) =>
+        [10, 20, 30].map((cy) => (
+          <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2.2" fill={fg} opacity="0.55" />
+        ))
       )}
+      <line x1="6" y1="34" x2="34" y2="6" stroke={fg} strokeWidth="2" opacity="0.9" />
     </>
   ),
-  triangles: (fg) => (
+  prism: (fg) => (
     <>
-      <path d="M20 3 L35 20 L20 20 Z" fill={fg} />
-      <path d="M20 37 L5 20 L20 20 Z" fill={fg} />
+      <path d="M20 5 L35 33 L5 33 Z" fill={fg} opacity="0.35" />
+      <path d="M20 14 L28 30 L12 30 Z" fill={fg} opacity="0.7" />
+      <path d="M20 21 L23 28 L17 28 Z" fill={fg} />
     </>
   ),
-  cross: (fg) => (
+  comet: (fg) => (
     <>
-      <rect x="16" y="4" width="8" height="32" fill={fg} />
-      <rect x="4" y="16" width="32" height="8" fill={fg} />
+      <path d="M6 30 Q16 26 34 10" fill="none" stroke={fg} strokeWidth="2.5" strokeLinecap="round" opacity="0.35" />
+      <path d="M12 28 Q20 22 32 12" fill="none" stroke={fg} strokeWidth="2.5" strokeLinecap="round" opacity="0.6" />
+      <circle cx="33" cy="10" r="4" fill={fg} />
     </>
   ),
-  quadrants: (fg) => (
+  mosaic: (fg) => (
     <>
-      <path d="M20 20 L20 0 A20 20 0 0 1 40 20 Z" fill={fg} />
-      <path d="M20 20 L20 40 A20 20 0 0 1 0 20 Z" fill={fg} />
-    </>
-  ),
-  chevrons: (fg) => (
-    <>
-      <path d="M2 16 L20 6 L38 16 L38 23 L20 13 L2 23 Z" fill={fg} />
-      <path d="M2 30 L20 20 L38 30 L38 37 L20 27 L2 37 Z" fill={fg} />
-    </>
-  ),
-  waves: (fg) => (
-    <>
-      <path d="M-2 13 Q9 6 20 13 T42 13 L42 21 Q31 14 20 21 T-2 21 Z" fill={fg} />
-      <path d="M-2 27 Q9 20 20 27 T42 27 L42 35 Q31 28 20 35 T-2 35 Z" fill={fg} />
+      <rect x="9" y="9" width="16" height="16" fill={fg} opacity="0.4" transform="rotate(8 17 17)" />
+      <rect x="15" y="15" width="16" height="16" fill={fg} opacity="0.65" transform="rotate(-10 23 23)" />
+      <rect x="17" y="8" width="10" height="10" fill={fg} opacity="0.9" transform="rotate(20 22 13)" />
     </>
   ),
 };
@@ -73,7 +96,7 @@ export function getAvatarDefinition(avatarId: string) {
   const [pattern, paletteIndexStr] = avatarId.split("-");
   const paletteIndex = Number(paletteIndexStr);
   const palette = PALETTES[paletteIndex] ?? PALETTES[0];
-  const patternFn = PATTERNS[pattern] ?? PATTERNS.rings;
+  const patternFn = PATTERNS[pattern] ?? PATTERNS.orbit;
 
   return {
     bg: palette.bg,
