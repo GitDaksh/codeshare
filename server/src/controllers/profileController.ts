@@ -1,8 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import { getAuth } from "@clerk/express";
 import { Profile } from "../models/Profile";
+import { Room } from "../models/Room";
 
-const DEFAULT_AVATAR_ID = "round-0";
+const DEFAULT_AVATAR_ID = "codeshare";
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
 
 export async function getProfile(req: Request, res: Response, next: NextFunction) {
@@ -86,6 +87,36 @@ export async function updateProfile(req: Request, res: Response, next: NextFunct
     );
 
     res.json(profile);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getRecentRooms(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { userId } = getAuth(req);
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const profile = await Profile.findOne({ clerkUserId: userId });
+
+    if (!profile || profile.recentRoomIds.length === 0) {
+      return res.json([]);
+    }
+
+    const rooms = await Room.find({
+      _id: { $in: profile.recentRoomIds },
+      ownerId: { $ne: userId },
+    });
+
+    const roomMap = new Map(rooms.map((r) => [r._id.toString(), r]));
+    const ordered = profile.recentRoomIds
+      .map((id) => roomMap.get(id))
+      .filter((r): r is (typeof rooms)[number] => Boolean(r));
+
+    res.json(ordered);
   } catch (err) {
     next(err);
   }

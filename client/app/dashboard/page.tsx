@@ -2,30 +2,56 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, ArrowRight } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/api";
 import { useOnboardingGate } from "@/lib/useOnboardingGate";
 import { useToast } from "@/components/ToastProvider";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
 import { Skeleton } from "@/components/Skeleton";
+import { AvatarIcon } from "@/components/AvatarIcon";
 import { getLanguageBadgeClasses } from "@/lib/languages";
 import type { Room } from "@/types/room";
 
 type SortMode = "updated" | "name";
 
+function timeAgo(dateStr: string): string {
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+function extractRoomId(input: string): string | null {
+  const trimmed = input.trim();
+  const match = trimmed.match(/room\/([a-f0-9]{24})/i);
+  if (match) return match[1];
+  if (/^[a-f0-9]{24}$/i.test(trimmed)) return trimmed;
+  return null;
+}
+
 export default function DashboardPage() {
   const { userId } = useAuth();
+  const router = useRouter();
   const api = useApi();
   const { toast } = useToast();
   const { checking, profile } = useOnboardingGate();
 
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [recentRooms, setRecentRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortMode>("updated");
+  const [languageFilter, setLanguageFilter] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [joinInput, setJoinInput] = useState("");
 
   useEffect(() => {
     document.title = "Dashboard — CodeShare";
@@ -37,6 +63,13 @@ export default function DashboardPage() {
       .then((res) => setRooms(res.data))
       .catch(() => toast("Could not load your rooms.", "error"))
       .finally(() => setLoading(false));
+  }, [api]);
+
+  useEffect(() => {
+    api
+      .get<Room[]>("/api/profile/recent-rooms")
+      .then((res) => setRecentRooms(res.data))
+      .catch(() => {});
   }, [api]);
 
   async function handleCreateRoom(name: string, language: string) {
@@ -60,15 +93,37 @@ export default function DashboardPage() {
     }
   }
 
+  function handleJoinByLink() {
+    const id = extractRoomId(joinInput);
+    if (!id) {
+      toast("That doesn't look like a valid room link or ID.", "error");
+      return;
+    }
+    router.push(`/room/${id}`);
+  }
+
+  const availableLanguages = useMemo(
+    () => Array.from(new Set(rooms.map((r) => r.language))),
+    [rooms]
+  );
+
   const filteredRooms = useMemo(() => {
-    const result = rooms.filter((room) =>
+    let result = rooms.filter((room) =>
       room.name.toLowerCase().includes(query.trim().toLowerCase())
     );
+    if (languageFilter) {
+      result = result.filter((room) => room.language === languageFilter);
+    }
     if (sortBy === "name") {
       return [...result].sort((a, b) => a.name.localeCompare(b.name));
     }
     return result;
-  }, [rooms, query, sortBy]);
+  }, [rooms, query, sortBy, languageFilter]);
+
+  const lastActive = useMemo(() => {
+    if (rooms.length === 0) return null;
+    return rooms.reduce((latest, r) => (r.updatedAt > latest ? r.updatedAt : latest), rooms[0].updatedAt);
+  }, [rooms]);
 
   if (checking) {
     return (
@@ -80,39 +135,154 @@ export default function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-12">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100">
-          Your rooms
-        </h1>
+      {profile && (
+        <div className="mb-8 flex items-center gap-3">
+          <AvatarIcon avatarId={profile.avatarId} className="h-12 w-12 rounded-full" />
+          <div className="min-w-0 flex-1">
+            <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100">
+              Welcome back, @{profile.username}
+            </h1>
+            {profile.bio && <p className="truncate text-sm text-ink-500">{profile.bio}</p>}
+          </div>
+          <Link
+            href="/profile"
+            className="shrink-0 text-xs text-ink-500 transition-colors hover:text-ink-100"
+          >
+            Edit profile
+          </Link>
+        </div>
+      )}
+
+      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-lg border border-ink-800 p-3">
+          <p className="text-xs text-ink-500">Rooms</p>
+          <p className="mt-1 text-lg font-medium text-ink-100">{rooms.length}</p>
+        </div>
+        <div className="rounded-lg border border-ink-800 p-3">
+          <p className="text-xs text-ink-500">Languages used</p>
+          <p className="mt-1 text-lg font-medium text-ink-100">{availableLanguages.length}</p>
+        </div>
+        <div className="rounded-lg border border-ink-800 p-3">
+          <p className="text-xs text-ink-500">Last active</p>
+          <p className="mt-1 text-lg font-medium text-ink-100">
+            {lastActive ? timeAgo(lastActive) : "—"}
+          </p>
+        </div>
+        <div className="rounded-lg border border-ink-800 p-3">
+          <p className="text-xs text-ink-500">Favorite language</p>
+          <p className="mt-1 truncate text-lg font-medium text-ink-100">
+            {profile?.favoriteLanguage || "Not set"}
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-8 flex flex-col gap-2 sm:flex-row">
         <button
           onClick={() => setModalOpen(true)}
-          className="flex items-center gap-1.5 rounded-md bg-ink-100 px-4 py-2 text-sm font-medium text-ink-950 transition-colors hover:bg-white"
+          className="flex items-center justify-center gap-1.5 rounded-md bg-ink-100 px-4 py-2 text-sm font-medium text-ink-950 transition-colors hover:bg-white"
         >
           <Plus className="h-4 w-4" />
           New room
         </button>
+        <div className="flex flex-1 gap-2">
+          <input
+            value={joinInput}
+            onChange={(e) => setJoinInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleJoinByLink()}
+            placeholder="Paste a room link or ID to join…"
+            className="min-w-0 flex-1 rounded-md border border-ink-800 bg-ink-900 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-600 focus:outline-none"
+          />
+          <button
+            onClick={handleJoinByLink}
+            className="flex shrink-0 items-center gap-1 rounded-md border border-ink-700 px-3 py-2 text-sm text-ink-100 transition-colors hover:border-ink-500"
+          >
+            Join
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
-      {rooms.length > 0 && (
-        <div className="mb-4 flex gap-2">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-600" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search rooms…"
-              className="w-full rounded-md border border-ink-800 bg-ink-900 py-2 pl-9 pr-3 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-600 focus:outline-none"
-            />
+      {recentRooms.length > 0 && (
+        <div className="mb-8">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-ink-500">
+            Recently joined
+          </h2>
+          <div className="divide-y divide-ink-800 rounded-lg border border-ink-800">
+            {recentRooms.map((room) => (
+              <div key={room._id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-medium text-ink-100">{room.name}</span>
+                    <span className={`rounded border px-1.5 py-0.5 text-xs ${getLanguageBadgeClasses(room.language)}`}>
+                      {room.language}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-ink-500">updated {timeAgo(room.updatedAt)}</p>
+                </div>
+                <Link
+                  href={`/room/${room._id}`}
+                  className="shrink-0 rounded-md border border-ink-700 px-3 py-1.5 text-sm text-ink-100 transition-colors hover:border-ink-500"
+                >
+                  Join
+                </Link>
+              </div>
+            ))}
           </div>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortMode)}
-            className="rounded-md border border-ink-800 bg-ink-900 px-2 text-sm text-ink-400 focus:border-ink-600 focus:outline-none"
-          >
-            <option value="updated">Recently updated</option>
-            <option value="name">Name A–Z</option>
-          </select>
         </div>
+      )}
+
+      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-ink-500">Your rooms</h2>
+
+      {rooms.length > 0 && (
+        <>
+          <div className="mb-3 flex gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-600" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search rooms…"
+                className="w-full rounded-md border border-ink-800 bg-ink-900 py-2 pl-9 pr-3 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-600 focus:outline-none"
+              />
+            </div>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortMode)}
+              className="rounded-md border border-ink-800 bg-ink-900 px-2 text-sm text-ink-400 focus:border-ink-600 focus:outline-none"
+            >
+              <option value="updated">Recently updated</option>
+              <option value="name">Name A–Z</option>
+            </select>
+          </div>
+
+          {availableLanguages.length > 1 && (
+            <div className="mb-4 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setLanguageFilter(null)}
+                className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                  languageFilter === null
+                    ? "border-ink-100 bg-ink-100 text-ink-950"
+                    : "border-ink-700 text-ink-400 hover:border-ink-500"
+                }`}
+              >
+                All
+              </button>
+              {availableLanguages.map((lang) => (
+                <button
+                  key={lang}
+                  onClick={() => setLanguageFilter(lang)}
+                  className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                    languageFilter === lang
+                      ? "border-ink-100 bg-ink-100 text-ink-950"
+                      : "border-ink-700 text-ink-400 hover:border-ink-500"
+                  }`}
+                >
+                  {lang}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {loading ? (
@@ -135,7 +305,7 @@ export default function DashboardPage() {
           </button>
         </div>
       ) : filteredRooms.length === 0 ? (
-        <p className="text-sm text-ink-500">No rooms match "{query}".</p>
+        <p className="text-sm text-ink-500">No rooms match your filters.</p>
       ) : (
         <div className="divide-y divide-ink-800 rounded-lg border border-ink-800">
           {filteredRooms.map((room, i) => (
@@ -156,9 +326,7 @@ export default function DashboardPage() {
                     {room.language}
                   </span>
                 </div>
-                <p className="mt-0.5 text-xs text-ink-500">
-                  updated {new Date(room.updatedAt).toLocaleString()}
-                </p>
+                <p className="mt-0.5 text-xs text-ink-500">updated {timeAgo(room.updatedAt)}</p>
               </div>
 
               <div className="flex shrink-0 items-center gap-2">

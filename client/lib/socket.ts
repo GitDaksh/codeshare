@@ -47,7 +47,19 @@ export function useSocket(
     let socket: Socket;
 
     async function connect() {
-      const token = await getToken();
+      let token: string | null;
+      try {
+        // skipCache: true forces Clerk to mint a genuinely fresh token rather
+        // than potentially handing back a cached one that's already close to
+        // its ~60s expiry — the socket handshake takes long enough that a
+        // near-expiry cached token can tip over into actually expired before
+        // the server gets to verify it.
+        token = await getToken({ skipCache: true });
+      } catch (err) {
+        console.error("Failed to fetch auth token for socket connection:", err);
+        setStatus("disconnected");
+        return;
+      }
 
       if (cancelled) return;
 

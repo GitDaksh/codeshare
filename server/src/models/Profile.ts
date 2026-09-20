@@ -1,6 +1,6 @@
 import { Schema, model, Document } from "mongoose";
 
-const DEFAULT_AVATAR_ID = "round-0";
+const DEFAULT_AVATAR_ID = "codeshare";
 
 export interface IProfile extends Document {
   clerkUserId: string;
@@ -9,6 +9,7 @@ export interface IProfile extends Document {
   bio: string;
   favoriteLanguage: string;
   githubUsername: string;
+  recentRoomIds: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,6 +49,10 @@ const profileSchema = new Schema<IProfile>(
       trim: true,
       maxlength: 39,
       default: "",
+    },
+    recentRoomIds: {
+      type: [String],
+      default: [],
     },
   },
   { timestamps: true }
