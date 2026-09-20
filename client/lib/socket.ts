@@ -8,10 +8,15 @@ import type { ChatMessage } from "@/types/chat";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
+type CodeChangePayload = {
+  code: string;
+  cursor: RemoteCursorEvent | null;
+};
+
 export function useSocket(
   roomId: string,
   onChatMessage?: (message: ChatMessage) => void,
-  onCodeChange?: (code: string) => void,
+  onCodeChange?: (code: string, cursor: RemoteCursorEvent | null) => void,
   onCursorMove?: (cursor: RemoteCursorEvent) => void
 ) {
   const { getToken } = useAuth();
@@ -67,8 +72,8 @@ export function useSocket(
         onChatMessageRef.current?.(message);
       });
 
-      socket.on("code:change", (code: string) => {
-        onCodeChangeRef.current?.(code);
+      socket.on("code:change", (payload: CodeChangePayload) => {
+        onCodeChangeRef.current?.(payload.code, payload.cursor);
       });
 
       socket.on("cursor:move", (cursor: RemoteCursorEvent) => {
@@ -95,8 +100,8 @@ export function useSocket(
     socketRef.current?.emit("chat:message", { roomId, text });
   }
 
-  function sendCodeChange(code: string) {
-    socketRef.current?.emit("code:change", { roomId, code });
+  function sendCodeChange(code: string, line: number, column: number) {
+    socketRef.current?.emit("code:change", { roomId, code, line, column });
   }
 
   function sendCursorMove(line: number, column: number) {

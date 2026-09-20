@@ -18,13 +18,12 @@ export type RemoteCodeUpdate = {
 };
 
 type MonacoEditorInstance = Parameters<OnMount>[0];
-type MonacoModel = NonNullable<ReturnType<MonacoEditorInstance["getModel"]>>;
 
 type CodeEditorProps = {
   language: string;
   initialValue: string;
   remoteUpdate: RemoteCodeUpdate | null;
-  onChange: (value: string) => void;
+  onChange: (value: string, line: number, column: number) => void;
   onCursorMove: (line: number, column: number) => void;
   remoteCursors: RemoteCursor[];
   saveStatus: "saved" | "saving";
@@ -63,6 +62,24 @@ function computeMinimalEdit(oldText: string, newText: string) {
     endOffset: oldText.length - suffixLen,
     insertedText: newText.slice(prefixLen, newText.length - suffixLen),
   };
+}
+
+// Converts a plain character offset into a {line, column}, computed purely from
+// the string itself — deliberately not using Monaco's model here, since the model
+// is mid-transition during a remote edit and its offset math would be ambiguous
+// about whether it reflects the old text or the new one.
+function offsetToPosition(text: string, offset: number): { lineNumber: number; column: number } {
+  let line = 1;
+  let col = 1;
+  for (let i = 0; i < offset && i < text.length; i++) {
+    if (text[i] === "\n") {
+      line++;
+      col = 1;
+    } else {
+      col++;
+    }
+  }
+  return { lineNumber: line, column: col };
 }
 
 class RemoteCursorWidget {
@@ -140,29 +157,62 @@ export function CodeEditor({
     });
   };
 
-  // Apply remote edits surgically — only the changed range, never the whole buffer.
   useEffect(() => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
     if (!editor || !monaco || !remoteUpdate) return;
 
-    const model: MonacoModel | null = editor.getModel();
+    const model = editor.getModel();
     if (!model) return;
 
     const oldText = model.getValue();
     if (oldText === remoteUpdate.code) return;
 
     const { startOffset, endOffset, insertedText } = computeMinimalEdit(oldText, remoteUpdate.code);
+    const deletedLength = endOffset - startOffset;
+    const insertedLength = insertedText.length;
+
+    // Transform the LOCAL user's own cursor position across this remote edit,
+    // so it ends up in the logically equivalent spot rather than wherever the
+    // remote edit happened to land.
+    const localPositionBefore = editor.getPosition();
+    const localOffsetBefore = localPositionBefore ? model.getOffsetAt(localPositionBefore) : 0;
+
+    let localOffsetAfter: number;
+    if (localOffsetBefore <= startOffset) {
+      // The edit is at or after the local cursor — nothing shifts.
+      localOffsetAfter = localOffsetBefore;
+    } else if (localOffsetBefore >= endOffset) {
+      // The edit is entirely before the local cursor — shift by the net length change.
+      localOffsetAfter = localOffsetBefore + (insertedLength - deletedLength);
+    } else {
+      // The local cursor sat inside the exact range the remote edit replaced —
+      // no exact mapping exists here, so snap to the start of the new text.
+      localOffsetAfter = startOffset;
+    }
+
+    const newLocalPosition = offsetToPosition(remoteUpdate.code, localOffsetAfter);
     const startPos = model.getPositionAt(startOffset);
     const endPos = model.getPositionAt(endOffset);
 
     isApplyingRemoteRef.current = true;
-    editor.executeEdits("remote-sync", [
-      {
-        range: new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column),
-        text: insertedText,
-      },
-    ]);
+    editor.executeEdits(
+      "remote-sync",
+      [
+        {
+          range: new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column),
+          text: insertedText,
+        },
+      ],
+      [
+        new monaco.Selection(
+          newLocalPosition.lineNumber,
+          newLocalPosition.column,
+          newLocalPosition.lineNumber,
+          newLocalPosition.column
+        ),
+      ]
+    );
     isApplyingRemoteRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remoteUpdate?.nonce]);
@@ -215,7 +265,8 @@ export function CodeEditor({
           defaultValue={initialValue}
           onChange={(val) => {
             if (isApplyingRemoteRef.current) return;
-            onChange(val ?? "");
+            const pos = editorRef.current?.getPosition();
+            onChange(val ?? "", pos?.lineNumber ?? 1, pos?.column ?? 1);
           }}
           beforeMount={handleEditorWillMount}
           onMount={handleMount}

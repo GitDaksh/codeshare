@@ -71,9 +71,15 @@ export default function RoomPage({
     setMessages((prev) => [...prev, message]);
   }, []);
 
-  const handleIncomingCodeChange = useCallback((incomingCode: string) => {
-    setRemoteUpdate((prev) => ({ code: incomingCode, nonce: (prev?.nonce ?? 0) + 1 }));
-  }, []);
+  const handleIncomingCodeChange = useCallback(
+    (incomingCode: string, cursor: RemoteCursorEvent | null) => {
+      setRemoteUpdate((prev) => ({ code: incomingCode, nonce: (prev?.nonce ?? 0) + 1 }));
+      if (cursor) {
+        setRemoteCursors((prev) => [...prev.filter((c) => c.userId !== cursor.userId), cursor]);
+      }
+    },
+    []
+  );
 
   const handleCursorMove = useCallback((cursor: RemoteCursorEvent) => {
     setRemoteCursors((prev) => [...prev.filter((c) => c.userId !== cursor.userId), cursor]);
@@ -149,8 +155,8 @@ export default function RoomPage({
     document.body.style.cursor = "col-resize";
   }
 
-  function handleCodeChange(newCode: string) {
-    sendCodeChange(newCode);
+  function handleCodeChange(newCode: string, line: number, column: number) {
+    sendCodeChange(newCode, line, column);
 
     setSaveStatus("saving");
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
