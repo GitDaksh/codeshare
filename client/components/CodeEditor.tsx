@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
 import { LANGUAGES } from "@/lib/languages";
-import { getCursorShadeClass } from "@/lib/colors";
+import { getCursorShadeClass, getAvatarShade } from "@/lib/colors";
 
 export type RemoteCursor = {
   userId: string;
@@ -64,10 +64,6 @@ function computeMinimalEdit(oldText: string, newText: string) {
   };
 }
 
-// Converts a plain character offset into a {line, column}, computed purely from
-// the string itself — deliberately not using Monaco's model here, since the model
-// is mid-transition during a remote edit and its offset math would be ambiguous
-// about whether it reflects the old text or the new one.
 function offsetToPosition(text: string, offset: number): { lineNumber: number; column: number } {
   let line = 1;
   let col = 1;
@@ -90,20 +86,21 @@ class RemoteCursorWidget {
     label: string,
     private position: { lineNumber: number; column: number },
     private readonly preference: number,
-    colorClass: string
+    lineColorClass: string,
+    badgeClasses: string
   ) {
     this.domNode = document.createElement("div");
     this.domNode.className = "remote-cursor-flag";
 
-    const tag = document.createElement("div");
-    tag.className = `remote-cursor-tag ${colorClass}`;
-    tag.textContent = label;
-
     const line = document.createElement("div");
-    line.className = `remote-cursor-line ${colorClass}`;
+    line.className = `remote-cursor-line ${lineColorClass}`;
 
-    this.domNode.appendChild(tag);
+    const badge = document.createElement("div");
+    badge.className = `remote-cursor-badge ${badgeClasses}`;
+    badge.textContent = label.charAt(0).toUpperCase();
+
     this.domNode.appendChild(line);
+    this.domNode.appendChild(badge);
   }
 
   getId() {
@@ -172,22 +169,15 @@ export function CodeEditor({
     const deletedLength = endOffset - startOffset;
     const insertedLength = insertedText.length;
 
-    // Transform the LOCAL user's own cursor position across this remote edit,
-    // so it ends up in the logically equivalent spot rather than wherever the
-    // remote edit happened to land.
     const localPositionBefore = editor.getPosition();
     const localOffsetBefore = localPositionBefore ? model.getOffsetAt(localPositionBefore) : 0;
 
     let localOffsetAfter: number;
     if (localOffsetBefore <= startOffset) {
-      // The edit is at or after the local cursor — nothing shifts.
       localOffsetAfter = localOffsetBefore;
     } else if (localOffsetBefore >= endOffset) {
-      // The edit is entirely before the local cursor — shift by the net length change.
       localOffsetAfter = localOffsetBefore + (insertedLength - deletedLength);
     } else {
-      // The local cursor sat inside the exact range the remote edit replaced —
-      // no exact mapping exists here, so snap to the start of the new text.
       localOffsetAfter = startOffset;
     }
 
@@ -232,7 +222,6 @@ export function CodeEditor({
     }
 
     for (const cursor of remoteCursors) {
-      const colorClass = getCursorShadeClass(cursor.userId);
       const pos = { lineNumber: cursor.line, column: cursor.column };
 
       let widget = widgetsRef.current.get(cursor.userId);
@@ -241,8 +230,9 @@ export function CodeEditor({
           `cursor-${cursor.userId}`,
           cursor.name,
           pos,
-          monaco.editor.ContentWidgetPositionPreference.ABOVE,
-          colorClass
+          monaco.editor.ContentWidgetPositionPreference.EXACT,
+          getCursorShadeClass(cursor.userId),
+          getAvatarShade(cursor.userId)
         );
         widgetsRef.current.set(cursor.userId, widget);
         editor.addContentWidget(widget);
