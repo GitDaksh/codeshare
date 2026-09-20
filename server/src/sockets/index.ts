@@ -141,12 +141,30 @@ export function setupSocket(io: Server) {
       }
     });
 
-    socket.on("code:change", ({ roomId, code }: { roomId: string; code: string }) => {
-      if (typeof code !== "string" || !socket.rooms.has(roomId)) return;
+    socket.on(
+  "code:change",
+  ({
+    roomId,
+    code,
+    line,
+    column,
+  }: {
+    roomId: string;
+    code: string;
+    line?: number;
+    column?: number;
+  }) => {
+    if (typeof code !== "string" || !socket.rooms.has(roomId)) return;
 
-      socket.to(roomId).emit("code:change", code);
-      scheduleCodeSave(roomId, code);
-    });
+    const cursor =
+      typeof line === "number" && typeof column === "number"
+        ? { userId: socket.data.userId, name: socket.data.userName || "Anonymous", line, column }
+        : null;
+
+    socket.to(roomId).emit("code:change", { code, cursor });
+    scheduleCodeSave(roomId, code);
+  }
+);
 
     socket.on("cursor:move", ({ roomId, line, column }: { roomId: string; line: number; column: number }) => {
       if (!socket.rooms.has(roomId)) return;
