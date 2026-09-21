@@ -4,7 +4,7 @@ Real-time collaborative coding rooms — create a room, share the link, and edit
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js) ![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript) ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss) ![Express](https://img.shields.io/badge/Express-black?logo=express) ![Socket.IO](https://img.shields.io/badge/Socket.IO-black?logo=socket.io) ![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb) ![Clerk](https://img.shields.io/badge/Auth-Clerk-6c47ff)
 
-**[Live demo →](https://codeshare-nexus.vercel.app)**
+**[Check it out live →](https://codeshare-nexus.vercel.app)**
 
 ---
 
