@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
 import { LANGUAGES } from "@/lib/languages";
 import { getCursorShadeClass, getAvatarShade } from "@/lib/colors";
@@ -15,6 +15,10 @@ export type RemoteCursor = {
 export type RemoteCodeUpdate = {
   code: string;
   nonce: number;
+};
+
+export type CodeEditorHandle = {
+  getValue: () => string;
 };
 
 type MonacoEditorInstance = Parameters<OnMount>[0];
@@ -123,21 +127,20 @@ class RemoteCursorWidget {
   }
 }
 
-export function CodeEditor({
-  language,
-  initialValue,
-  remoteUpdate,
-  onChange,
-  onCursorMove,
-  remoteCursors,
-  saveStatus,
-}: CodeEditorProps) {
+export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEditor(
+  { language, initialValue, remoteUpdate, onChange, onCursorMove, remoteCursors, saveStatus },
+  ref
+) {
   const [position, setPosition] = useState({ line: 1, column: 1 });
   const editorRef = useRef<MonacoEditorInstance | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const widgetsRef = useRef<Map<string, RemoteCursorWidget>>(new Map());
   const lastEmitRef = useRef(0);
   const isApplyingRemoteRef = useRef(false);
+
+  useImperativeHandle(ref, () => ({
+    getValue: () => editorRef.current?.getValue() ?? "",
+  }));
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -288,4 +291,4 @@ export function CodeEditor({
       </div>
     </div>
   );
-}
+});

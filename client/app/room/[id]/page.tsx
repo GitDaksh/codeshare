@@ -11,14 +11,15 @@ import {
 } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
-import { ArrowLeft, Maximize2, Minimize2, Link as LinkIcon } from "lucide-react";
+import { ArrowLeft, Maximize2, Minimize2, Link as LinkIcon, Play } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
 import { useOnboardingGate } from "@/lib/useOnboardingGate";
 import { useToast } from "@/components/ToastProvider";
 import { getAvatarShade } from "@/lib/colors";
-import { CodeEditor, type RemoteCursor, type RemoteCodeUpdate } from "@/components/CodeEditor";
+import { CodeEditor, type RemoteCursor, type RemoteCodeUpdate, type CodeEditorHandle } from "@/components/CodeEditor";
 import { LanguageDropdown } from "@/components/LanguageDropdown";
+import { RunPanel } from "@/components/RunPanel";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
 import type { RemoteCursorEvent } from "@/types/presence";
@@ -59,6 +60,8 @@ export default function RoomPage({
   const [language, setLanguage] = useState("javascript");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const codeEditorRef = useRef<CodeEditorHandle>(null);
+  const [runPanelOpen, setRunPanelOpen] = useState(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -224,6 +227,15 @@ export default function RoomPage({
           </span>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => setRunPanelOpen((o) => !o)}
+            aria-label={runPanelOpen ? "Hide output" : "Run code"}
+            title={runPanelOpen ? "Hide output" : "Run code"}
+            className="flex items-center gap-1.5 rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100"
+          >
+            <Play className="h-4 w-4" />
+          </button>
+          <span className="mx-1 hidden h-4 w-px bg-ink-800 sm:block" />
           <LanguageDropdown value={language} onChange={setLanguage} />
           <span className="mx-1 hidden h-4 w-px bg-ink-800 sm:block" />
           <button
@@ -246,15 +258,24 @@ export default function RoomPage({
       </div>
 
       <div className="flex flex-1 flex-col md:min-h-0 md:flex-row">
-        <div className="min-h-[400px] min-w-0 flex-1 md:h-full md:min-h-0">
-          <CodeEditor
+        <div className="flex min-h-[400px] min-w-0 flex-1 flex-col md:h-full md:min-h-0">
+          <div className="min-h-0 flex-1">
+            <CodeEditor
+              ref={codeEditorRef}
+              language={language}
+              initialValue={initialCode}
+              remoteUpdate={remoteUpdate}
+              onChange={handleCodeChange}
+              onCursorMove={sendCursorMove}
+              remoteCursors={remoteCursors.filter((c) => c.userId !== currentUserId)}
+              saveStatus={saveStatus}
+            />
+          </div>
+          <RunPanel
+            getCode={() => codeEditorRef.current?.getValue() ?? ""}
             language={language}
-            initialValue={initialCode}
-            remoteUpdate={remoteUpdate}
-            onChange={handleCodeChange}
-            onCursorMove={sendCursorMove}
-            remoteCursors={remoteCursors.filter((c) => c.userId !== currentUserId)}
-            saveStatus={saveStatus}
+            open={runPanelOpen}
+            onClose={() => setRunPanelOpen(false)}
           />
         </div>
 
