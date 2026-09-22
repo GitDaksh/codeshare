@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowDown } from "lucide-react";
 import { AvatarIcon } from "@/components/AvatarIcon";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage, Reaction } from "@/types/chat";
 import type { TypingEvent } from "@/types/presence";
 
 type ChatPanelProps = {
@@ -15,11 +15,13 @@ type ChatPanelProps = {
   onDraftChange: (value: string) => void;
   onSend: () => void;
   onTypingChange: (isTyping: boolean) => void;
+  onReact: (messageId: string, emoji: string) => void;
 };
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 const TYPING_STOP_DELAY_MS = 2000;
 const AT_BOTTOM_THRESHOLD = 60;
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "🎉", "👀", "🚀"];
 
 function formatTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -53,6 +55,16 @@ function renderMessageText(text: string) {
   });
 }
 
+function groupReactions(reactions: Reaction[]) {
+  const map = new Map<string, string[]>();
+  for (const r of reactions) {
+    const arr = map.get(r.emoji) ?? [];
+    arr.push(r.userId);
+    map.set(r.emoji, arr);
+  }
+  return Array.from(map.entries()).map(([emoji, userIds]) => ({ emoji, userIds }));
+}
+
 function TypingDots() {
   return (
     <span className="flex items-center gap-0.5">
@@ -76,6 +88,7 @@ export function ChatPanel({
   onDraftChange,
   onSend,
   onTypingChange,
+  onReact,
 }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -87,10 +100,6 @@ export function ChatPanel({
     initialMessageIdsRef.current = new Set(messages.map((m) => m._id));
   }
 
-  // In a column-reverse container, scrollTop === 0 IS "showing the latest
-  // message" — an intrinsic property of the flex layout direction itself,
-  // not something calculated against a parent's height. That's the whole
-  // point of switching to this technique.
   useEffect(() => {
     if (isAtBottom) {
       scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -138,10 +147,6 @@ export function ChatPanel({
     onSend();
   }
 
-  // Rendered newest-first in the DOM on purpose — flex-col-reverse flips the
-  // visual stacking back to normal chronological order (oldest at top,
-  // newest at bottom), while making "newest" the layout's natural resting
-  // position with zero height calculations involved.
   const reversedMessages = [...messages].reverse();
 
   return (
@@ -155,8 +160,6 @@ export function ChatPanel({
           <p className="text-xs text-ink-600">No messages yet — say hi.</p>
         ) : (
           reversedMessages.map((msg, revIndex) => {
-            // "older" is the message that actually came before this one in
-            // real time — since the array is reversed, that's the NEXT entry.
             const older = reversedMessages[revIndex + 1];
             const isNewDay =
               !!older &&
@@ -167,6 +170,7 @@ export function ChatPanel({
               older.senderId === msg.senderId &&
               new Date(msg.createdAt).getTime() - new Date(older.createdAt).getTime() < GROUP_WINDOW_MS;
             const isNewMessage = !initialMessageIdsRef.current!.has(msg._id);
+            const reactionGroups = groupReactions(msg.reactions);
 
             return (
               <div key={msg._id}>
@@ -174,10 +178,22 @@ export function ChatPanel({
                   initial={isNewMessage ? { opacity: 0, y: 6 } : false}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.15 }}
-                  className={`group flex gap-2.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-ink-900/60 ${
+                  className={`group relative flex gap-2.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-ink-900/60 ${
                     isGrouped ? "" : "mt-2.5"
                   }`}
                 >
+                  <div className="pointer-events-none absolute -top-3 right-2 flex gap-0.5 rounded-md border border-ink-700 bg-ink-900 p-0.5 opacity-0 shadow-lg transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+                    {REACTION_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        onClick={() => onReact(msg._id, emoji)}
+                        className="rounded px-1 py-0.5 text-sm transition-transform hover:scale-125 hover:bg-ink-800"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+
                   {isGrouped ? (
                     <span className="w-7 shrink-0 text-center text-[9px] leading-6 text-ink-700 opacity-0 group-hover:opacity-100">
                       {formatTime(msg.createdAt)}
@@ -195,6 +211,27 @@ export function ChatPanel({
                       </div>
                     )}
                     <p className="break-words text-sm text-ink-300">{renderMessageText(msg.text)}</p>
+                    {reactionGroups.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {reactionGroups.map(({ emoji, userIds }) => {
+                          const reacted = currentUserId ? userIds.includes(currentUserId) : false;
+                          return (
+                            <button
+                              key={emoji}
+                              onClick={() => onReact(msg._id, emoji)}
+                              className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition-colors ${
+                                reacted
+                                  ? "border-ink-100 bg-ink-100/10 text-ink-100"
+                                  : "border-ink-700 text-ink-400 hover:border-ink-500"
+                              }`}
+                            >
+                              <span>{emoji}</span>
+                              <span>{userIds.length}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
                 {isNewDay && (

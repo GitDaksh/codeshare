@@ -155,6 +155,38 @@ export function setupSocket(io: Server) {
       }
     });
 
+    socket.on(
+      "reaction:toggle",
+      async ({ roomId, messageId, emoji }: { roomId: string; messageId: string; emoji: string }) => {
+        if (!socket.rooms.has(roomId)) return;
+
+        try {
+          const message = await Message.findById(messageId);
+          if (!message || message.roomId.toString() !== roomId) return;
+
+          const userId = socket.data.userId;
+          const existingIndex = message.reactions.findIndex(
+            (r) => r.userId === userId && r.emoji === emoji
+          );
+
+          if (existingIndex >= 0) {
+            message.reactions.splice(existingIndex, 1);
+          } else {
+            message.reactions.push({ emoji, userId });
+          }
+
+          await message.save();
+
+          io.to(roomId).emit("reaction:update", {
+            messageId,
+            reactions: message.reactions,
+          });
+        } catch (err) {
+          console.error("Failed to toggle reaction:", err);
+        }
+      }
+    );
+
     socket.on("typing", ({ roomId, isTyping }: { roomId: string; isTyping: boolean }) => {
       if (!socket.rooms.has(roomId)) return;
 

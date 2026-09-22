@@ -1,13 +1,27 @@
 import { Schema, model, Document, Types } from "mongoose";
 
+export interface IReaction {
+  emoji: string;
+  userId: string;
+}
+
 export interface IMessage extends Document {
   roomId: Types.ObjectId;
   senderId: string;
   senderName: string;
   senderAvatarId: string;
   text: string;
+  reactions: IReaction[];
   createdAt: Date;
 }
+
+const reactionSchema = new Schema<IReaction>(
+  {
+    emoji: { type: String, required: true },
+    userId: { type: String, required: true },
+  },
+  { _id: false }
+);
 
 const messageSchema = new Schema<IMessage>(
   {
@@ -34,6 +48,10 @@ const messageSchema = new Schema<IMessage>(
       required: true,
       trim: true,
       maxlength: 2000,
+    },
+    reactions: {
+      type: [reactionSchema],
+      default: [],
     },
   },
   { timestamps: { createdAt: true, updatedAt: false } }

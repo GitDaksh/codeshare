@@ -25,7 +25,7 @@ import { RunPanel } from "@/components/RunPanel";
 import { ChatPanel } from "@/components/ChatPanel";
 import { getStarterCode } from "@/lib/languages";
 import type { Room } from "@/types/room";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage, Reaction } from "@/types/chat";
 import type { RemoteCursorEvent, TypingEvent } from "@/types/presence";
 
 const SAVE_INDICATOR_DELAY_MS = 1800;
@@ -92,13 +92,28 @@ export default function RoomPage({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [activeTab, setActiveTab] = useState<"chat" | "online">("chat");
+  const activeTabRef = useRef(activeTab);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [typingUsers, setTypingUsers] = useState<TypingEvent[]>([]);
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursor[]>([]);
 
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
   const handleIncomingMessage = useCallback((message: ChatMessage) => {
     setMessages((prev) => [...prev, message]);
+    if (activeTabRef.current !== "chat") {
+      setUnreadCount((c) => c + 1);
+    }
+  }, []);
+
+  const handleReactionUpdate = useCallback((update: { messageId: string; reactions: Reaction[] }) => {
+    setMessages((prev) =>
+      prev.map((m) => (m._id === update.messageId ? { ...m, reactions: update.reactions } : m))
+    );
   }, []);
 
   const handleIncomingCodeChange = useCallback(
@@ -132,12 +147,21 @@ export default function RoomPage({
     }
   }, []);
 
-  const { status, onlineUsers, sendMessage, sendCodeChange, sendCursorMove, sendTyping } = useSocket(
+  const {
+    status,
+    onlineUsers,
+    sendMessage,
+    sendReaction,
+    sendCodeChange,
+    sendCursorMove,
+    sendTyping,
+  } = useSocket(
     id,
     handleIncomingMessage,
     handleIncomingCodeChange,
     handleCursorMove,
-    handleTyping
+    handleTyping,
+    handleReactionUpdate
   );
 
   const [zenMode, setZenMode] = useState(false);
@@ -217,6 +241,11 @@ export default function RoomPage({
     if (!draft.trim()) return;
     sendMessage(draft.trim());
     setDraft("");
+  }
+
+  function handleTabClick(tab: "chat" | "online") {
+    setActiveTab(tab);
+    if (tab === "chat") setUnreadCount(0);
   }
 
   if (checking || loading || initialCode === null) {
@@ -337,7 +366,7 @@ export default function RoomPage({
                 {(["chat", "online"] as const).map((tab) => (
                   <button
                     key={tab}
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => handleTabClick(tab)}
                     className="relative flex-1 rounded-md px-3 py-1.5 text-xs font-medium"
                   >
                     {activeTab === tab && (
@@ -347,8 +376,13 @@ export default function RoomPage({
                         transition={{ type: "spring", bounce: 0.2, duration: 0.3 }}
                       />
                     )}
-                    <span className={`relative z-10 ${activeTab === tab ? "text-ink-950" : "text-ink-400"}`}>
+                    <span className={`relative z-10 inline-flex items-center gap-1.5 ${activeTab === tab ? "text-ink-950" : "text-ink-400"}`}>
                       {tab === "chat" ? "Chat" : `Online — ${onlineUsers.length}`}
+                      {tab === "chat" && unreadCount > 0 && activeTab !== "chat" && (
+                        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                          {unreadCount > 9 ? "9+" : unreadCount}
+                        </span>
+                      )}
                     </span>
                   </button>
                 ))}
@@ -378,6 +412,7 @@ export default function RoomPage({
                   onDraftChange={setDraft}
                   onSend={handleSend}
                   onTypingChange={sendTyping}
+                  onReact={sendReaction}
                 />
               )}
             </aside>

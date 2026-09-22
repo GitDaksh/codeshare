@@ -4,7 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import type { OnlineUser, RemoteCursorEvent, TypingEvent } from "@/types/presence";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage, Reaction } from "@/types/chat";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -13,12 +13,18 @@ type CodeChangePayload = {
   cursor: RemoteCursorEvent | null;
 };
 
+type ReactionUpdate = {
+  messageId: string;
+  reactions: Reaction[];
+};
+
 export function useSocket(
   roomId: string,
   onChatMessage?: (message: ChatMessage) => void,
   onCodeChange?: (code: string, cursor: RemoteCursorEvent | null) => void,
   onCursorMove?: (cursor: RemoteCursorEvent) => void,
-  onTyping?: (event: TypingEvent) => void
+  onTyping?: (event: TypingEvent) => void,
+  onReactionUpdate?: (update: ReactionUpdate) => void
 ) {
   const { getToken } = useAuth();
   const socketRef = useRef<Socket | null>(null);
@@ -26,6 +32,7 @@ export function useSocket(
   const onCodeChangeRef = useRef(onCodeChange);
   const onCursorMoveRef = useRef(onCursorMove);
   const onTypingRef = useRef(onTyping);
+  const onReactionUpdateRef = useRef(onReactionUpdate);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
 
@@ -44,6 +51,10 @@ export function useSocket(
   useEffect(() => {
     onTypingRef.current = onTyping;
   }, [onTyping]);
+
+  useEffect(() => {
+    onReactionUpdateRef.current = onReactionUpdate;
+  }, [onReactionUpdate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +91,10 @@ export function useSocket(
         onChatMessageRef.current?.(message);
       });
 
+      socket.on("reaction:update", (update: ReactionUpdate) => {
+        onReactionUpdateRef.current?.(update);
+      });
+
       socket.on("code:change", (payload: CodeChangePayload) => {
         onCodeChangeRef.current?.(payload.code, payload.cursor);
       });
@@ -112,6 +127,10 @@ export function useSocket(
     socketRef.current?.emit("chat:message", { roomId, text });
   }
 
+  function sendReaction(messageId: string, emoji: string) {
+    socketRef.current?.emit("reaction:toggle", { roomId, messageId, emoji });
+  }
+
   function sendCodeChange(code: string, line: number, column: number) {
     socketRef.current?.emit("code:change", { roomId, code, line, column });
   }
@@ -124,5 +143,13 @@ export function useSocket(
     socketRef.current?.emit("typing", { roomId, isTyping });
   }
 
-  return { status, onlineUsers, sendMessage, sendCodeChange, sendCursorMove, sendTyping };
+  return {
+    status,
+    onlineUsers,
+    sendMessage,
+    sendReaction,
+    sendCodeChange,
+    sendCursorMove,
+    sendTyping,
+  };
 }
