@@ -4,6 +4,7 @@ export interface IMessage extends Document {
   roomId: Types.ObjectId;
   senderId: string;
   senderName: string;
+  senderAvatarId: string;
   text: string;
   createdAt: Date;
 }
@@ -23,6 +24,10 @@ const messageSchema = new Schema<IMessage>(
     senderName: {
       type: String,
       required: true,
+    },
+    senderAvatarId: {
+      type: String,
+      default: "",
     },
     text: {
       type: String,

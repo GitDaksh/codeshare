@@ -142,6 +142,24 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     getValue: () => editorRef.current?.getValue() ?? "",
   }));
 
+  // Monaco's own internal code occasionally attempts a clipboard write that gets
+  // refused when a browser tab lacks focus (common when testing multiple windows
+  // side by side). That produces a "Canceled" promise rejection we can't prevent
+  // at the source — but we can stop it from surfacing as a disruptive unhandled
+  // rejection / dev-mode error overlay, since it doesn't affect functionality.
+  useEffect(() => {
+    function handleUnhandledRejection(event: PromiseRejectionEvent) {
+      const reason = event.reason;
+      const message = typeof reason === "string" ? reason : reason?.message;
+      if (message === "Canceled") {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    return () => window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+  }, []);
+
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
