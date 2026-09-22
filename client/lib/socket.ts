@@ -1,9 +1,9 @@
 "use client";
 
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import type { OnlineUser, RemoteCursorEvent } from "@/types/presence";
+import type { OnlineUser, RemoteCursorEvent, TypingEvent } from "@/types/presence";
 import type { ChatMessage } from "@/types/chat";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
@@ -17,14 +17,15 @@ export function useSocket(
   roomId: string,
   onChatMessage?: (message: ChatMessage) => void,
   onCodeChange?: (code: string, cursor: RemoteCursorEvent | null) => void,
-  onCursorMove?: (cursor: RemoteCursorEvent) => void
+  onCursorMove?: (cursor: RemoteCursorEvent) => void,
+  onTyping?: (event: TypingEvent) => void
 ) {
   const { getToken } = useAuth();
-  const { user, isLoaded } = useUser();
   const socketRef = useRef<Socket | null>(null);
   const onChatMessageRef = useRef(onChatMessage);
   const onCodeChangeRef = useRef(onCodeChange);
   const onCursorMoveRef = useRef(onCursorMove);
+  const onTypingRef = useRef(onTyping);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
 
@@ -41,19 +42,16 @@ export function useSocket(
   }, [onCursorMove]);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    onTypingRef.current = onTyping;
+  }, [onTyping]);
 
+  useEffect(() => {
     let cancelled = false;
     let socket: Socket;
 
     async function connect() {
       let token: string | null;
       try {
-        // skipCache: true forces Clerk to mint a genuinely fresh token rather
-        // than potentially handing back a cached one that's already close to
-        // its ~60s expiry — the socket handshake takes long enough that a
-        // near-expiry cached token can tip over into actually expired before
-        // the server gets to verify it.
         token = await getToken({ skipCache: true });
       } catch (err) {
         console.error("Failed to fetch auth token for socket connection:", err);
@@ -63,8 +61,6 @@ export function useSocket(
 
       if (cancelled) return;
 
-      const displayName = user?.fullName || user?.username || "Anonymous";
-
       socket = io(process.env.NEXT_PUBLIC_API_URL!, {
         auth: { token },
       });
@@ -73,7 +69,7 @@ export function useSocket(
 
       socket.on("connect", () => {
         setStatus("connected");
-        socket.emit("room:join", { roomId, name: displayName });
+        socket.emit("room:join", { roomId });
       });
 
       socket.on("presence:update", (users: OnlineUser[]) => {
@@ -92,6 +88,10 @@ export function useSocket(
         onCursorMoveRef.current?.(cursor);
       });
 
+      socket.on("typing", (event: TypingEvent) => {
+        onTypingRef.current?.(event);
+      });
+
       socket.on("disconnect", () => setStatus("disconnected"));
       socket.on("connect_error", (err) => {
         console.error("Socket connection error:", err.message);
@@ -106,7 +106,7 @@ export function useSocket(
       socket?.emit("room:leave", roomId);
       socket?.disconnect();
     };
-  }, [roomId, getToken, isLoaded, user?.id]);
+  }, [roomId, getToken]);
 
   function sendMessage(text: string) {
     socketRef.current?.emit("chat:message", { roomId, text });
@@ -120,5 +120,9 @@ export function useSocket(
     socketRef.current?.emit("cursor:move", { roomId, line, column });
   }
 
-  return { status, onlineUsers, sendMessage, sendCodeChange, sendCursorMove };
+  function sendTyping(isTyping: boolean) {
+    socketRef.current?.emit("typing", { roomId, isTyping });
+  }
+
+  return { status, onlineUsers, sendMessage, sendCodeChange, sendCursorMove, sendTyping };
 }

@@ -2,11 +2,13 @@ import type { Server, Socket } from "socket.io";
 import { verifyToken } from "@clerk/backend";
 import { Message } from "../models/Message";
 import { Room } from "../models/Room";
+import { Profile } from "../models/Profile";
 
 type PresenceUser = {
   socketId: string;
   userId: string;
   name: string;
+  avatarId: string;
 };
 
 type PendingCodeSave = {
@@ -15,6 +17,7 @@ type PendingCodeSave = {
 };
 
 const CODE_SAVE_DEBOUNCE_MS = 1500;
+const DEFAULT_AVATAR_ID = "codeshare";
 
 const roomPresence = new Map<string, Map<string, PresenceUser>>();
 const pendingCodeSaves = new Map<string, PendingCodeSave>();
@@ -99,10 +102,19 @@ export function setupSocket(io: Server) {
   io.on("connection", (socket: Socket) => {
     console.log(`Socket connected: ${socket.id} (user ${socket.data.userId})`);
 
-    socket.on("room:join", ({ roomId, name }: { roomId: string; name: string }) => {
+    socket.on("room:join", async ({ roomId }: { roomId: string }) => {
       socket.join(roomId);
       socket.data.roomId = roomId;
-      socket.data.userName = name || "Anonymous";
+
+      try {
+        const profile = await Profile.findOne({ clerkUserId: socket.data.userId });
+        socket.data.userName = profile?.username || "Anonymous";
+        socket.data.userAvatarId = profile?.avatarId || DEFAULT_AVATAR_ID;
+      } catch (err) {
+        console.error("Failed to load profile for socket identity:", err);
+        socket.data.userName = "Anonymous";
+        socket.data.userAvatarId = DEFAULT_AVATAR_ID;
+      }
 
       if (!roomPresence.has(roomId)) {
         roomPresence.set(roomId, new Map());
@@ -112,6 +124,7 @@ export function setupSocket(io: Server) {
         socketId: socket.id,
         userId: socket.data.userId,
         name: socket.data.userName,
+        avatarId: socket.data.userAvatarId,
       });
 
       broadcastPresence(io, roomId);
@@ -132,6 +145,7 @@ export function setupSocket(io: Server) {
           roomId,
           senderId: socket.data.userId,
           senderName: socket.data.userName || "Anonymous",
+          senderAvatarId: socket.data.userAvatarId || DEFAULT_AVATAR_ID,
           text: text.trim(),
         });
 
@@ -141,30 +155,30 @@ export function setupSocket(io: Server) {
       }
     });
 
+    socket.on("typing", ({ roomId, isTyping }: { roomId: string; isTyping: boolean }) => {
+      if (!socket.rooms.has(roomId)) return;
+
+      socket.to(roomId).emit("typing", {
+        userId: socket.data.userId,
+        name: socket.data.userName || "Anonymous",
+        isTyping,
+      });
+    });
+
     socket.on(
-  "code:change",
-  ({
-    roomId,
-    code,
-    line,
-    column,
-  }: {
-    roomId: string;
-    code: string;
-    line?: number;
-    column?: number;
-  }) => {
-    if (typeof code !== "string" || !socket.rooms.has(roomId)) return;
+      "code:change",
+      ({ roomId, code, line, column }: { roomId: string; code: string; line?: number; column?: number }) => {
+        if (typeof code !== "string" || !socket.rooms.has(roomId)) return;
 
-    const cursor =
-      typeof line === "number" && typeof column === "number"
-        ? { userId: socket.data.userId, name: socket.data.userName || "Anonymous", line, column }
-        : null;
+        const cursor =
+          typeof line === "number" && typeof column === "number"
+            ? { userId: socket.data.userId, name: socket.data.userName || "Anonymous", line, column }
+            : null;
 
-    socket.to(roomId).emit("code:change", { code, cursor });
-    scheduleCodeSave(roomId, code);
-  }
-);
+        socket.to(roomId).emit("code:change", { code, cursor });
+        scheduleCodeSave(roomId, code);
+      }
+    );
 
     socket.on("cursor:move", ({ roomId, line, column }: { roomId: string; line: number; column: number }) => {
       if (!socket.rooms.has(roomId)) return;

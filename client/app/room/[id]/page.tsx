@@ -11,34 +11,60 @@ import {
 } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
+import { motion } from "framer-motion";
 import { ArrowLeft, Maximize2, Minimize2, Link as LinkIcon, Play } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
 import { useOnboardingGate } from "@/lib/useOnboardingGate";
 import { useToast } from "@/components/ToastProvider";
-import { getAvatarShade } from "@/lib/colors";
+import { AvatarIcon } from "@/components/AvatarIcon";
+import { Skeleton } from "@/components/Skeleton";
 import { CodeEditor, type RemoteCursor, type RemoteCodeUpdate, type CodeEditorHandle } from "@/components/CodeEditor";
 import { LanguageDropdown } from "@/components/LanguageDropdown";
 import { RunPanel } from "@/components/RunPanel";
+import { ChatPanel } from "@/components/ChatPanel";
+import { getStarterCode } from "@/lib/languages";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
-import type { RemoteCursorEvent } from "@/types/presence";
-
-const starterCode = `function twoSum(nums, target) {
-  const seen = new Map();
-
-  for (let i = 0; i < nums.length; i++) {
-    const complement = target - nums[i];
-    if (seen.has(complement)) {
-      return [seen.get(complement), i];
-    }
-    seen.set(nums[i], i);
-  }
-
-  return [];
-}`;
+import type { RemoteCursorEvent, TypingEvent } from "@/types/presence";
 
 const SAVE_INDICATOR_DELAY_MS = 1800;
+const TYPING_EXPIRY_MS = 4000;
+
+function RoomLoadingSkeleton() {
+  return (
+    <main className="flex h-[calc(100vh-56px)] flex-col">
+      <div className="flex items-center justify-between border-b border-ink-800 px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4 rounded" />
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-20 rounded" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-7 w-24 rounded-lg" />
+          <Skeleton className="h-7 w-20 rounded-lg" />
+        </div>
+      </div>
+      <div className="flex flex-1">
+        <Skeleton className="flex-1 rounded-none" />
+        <div className="hidden w-72 shrink-0 border-l border-ink-800 bg-ink-900/40 p-3 md:block">
+          <Skeleton className="mb-3 h-9 w-full rounded-lg" />
+          <div className="space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
 
 export default function RoomPage({
   params,
@@ -66,7 +92,8 @@ export default function RoomPage({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [activeTab, setActiveTab] = useState<"chat" | "online">("chat");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [typingUsers, setTypingUsers] = useState<TypingEvent[]>([]);
+  const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursor[]>([]);
 
@@ -88,11 +115,29 @@ export default function RoomPage({
     setRemoteCursors((prev) => [...prev.filter((c) => c.userId !== cursor.userId), cursor]);
   }, []);
 
-  const { status, onlineUsers, sendMessage, sendCodeChange, sendCursorMove } = useSocket(
+  const handleTyping = useCallback((event: TypingEvent) => {
+    const existing = typingTimeoutsRef.current.get(event.userId);
+    if (existing) clearTimeout(existing);
+
+    if (event.isTyping) {
+      setTypingUsers((prev) => [...prev.filter((u) => u.userId !== event.userId), event]);
+      const timeout = setTimeout(() => {
+        setTypingUsers((prev) => prev.filter((u) => u.userId !== event.userId));
+        typingTimeoutsRef.current.delete(event.userId);
+      }, TYPING_EXPIRY_MS);
+      typingTimeoutsRef.current.set(event.userId, timeout);
+    } else {
+      setTypingUsers((prev) => prev.filter((u) => u.userId !== event.userId));
+      typingTimeoutsRef.current.delete(event.userId);
+    }
+  }, []);
+
+  const { status, onlineUsers, sendMessage, sendCodeChange, sendCursorMove, sendTyping } = useSocket(
     id,
     handleIncomingMessage,
     handleIncomingCodeChange,
-    handleCursorMove
+    handleCursorMove,
+    handleTyping
   );
 
   const [zenMode, setZenMode] = useState(false);
@@ -105,7 +150,7 @@ export default function RoomPage({
       .then((res) => {
         setRoom(res.data);
         setLanguage(res.data.language);
-        setInitialCode(res.data.code || starterCode);
+        setInitialCode(res.data.code || getStarterCode(res.data.language));
         document.title = `${res.data.name} — CodeShare`;
       })
       .catch(() => setNotFound(true))
@@ -120,12 +165,9 @@ export default function RoomPage({
   }, [api, id]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  useEffect(() => {
     const onlineIds = new Set(onlineUsers.map((u) => u.userId));
     setRemoteCursors((prev) => prev.filter((c) => onlineIds.has(c.userId)));
+    setTypingUsers((prev) => prev.filter((u) => onlineIds.has(u.userId)));
   }, [onlineUsers]);
 
   useEffect(() => {
@@ -178,11 +220,7 @@ export default function RoomPage({
   }
 
   if (checking || loading || initialCode === null) {
-    return (
-      <main className="flex h-[calc(100vh-56px)] items-center justify-center">
-        <p className="text-sm text-ink-500">Loading room…</p>
-      </main>
-    );
+    return <RoomLoadingSkeleton />;
   }
 
   if (notFound || !room) {
@@ -217,7 +255,9 @@ export default function RoomPage({
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <span className="truncate text-sm font-medium text-ink-100">{room.name}</span>
+          <span className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-ink-100">
+            {room.name}
+          </span>
           <span className="shrink-0 rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500">
             {room._id}
           </span>
@@ -226,34 +266,38 @@ export default function RoomPage({
             {status}
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setRunPanelOpen((o) => !o)}
-            aria-label={runPanelOpen ? "Hide output" : "Run code"}
-            title={runPanelOpen ? "Hide output" : "Run code"}
-            className="flex items-center gap-1.5 rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100"
-          >
-            <Play className="h-4 w-4" />
-          </button>
-          <span className="mx-1 hidden h-4 w-px bg-ink-800 sm:block" />
+        <div className="flex items-center gap-2">
           <LanguageDropdown value={language} onChange={setLanguage} />
-          <span className="mx-1 hidden h-4 w-px bg-ink-800 sm:block" />
-          <button
-            onClick={handleCopyLink}
-            aria-label="Copy room link"
-            title="Copy room link"
-            className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100"
-          >
-            <LinkIcon className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setZenMode((z) => !z)}
-            aria-label={zenMode ? "Show sidebar" : "Enter focus mode"}
-            title={zenMode ? "Show sidebar" : "Focus mode"}
-            className="hidden rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 md:block"
-          >
-            {zenMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </button>
+          <div className="flex items-center gap-0.5 rounded-lg bg-ink-900/60 p-1">
+            <button
+              onClick={() => setRunPanelOpen((o) => !o)}
+              aria-label={runPanelOpen ? "Hide output" : "Run code"}
+              title={runPanelOpen ? "Hide output" : "Run code"}
+              className={`rounded-md p-1.5 transition-colors ${
+                runPanelOpen
+                  ? "bg-ink-100 text-ink-950"
+                  : "text-ink-400 hover:bg-ink-800 hover:text-ink-100"
+              }`}
+            >
+              <Play className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleCopyLink}
+              aria-label="Copy room link"
+              title="Copy room link"
+              className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100"
+            >
+              <LinkIcon className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setZenMode((z) => !z)}
+              aria-label={zenMode ? "Show sidebar" : "Enter focus mode"}
+              title={zenMode ? "Show sidebar" : "Focus mode"}
+              className="hidden rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 md:block"
+            >
+              {zenMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -287,91 +331,54 @@ export default function RoomPage({
             />
             <aside
               style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
-              className="flex w-full flex-col border-t border-ink-800 md:h-full md:w-[var(--sidebar-width)] md:shrink-0 md:border-l md:border-t-0"
+              className="flex w-full flex-col border-t border-ink-800 bg-ink-900/40 md:h-full md:w-[var(--sidebar-width)] md:shrink-0 md:border-l md:border-t-0"
             >
-              <div className="flex border-b border-ink-800">
-                <button
-                  onClick={() => setActiveTab("chat")}
-                  className={`flex-1 px-3 py-2.5 text-xs font-medium transition-colors ${
-                    activeTab === "chat"
-                      ? "border-b-2 border-ink-100 text-ink-100"
-                      : "text-ink-500 hover:text-ink-300"
-                  }`}
-                >
-                  Chat
-                </button>
-                <button
-                  onClick={() => setActiveTab("online")}
-                  className={`flex-1 px-3 py-2.5 text-xs font-medium transition-colors ${
-                    activeTab === "online"
-                      ? "border-b-2 border-ink-100 text-ink-100"
-                      : "text-ink-500 hover:text-ink-300"
-                  }`}
-                >
-                  Online — {onlineUsers.length}
-                </button>
+              <div className="relative flex gap-1 p-2">
+                {(["chat", "online"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className="relative flex-1 rounded-md px-3 py-1.5 text-xs font-medium"
+                  >
+                    {activeTab === tab && (
+                      <motion.div
+                        layoutId="sidebar-tab-pill"
+                        className="absolute inset-0 rounded-md bg-ink-100"
+                        transition={{ type: "spring", bounce: 0.2, duration: 0.3 }}
+                      />
+                    )}
+                    <span className={`relative z-10 ${activeTab === tab ? "text-ink-950" : "text-ink-400"}`}>
+                      {tab === "chat" ? "Chat" : `Online — ${onlineUsers.length}`}
+                    </span>
+                  </button>
+                ))}
               </div>
 
               {activeTab === "online" ? (
-                <ul className="max-h-96 flex-1 space-y-2 overflow-y-auto p-3 md:max-h-none">
+                <ul className="max-h-96 flex-1 space-y-1 overflow-y-auto p-2 md:max-h-none">
                   {onlineUsers.map((u) => {
                     const label = u.userId === currentUserId ? "You" : u.name;
                     return (
-                      <li key={u.socketId} className="flex items-center gap-2 text-sm text-ink-100">
-                        <span
-                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${getAvatarShade(u.userId)}`}
-                        >
-                          {label.charAt(0).toUpperCase()}
-                        </span>
+                      <li
+                        key={u.socketId}
+                        className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-ink-100 transition-colors hover:bg-ink-900/60"
+                      >
+                        <AvatarIcon avatarId={u.avatarId} className="h-6 w-6 shrink-0 rounded-full" />
                         {label}
                       </li>
                     );
                   })}
                 </ul>
               ) : (
-                <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="max-h-96 flex-1 space-y-1 overflow-y-auto p-3 md:max-h-none">
-                    {messages.length === 0 ? (
-                      <p className="text-xs text-ink-600">No messages yet — say hi.</p>
-                    ) : (
-                      messages.map((msg) => (
-                        <div
-                          key={msg._id}
-                          className="-mx-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-ink-900/60"
-                        >
-                          <div className="flex items-baseline gap-2">
-                            <span className="font-medium text-ink-100">
-                              {msg.senderId === currentUserId ? "You" : msg.senderName}
-                            </span>
-                            <span className="text-xs text-ink-500">
-                              {new Date(msg.createdAt).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                          </div>
-                          <p className="text-ink-300">{msg.text}</p>
-                        </div>
-                      ))
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
-                  <div className="flex gap-2 border-t border-ink-800 p-3">
-                    <input
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                      placeholder="Message the room…"
-                      className="min-w-0 flex-1 rounded-md border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none"
-                    />
-                    <button
-                      onClick={handleSend}
-                      className="rounded-md bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-950 transition-colors hover:bg-white"
-                    >
-                      Send
-                    </button>
-                  </div>
-                </div>
+                <ChatPanel
+                  messages={messages}
+                  currentUserId={currentUserId ?? null}
+                  typingUsers={typingUsers}
+                  draft={draft}
+                  onDraftChange={setDraft}
+                  onSend={handleSend}
+                  onTypingChange={sendTyping}
+                />
               )}
             </aside>
           </>

@@ -3,6 +3,7 @@ export type ChatMessage = {
   roomId: string;
   senderId: string;
   senderName: string;
+  senderAvatarId: string;
   text: string;
   createdAt: string;
 };

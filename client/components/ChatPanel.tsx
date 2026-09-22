@@ -1,0 +1,257 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowDown } from "lucide-react";
+import { AvatarIcon } from "@/components/AvatarIcon";
+import type { ChatMessage } from "@/types/chat";
+import type { TypingEvent } from "@/types/presence";
+
+type ChatPanelProps = {
+  messages: ChatMessage[];
+  currentUserId: string | null;
+  typingUsers: TypingEvent[];
+  draft: string;
+  onDraftChange: (value: string) => void;
+  onSend: () => void;
+  onTypingChange: (isTyping: boolean) => void;
+};
+
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
+const TYPING_STOP_DELAY_MS = 2000;
+const AT_BOTTOM_THRESHOLD = 60;
+
+function formatTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateDivider(dateStr: string): string {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+}
+
+function renderMessageText(text: string) {
+  const parts = text.split(/(`[^`]+`)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("`") && part.endsWith("`") && part.length > 1) {
+      return (
+        <code
+          key={i}
+          className="rounded bg-ink-800 px-1 py-0.5 font-[family-name:var(--font-mono)] text-[0.85em] text-ink-100"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+function TypingDots() {
+  return (
+    <span className="flex items-center gap-0.5">
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="h-1 w-1 rounded-full bg-ink-500"
+          animate={{ y: [0, -3, 0] }}
+          transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
+        />
+      ))}
+    </span>
+  );
+}
+
+export function ChatPanel({
+  messages,
+  currentUserId,
+  typingUsers,
+  draft,
+  onDraftChange,
+  onSend,
+  onTypingChange,
+}: ChatPanelProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingRef = useRef(false);
+
+  const initialMessageIdsRef = useRef<Set<string> | null>(null);
+  if (initialMessageIdsRef.current === null) {
+    initialMessageIdsRef.current = new Set(messages.map((m) => m._id));
+  }
+
+  // In a column-reverse container, scrollTop === 0 IS "showing the latest
+  // message" — an intrinsic property of the flex layout direction itself,
+  // not something calculated against a parent's height. That's the whole
+  // point of switching to this technique.
+  useEffect(() => {
+    if (isAtBottom) {
+      scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [messages, isAtBottom]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, []);
+
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    setIsAtBottom(el.scrollTop < AT_BOTTOM_THRESHOLD);
+  }
+
+  function scrollToBottom() {
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    setIsAtBottom(true);
+  }
+
+  function handleDraftChange(value: string) {
+    onDraftChange(value);
+
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      onTypingChange(true);
+    }
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+      onTypingChange(false);
+    }, TYPING_STOP_DELAY_MS);
+  }
+
+  function handleSend() {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      onTypingChange(false);
+    }
+    onSend();
+  }
+
+  // Rendered newest-first in the DOM on purpose — flex-col-reverse flips the
+  // visual stacking back to normal chronological order (oldest at top,
+  // newest at bottom), while making "newest" the layout's natural resting
+  // position with zero height calculations involved.
+  const reversedMessages = [...messages].reverse();
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex max-h-96 flex-1 flex-col-reverse overflow-y-auto px-3 py-2 md:max-h-none"
+      >
+        {messages.length === 0 ? (
+          <p className="text-xs text-ink-600">No messages yet — say hi.</p>
+        ) : (
+          reversedMessages.map((msg, revIndex) => {
+            // "older" is the message that actually came before this one in
+            // real time — since the array is reversed, that's the NEXT entry.
+            const older = reversedMessages[revIndex + 1];
+            const isNewDay =
+              !!older &&
+              new Date(older.createdAt).toDateString() !== new Date(msg.createdAt).toDateString();
+            const isGrouped =
+              !isNewDay &&
+              !!older &&
+              older.senderId === msg.senderId &&
+              new Date(msg.createdAt).getTime() - new Date(older.createdAt).getTime() < GROUP_WINDOW_MS;
+            const isNewMessage = !initialMessageIdsRef.current!.has(msg._id);
+
+            return (
+              <div key={msg._id}>
+                <motion.div
+                  initial={isNewMessage ? { opacity: 0, y: 6 } : false}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className={`group flex gap-2.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-ink-900/60 ${
+                    isGrouped ? "" : "mt-2.5"
+                  }`}
+                >
+                  {isGrouped ? (
+                    <span className="w-7 shrink-0 text-center text-[9px] leading-6 text-ink-700 opacity-0 group-hover:opacity-100">
+                      {formatTime(msg.createdAt)}
+                    </span>
+                  ) : (
+                    <AvatarIcon avatarId={msg.senderAvatarId} className="h-7 w-7 shrink-0 rounded-full" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    {!isGrouped && (
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-medium text-ink-100">
+                          {msg.senderId === currentUserId ? "You" : msg.senderName}
+                        </span>
+                        <span className="text-[10px] text-ink-600">{formatTime(msg.createdAt)}</span>
+                      </div>
+                    )}
+                    <p className="break-words text-sm text-ink-300">{renderMessageText(msg.text)}</p>
+                  </div>
+                </motion.div>
+                {isNewDay && (
+                  <div className="my-3 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-ink-600">
+                    <span className="h-px flex-1 bg-ink-800" />
+                    {formatDateDivider(msg.createdAt)}
+                    <span className="h-px flex-1 bg-ink-800" />
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <AnimatePresence>
+        {!isAtBottom && (
+          <motion.button
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            onClick={scrollToBottom}
+            className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-ink-100 shadow-lg"
+          >
+            <ArrowDown className="h-3 w-3" />
+            New messages
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <div className="flex h-4 items-center px-3">
+        {typingUsers.length > 0 && (
+          <div className="flex items-center gap-1.5 text-[11px] text-ink-500">
+            <TypingDots />
+            <span className="truncate">
+              {typingUsers.map((u) => u.name).join(", ")}
+              {typingUsers.length === 1 ? " is" : " are"} typing
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-2 border-t border-ink-800 p-3">
+        <input
+          value={draft}
+          onChange={(e) => handleDraftChange(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          placeholder="Message the room…"
+          className="min-w-0 flex-1 rounded-md border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none"
+        />
+        <button
+          onClick={handleSend}
+          className="rounded-md bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-950 transition-colors hover:bg-white active:scale-95"
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
