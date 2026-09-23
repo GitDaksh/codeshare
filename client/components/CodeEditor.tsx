@@ -1,9 +1,10 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
 import { LANGUAGES } from "@/lib/languages";
 import { getCursorShadeClass, getAvatarShade } from "@/lib/colors";
+import { installSafariClipboardShim } from "@/lib/safariClipboardShim";
 
 export type RemoteCursor = {
   userId: string;
@@ -19,6 +20,7 @@ export type RemoteCodeUpdate = {
 
 export type CodeEditorHandle = {
   getValue: () => string;
+  setValue: (value: string) => void;
 };
 
 type MonacoEditorInstance = Parameters<OnMount>[0];
@@ -31,9 +33,16 @@ type CodeEditorProps = {
   onCursorMove: (line: number, column: number) => void;
   remoteCursors: RemoteCursor[];
   saveStatus: "saved" | "saving";
+  minimapEnabled: boolean;
+  fontSize: number;
+  handleRef?: MutableRefObject<CodeEditorHandle | null>;
 };
 
 function handleEditorWillMount(monaco: Monaco) {
+  // Must run before any user interaction reaches Monaco's WebKit clipboard
+  // workaround. Idempotent and a no-op outside Safari/WebKit.
+  installSafariClipboardShim();
+
   monaco.editor.defineTheme("codeshare-dark", {
     base: "vs-dark",
     inherit: true,
@@ -127,10 +136,18 @@ class RemoteCursorWidget {
   }
 }
 
-export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEditor(
-  { language, initialValue, remoteUpdate, onChange, onCursorMove, remoteCursors, saveStatus },
-  ref
-) {
+export function CodeEditor({
+  language,
+  initialValue,
+  remoteUpdate,
+  onChange,
+  onCursorMove,
+  remoteCursors,
+  saveStatus,
+  minimapEnabled,
+  fontSize,
+  handleRef,
+}: CodeEditorProps) {
   const [position, setPosition] = useState({ line: 1, column: 1 });
   const editorRef = useRef<MonacoEditorInstance | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
@@ -138,15 +155,26 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
   const lastEmitRef = useRef(0);
   const isApplyingRemoteRef = useRef(false);
 
-  useImperativeHandle(ref, () => ({
-    getValue: () => editorRef.current?.getValue() ?? "",
-  }));
+  useEffect(() => {
+    if (!handleRef) return;
 
-  // Monaco's own internal code occasionally attempts a clipboard write that gets
-  // refused when a browser tab lacks focus (common when testing multiple windows
-  // side by side). That produces a "Canceled" promise rejection we can't prevent
-  // at the source — but we can stop it from surfacing as a disruptive unhandled
-  // rejection / dev-mode error overlay, since it doesn't affect functionality.
+    handleRef.current = {
+      getValue: () => editorRef.current?.getValue() ?? "",
+      setValue: (value: string) => {
+        const editor = editorRef.current;
+        const model = editor?.getModel();
+        if (!editor || !model) return;
+        editor.executeEdits("format", [{ range: model.getFullModelRange(), text: value }]);
+      },
+    };
+
+    return () => {
+      handleRef.current = null;
+    };
+  }, [handleRef]);
+
+  // Safety net, kept from before: if a "Canceled" rejection ever slips past
+  // the shim, don't let it surface as an unhandled rejection.
   useEffect(() => {
     function handleUnhandledRejection(event: PromiseRejectionEvent) {
       const reason = event.reason;
@@ -283,9 +311,9 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
           onMount={handleMount}
           options={{
             fontFamily: "var(--font-mono)",
-            fontSize: 14,
-            lineHeight: 21,
-            minimap: { enabled: false },
+            fontSize,
+            lineHeight: fontSize * 1.5,
+            minimap: { enabled: minimapEnabled },
             scrollBeyondLastLine: false,
             padding: { top: 16 },
           }}
@@ -309,4 +337,4 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
       </div>
     </div>
   );
-});
+}

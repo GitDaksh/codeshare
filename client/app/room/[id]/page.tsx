@@ -10,9 +10,23 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { motion } from "framer-motion";
-import { ArrowLeft, Maximize2, Minimize2, Link as LinkIcon, Play } from "lucide-react";
+import {
+  ArrowLeft,
+  Maximize2,
+  Minimize2,
+  Link as LinkIcon,
+  Play,
+  AlignLeft,
+  Settings,
+  Command as CommandIcon,
+  Map as MapIcon,
+  ZoomIn,
+  ZoomOut,
+  LayoutDashboard,
+} from "lucide-react";
 import { useApi } from "@/lib/api";
 import { useSocket } from "@/lib/socket";
 import { useOnboardingGate } from "@/lib/useOnboardingGate";
@@ -23,13 +37,19 @@ import { CodeEditor, type RemoteCursor, type RemoteCodeUpdate, type CodeEditorHa
 import { LanguageDropdown } from "@/components/LanguageDropdown";
 import { RunPanel } from "@/components/RunPanel";
 import { ChatPanel } from "@/components/ChatPanel";
+import { CommandPalette, type Command } from "@/components/CommandPalette";
+import { PresenceStack } from "@/components/PresenceStack";
+import { RoomSettingsModal } from "@/components/RoomSettingsModal";
 import { getStarterCode } from "@/lib/languages";
+import { formatCode, isFormattable } from "@/lib/format";
 import type { Room } from "@/types/room";
 import type { ChatMessage, Reaction } from "@/types/chat";
 import type { RemoteCursorEvent, TypingEvent } from "@/types/presence";
 
 const SAVE_INDICATOR_DELAY_MS = 1800;
 const TYPING_EXPIRY_MS = 4000;
+const MIN_FONT_SIZE = 10;
+const MAX_FONT_SIZE = 24;
 
 function RoomLoadingSkeleton() {
   return (
@@ -74,20 +94,25 @@ export default function RoomPage({
   const { id } = use(params);
   const { userId: currentUserId } = useAuth();
   const api = useApi();
+  const router = useRouter();
   const { toast } = useToast();
   const { checking } = useOnboardingGate();
 
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [initialCode, setInitialCode] = useState<string | null>(null);
   const [remoteUpdate, setRemoteUpdate] = useState<RemoteCodeUpdate | null>(null);
   const [language, setLanguage] = useState("javascript");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const codeEditorRef = useRef<CodeEditorHandle>(null);
+  const codeEditorRef = useRef<CodeEditorHandle | null>(null);
   const [runPanelOpen, setRunPanelOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [minimapEnabled, setMinimapEnabled] = useState(false);
+  const [fontSize, setFontSize] = useState(14);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -218,6 +243,17 @@ export default function RoomPage({
     };
   }, []);
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setCommandPaletteOpen((o) => !o);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   function handleDragStart(e: ReactMouseEvent) {
     e.preventDefault();
     isDraggingRef.current = true;
@@ -247,6 +283,98 @@ export default function RoomPage({
     setActiveTab(tab);
     if (tab === "chat") setUnreadCount(0);
   }
+
+  async function handleFormat() {
+    const code = codeEditorRef.current?.getValue() ?? "";
+    const result = await formatCode(code, language);
+
+    if (result.error) {
+      toast(result.error, "error");
+      return;
+    }
+    if (result.formatted && result.formatted !== code) {
+      codeEditorRef.current?.setValue(result.formatted);
+      handleCodeChange(result.formatted, 1, 1);
+      toast("Code formatted");
+    }
+  }
+
+  async function handleRenameRoom(newName: string) {
+    try {
+      const res = await api.patch<Room>(`/api/rooms/${id}`, { name: newName });
+      setRoom(res.data);
+      document.title = `${res.data.name} — CodeShare`;
+      toast("Room renamed");
+    } catch {
+      toast("Could not rename the room.", "error");
+      throw new Error("rename failed");
+    }
+  }
+
+  function handleRunClick() {
+    setRunPanelOpen((o) => !o);
+  }
+
+  const isOwner = room?.ownerId === currentUserId;
+
+  const commands: Command[] = [
+    {
+      id: "run",
+      label: "Run code",
+      icon: Play,
+      action: () => setRunPanelOpen(true),
+    },
+    {
+      id: "format",
+      label: "Format code",
+      icon: AlignLeft,
+      action: handleFormat,
+      disabled: !isFormattable(language),
+    },
+    {
+      id: "copy-link",
+      label: "Copy room link",
+      icon: LinkIcon,
+      action: handleCopyLink,
+    },
+    {
+      id: "zen",
+      label: zenMode ? "Show sidebar" : "Enter focus mode",
+      icon: zenMode ? Minimize2 : Maximize2,
+      action: () => setZenMode((z) => !z),
+    },
+    {
+      id: "minimap",
+      label: minimapEnabled ? "Hide minimap" : "Show minimap",
+      icon: MapIcon,
+      action: () => setMinimapEnabled((m) => !m),
+    },
+    {
+      id: "font-increase",
+      label: "Increase font size",
+      icon: ZoomIn,
+      action: () => setFontSize((f) => Math.min(MAX_FONT_SIZE, f + 2)),
+    },
+    {
+      id: "font-decrease",
+      label: "Decrease font size",
+      icon: ZoomOut,
+      action: () => setFontSize((f) => Math.max(MIN_FONT_SIZE, f - 2)),
+    },
+    {
+      id: "settings",
+      label: "Rename room",
+      icon: Settings,
+      action: () => setSettingsOpen(true),
+      disabled: !isOwner,
+    },
+    {
+      id: "dashboard",
+      label: "Go to dashboard",
+      icon: LayoutDashboard,
+      action: () => router.push("/dashboard"),
+    },
+  ];
 
   if (checking || loading || initialCode === null) {
     return <RoomLoadingSkeleton />;
@@ -287,7 +415,17 @@ export default function RoomPage({
           <span className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-ink-100">
             {room.name}
           </span>
-          <span className="shrink-0 rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500">
+          {isOwner && (
+            <button
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Room settings"
+              title="Room settings"
+              className="shrink-0 text-ink-600 transition-colors hover:text-ink-100"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <span className="hidden shrink-0 rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500 sm:inline">
             {room._id}
           </span>
           <span className="hidden shrink-0 items-center gap-1.5 text-xs text-ink-500 sm:flex">
@@ -296,10 +434,21 @@ export default function RoomPage({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <div className="hidden sm:block">
+            <PresenceStack users={onlineUsers} currentUserId={currentUserId ?? null} />
+          </div>
+          <button
+            onClick={() => setCommandPaletteOpen(true)}
+            aria-label="Open command palette"
+            title="Command palette (⌘K)"
+            className="hidden items-center gap-1 rounded-md border border-ink-700 px-2 py-1 text-xs text-ink-500 transition-colors hover:border-ink-500 hover:text-ink-100 sm:flex"
+          >
+            <CommandIcon className="h-3 w-3" />K
+          </button>
           <LanguageDropdown value={language} onChange={setLanguage} />
           <div className="flex items-center gap-0.5 rounded-lg bg-ink-900/60 p-1">
             <button
-              onClick={() => setRunPanelOpen((o) => !o)}
+              onClick={handleRunClick}
               aria-label={runPanelOpen ? "Hide output" : "Run code"}
               title={runPanelOpen ? "Hide output" : "Run code"}
               className={`rounded-md p-1.5 transition-colors ${
@@ -309,6 +458,15 @@ export default function RoomPage({
               }`}
             >
               <Play className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleFormat}
+              disabled={!isFormattable(language)}
+              aria-label="Format code"
+              title={isFormattable(language) ? "Format code" : "Formatting not supported for this language"}
+              className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <AlignLeft className="h-4 w-4" />
             </button>
             <button
               onClick={handleCopyLink}
@@ -334,7 +492,7 @@ export default function RoomPage({
         <div className="flex min-h-[400px] min-w-0 flex-1 flex-col md:h-full md:min-h-0">
           <div className="min-h-0 flex-1">
             <CodeEditor
-              ref={codeEditorRef}
+              handleRef={codeEditorRef}
               language={language}
               initialValue={initialCode}
               remoteUpdate={remoteUpdate}
@@ -342,6 +500,8 @@ export default function RoomPage({
               onCursorMove={sendCursorMove}
               remoteCursors={remoteCursors.filter((c) => c.userId !== currentUserId)}
               saveStatus={saveStatus}
+              minimapEnabled={minimapEnabled}
+              fontSize={fontSize}
             />
           </div>
           <RunPanel
@@ -399,6 +559,9 @@ export default function RoomPage({
                       >
                         <AvatarIcon avatarId={u.avatarId} className="h-6 w-6 shrink-0 rounded-full" />
                         {label}
+                        {u.userId === room.ownerId && (
+                          <span className="ml-auto text-[9px] uppercase tracking-wide text-ink-600">Owner</span>
+                        )}
                       </li>
                     );
                   })}
@@ -419,6 +582,14 @@ export default function RoomPage({
           </>
         )}
       </div>
+
+      <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} commands={commands} />
+      <RoomSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        currentName={room.name}
+        onSave={handleRenameRoom}
+      />
     </main>
   );
 }
