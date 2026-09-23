@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import type { OnlineUser, RemoteCursorEvent, TypingEvent } from "@/types/presence";
 import type { ChatMessage, Reaction } from "@/types/chat";
+import type { LanguageUpdateEvent, RunResultEvent, RunStartEvent } from "@/types/roomEvents";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -13,48 +14,34 @@ type CodeChangePayload = {
   cursor: RemoteCursorEvent | null;
 };
 
-type ReactionUpdate = {
+export type ReactionUpdate = {
   messageId: string;
   reactions: Reaction[];
 };
 
-export function useSocket(
-  roomId: string,
-  onChatMessage?: (message: ChatMessage) => void,
-  onCodeChange?: (code: string, cursor: RemoteCursorEvent | null) => void,
-  onCursorMove?: (cursor: RemoteCursorEvent) => void,
-  onTyping?: (event: TypingEvent) => void,
-  onReactionUpdate?: (update: ReactionUpdate) => void
-) {
+export type SocketHandlers = {
+  onChatMessage?: (message: ChatMessage) => void;
+  onCodeChange?: (code: string, cursor: RemoteCursorEvent | null) => void;
+  onCursorMove?: (cursor: RemoteCursorEvent) => void;
+  onTyping?: (event: TypingEvent) => void;
+  onReactionUpdate?: (update: ReactionUpdate) => void;
+  onLanguageUpdate?: (event: LanguageUpdateEvent) => void;
+  onRunStart?: (event: RunStartEvent) => void;
+  onRunResult?: (event: RunResultEvent) => void;
+};
+
+export function useSocket(roomId: string, handlers: SocketHandlers) {
   const { getToken } = useAuth();
   const socketRef = useRef<Socket | null>(null);
-  const onChatMessageRef = useRef(onChatMessage);
-  const onCodeChangeRef = useRef(onCodeChange);
-  const onCursorMoveRef = useRef(onCursorMove);
-  const onTypingRef = useRef(onTyping);
-  const onReactionUpdateRef = useRef(onReactionUpdate);
+  const handlersRef = useRef(handlers);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
 
+  // Always call the latest handlers without reconnecting the socket when
+  // their identities change between renders.
   useEffect(() => {
-    onChatMessageRef.current = onChatMessage;
-  }, [onChatMessage]);
-
-  useEffect(() => {
-    onCodeChangeRef.current = onCodeChange;
-  }, [onCodeChange]);
-
-  useEffect(() => {
-    onCursorMoveRef.current = onCursorMove;
-  }, [onCursorMove]);
-
-  useEffect(() => {
-    onTypingRef.current = onTyping;
-  }, [onTyping]);
-
-  useEffect(() => {
-    onReactionUpdateRef.current = onReactionUpdate;
-  }, [onReactionUpdate]);
+    handlersRef.current = handlers;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -88,23 +75,35 @@ export function useSocket(
       });
 
       socket.on("chat:message", (message: ChatMessage) => {
-        onChatMessageRef.current?.(message);
+        handlersRef.current.onChatMessage?.(message);
       });
 
       socket.on("reaction:update", (update: ReactionUpdate) => {
-        onReactionUpdateRef.current?.(update);
+        handlersRef.current.onReactionUpdate?.(update);
       });
 
       socket.on("code:change", (payload: CodeChangePayload) => {
-        onCodeChangeRef.current?.(payload.code, payload.cursor);
+        handlersRef.current.onCodeChange?.(payload.code, payload.cursor);
       });
 
       socket.on("cursor:move", (cursor: RemoteCursorEvent) => {
-        onCursorMoveRef.current?.(cursor);
+        handlersRef.current.onCursorMove?.(cursor);
       });
 
       socket.on("typing", (event: TypingEvent) => {
-        onTypingRef.current?.(event);
+        handlersRef.current.onTyping?.(event);
+      });
+
+      socket.on("language:update", (event: LanguageUpdateEvent) => {
+        handlersRef.current.onLanguageUpdate?.(event);
+      });
+
+      socket.on("run:start", (event: RunStartEvent) => {
+        handlersRef.current.onRunStart?.(event);
+      });
+
+      socket.on("run:result", (event: RunResultEvent) => {
+        handlersRef.current.onRunResult?.(event);
       });
 
       socket.on("disconnect", () => setStatus("disconnected"));
@@ -143,6 +142,21 @@ export function useSocket(
     socketRef.current?.emit("typing", { roomId, isTyping });
   }
 
+  function sendLanguageChange(language: string) {
+    socketRef.current?.emit("language:change", { roomId, language });
+  }
+
+  function sendRunStart(language: string) {
+    socketRef.current?.emit("run:start", { roomId, language });
+  }
+
+  function sendRunResult(
+    language: string,
+    result: { output: string; error: string | null; durationMs: number }
+  ) {
+    socketRef.current?.emit("run:result", { roomId, language, ...result });
+  }
+
   return {
     status,
     onlineUsers,
@@ -151,5 +165,8 @@ export function useSocket(
     sendCodeChange,
     sendCursorMove,
     sendTyping,
+    sendLanguageChange,
+    sendRunStart,
+    sendRunResult,
   };
 }

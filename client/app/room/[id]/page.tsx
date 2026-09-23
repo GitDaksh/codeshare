@@ -4,6 +4,7 @@ import {
   use,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -26,9 +27,11 @@ import {
   ZoomIn,
   ZoomOut,
   LayoutDashboard,
+  Terminal,
+  Loader2,
 } from "lucide-react";
 import { useApi } from "@/lib/api";
-import { useSocket } from "@/lib/socket";
+import { useSocket, type ReactionUpdate } from "@/lib/socket";
 import { useOnboardingGate } from "@/lib/useOnboardingGate";
 import { useToast } from "@/components/ToastProvider";
 import { AvatarIcon } from "@/components/AvatarIcon";
@@ -40,16 +43,24 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { PresenceStack } from "@/components/PresenceStack";
 import { RoomSettingsModal } from "@/components/RoomSettingsModal";
-import { getStarterCode } from "@/lib/languages";
+import { getStarterCode, LANGUAGES } from "@/lib/languages";
 import { formatCode, isFormattable } from "@/lib/format";
+import { executeCode, isRunnable, IDLE_RUN_STATE, type RunState } from "@/lib/execution";
+import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import type { Room } from "@/types/room";
-import type { ChatMessage, Reaction } from "@/types/chat";
+import type { ChatMessage } from "@/types/chat";
 import type { RemoteCursorEvent, TypingEvent } from "@/types/presence";
+import type { LanguageUpdateEvent, RunResultEvent, RunStartEvent } from "@/types/roomEvents";
 
 const SAVE_INDICATOR_DELAY_MS = 1800;
 const TYPING_EXPIRY_MS = 4000;
+const REMOTE_RUN_TIMEOUT_MS = 30000;
 const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 24;
+
+function languageLabel(value: string): string {
+  return LANGUAGES.find((l) => l.value === value)?.label ?? value;
+}
 
 function RoomLoadingSkeleton() {
   return (
@@ -109,7 +120,12 @@ export default function RoomPage({
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const codeEditorRef = useRef<CodeEditorHandle | null>(null);
+
   const [runPanelOpen, setRunPanelOpen] = useState(false);
+  const [runState, setRunState] = useState<RunState>(IDLE_RUN_STATE);
+  const isSelfRunningRef = useRef(false);
+  const remoteRunTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [minimapEnabled, setMinimapEnabled] = useState(false);
   const [fontSize, setFontSize] = useState(14);
@@ -122,7 +138,7 @@ export default function RoomPage({
   const [typingUsers, setTypingUsers] = useState<TypingEvent[]>([]);
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  const [remoteCursors, setRemoteCursors] = useState<RemoteCursor[]>([]);
+  const [remoteCursors, setRemoteCursors] = useState<RemoteCursorEvent[]>([]);
 
   useEffect(() => {
     activeTabRef.current = activeTab;
@@ -135,7 +151,7 @@ export default function RoomPage({
     }
   }, []);
 
-  const handleReactionUpdate = useCallback((update: { messageId: string; reactions: Reaction[] }) => {
+  const handleReactionUpdate = useCallback((update: ReactionUpdate) => {
     setMessages((prev) =>
       prev.map((m) => (m._id === update.messageId ? { ...m, reactions: update.reactions } : m))
     );
@@ -172,6 +188,57 @@ export default function RoomPage({
     }
   }, []);
 
+  const handleLanguageUpdate = useCallback(
+    (event: LanguageUpdateEvent) => {
+      setLanguage(event.language);
+      setRoom((prev) => (prev ? { ...prev, language: event.language } : prev));
+      toast(`${event.name} switched the room to ${languageLabel(event.language)}`, "info");
+    },
+    [toast]
+  );
+
+  const handleRemoteRunStart = useCallback((event: RunStartEvent) => {
+    if (remoteRunTimeoutRef.current) clearTimeout(remoteRunTimeoutRef.current);
+
+    const runner = { name: event.name, avatarId: event.avatarId, isSelf: false };
+    setRunState({ status: "running", result: null, runner, language: event.language });
+    setRunPanelOpen(true);
+
+    // If the runner disconnects mid-run, their result never arrives.
+    // Don't leave everyone else staring at "running" forever.
+    remoteRunTimeoutRef.current = setTimeout(() => {
+      remoteRunTimeoutRef.current = null;
+      setRunState((prev) =>
+        prev.status === "running" && prev.runner && !prev.runner.isSelf && prev.runner.name === event.name
+          ? {
+              ...prev,
+              status: "done",
+              result: {
+                output: "",
+                error: `${event.name}'s run didn't finish. They may have disconnected.`,
+                durationMs: 0,
+              },
+            }
+          : prev
+      );
+    }, REMOTE_RUN_TIMEOUT_MS);
+  }, []);
+
+  const handleRemoteRunResult = useCallback((event: RunResultEvent) => {
+    if (remoteRunTimeoutRef.current) {
+      clearTimeout(remoteRunTimeoutRef.current);
+      remoteRunTimeoutRef.current = null;
+    }
+
+    setRunState({
+      status: "done",
+      result: { output: event.output, error: event.error, durationMs: event.durationMs },
+      runner: { name: event.name, avatarId: event.avatarId, isSelf: false },
+      language: event.language,
+    });
+    setRunPanelOpen(true);
+  }, []);
+
   const {
     status,
     onlineUsers,
@@ -180,13 +247,30 @@ export default function RoomPage({
     sendCodeChange,
     sendCursorMove,
     sendTyping,
-  } = useSocket(
-    id,
-    handleIncomingMessage,
-    handleIncomingCodeChange,
-    handleCursorMove,
-    handleTyping,
-    handleReactionUpdate
+    sendLanguageChange,
+    sendRunStart,
+    sendRunResult,
+  } = useSocket(id, {
+    onChatMessage: handleIncomingMessage,
+    onCodeChange: handleIncomingCodeChange,
+    onCursorMove: handleCursorMove,
+    onTyping: handleTyping,
+    onReactionUpdate: handleReactionUpdate,
+    onLanguageUpdate: handleLanguageUpdate,
+    onRunStart: handleRemoteRunStart,
+    onRunResult: handleRemoteRunResult,
+  });
+
+  // Remote cursors enriched with each person's real avatar from presence.
+  const editorCursors = useMemo<RemoteCursor[]>(
+    () =>
+      remoteCursors
+        .filter((c) => c.userId !== currentUserId)
+        .map((c) => ({
+          ...c,
+          avatarId: onlineUsers.find((u) => u.userId === c.userId)?.avatarId ?? c.userId,
+        })),
+    [remoteCursors, onlineUsers, currentUserId]
   );
 
   const [zenMode, setZenMode] = useState(false);
@@ -240,6 +324,7 @@ export default function RoomPage({
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (remoteRunTimeoutRef.current) clearTimeout(remoteRunTimeoutRef.current);
     };
   }, []);
 
@@ -293,8 +378,8 @@ export default function RoomPage({
       return;
     }
     if (result.formatted && result.formatted !== code) {
+      // setValue triggers the editor's normal onChange, which syncs and saves.
       codeEditorRef.current?.setValue(result.formatted);
-      handleCodeChange(result.formatted, 1, 1);
       toast("Code formatted");
     }
   }
@@ -311,18 +396,65 @@ export default function RoomPage({
     }
   }
 
-  function handleRunClick() {
-    setRunPanelOpen((o) => !o);
+  function handleLanguageChange(next: string) {
+    if (next === language) return;
+    const previous = language;
+
+    setLanguage(next);
+    setRoom((prev) => (prev ? { ...prev, language: next } : prev));
+    sendLanguageChange(next);
+
+    // If the editor still holds only the untouched starter comment, swap it
+    // for the new language's comment style (e.g. // -> #).
+    const current = codeEditorRef.current?.getValue() ?? "";
+    const nextStarter = getStarterCode(next);
+    if (current === getStarterCode(previous) && current !== nextStarter) {
+      codeEditorRef.current?.setValue(nextStarter);
+    }
+  }
+
+  async function handleRun() {
+    setRunPanelOpen(true);
+    if (!isRunnable(language) || isSelfRunningRef.current) return;
+
+    isSelfRunningRef.current = true;
+    if (remoteRunTimeoutRef.current) {
+      clearTimeout(remoteRunTimeoutRef.current);
+      remoteRunTimeoutRef.current = null;
+    }
+
+    const me = onlineUsers.find((u) => u.userId === currentUserId);
+    const runner = { name: "You", avatarId: me?.avatarId ?? DEFAULT_AVATAR_ID, isSelf: true };
+    const runLanguage = language;
+
+    setRunState({ status: "running", result: null, runner, language: runLanguage });
+    sendRunStart(runLanguage);
+
+    try {
+      const code = codeEditorRef.current?.getValue() ?? "";
+      const result = await executeCode(code, runLanguage);
+      setRunState({ status: "done", result, runner, language: runLanguage });
+      sendRunResult(runLanguage, result);
+    } finally {
+      isSelfRunningRef.current = false;
+    }
   }
 
   const isOwner = room?.ownerId === currentUserId;
+  const isSelfRunning = runState.status === "running" && !!runState.runner?.isSelf;
 
   const commands: Command[] = [
     {
       id: "run",
       label: "Run code",
       icon: Play,
-      action: () => setRunPanelOpen(true),
+      action: handleRun,
+    },
+    {
+      id: "output",
+      label: runPanelOpen ? "Hide output panel" : "Show output panel",
+      icon: Terminal,
+      action: () => setRunPanelOpen((o) => !o),
     },
     {
       id: "format",
@@ -425,7 +557,7 @@ export default function RoomPage({
               <Settings className="h-3.5 w-3.5" />
             </button>
           )}
-          <span className="hidden shrink-0 rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500 sm:inline">
+          <span className="hidden shrink-0 rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500 lg:inline">
             {room._id}
           </span>
           <span className="hidden shrink-0 items-center gap-1.5 text-xs text-ink-500 sm:flex">
@@ -433,7 +565,8 @@ export default function RoomPage({
             {status}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex flex-wrap items-center gap-2">
           <div className="hidden sm:block">
             <PresenceStack users={onlineUsers} currentUserId={currentUserId ?? null} />
           </div>
@@ -445,19 +578,30 @@ export default function RoomPage({
           >
             <CommandIcon className="h-3 w-3" />K
           </button>
-          <LanguageDropdown value={language} onChange={setLanguage} />
+          <LanguageDropdown value={language} onChange={handleLanguageChange} />
+          <button
+            onClick={handleRun}
+            disabled={isSelfRunning}
+            title={isRunnable(language) ? "Run (⌘↵)" : `Running ${languageLabel(language)} isn't supported yet`}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
+              isRunnable(language)
+                ? "bg-ink-100 text-ink-950 hover:bg-white"
+                : "border border-ink-700 text-ink-500 hover:border-ink-500"
+            }`}
+          >
+            {isSelfRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            Run
+          </button>
           <div className="flex items-center gap-0.5 rounded-lg bg-ink-900/60 p-1">
             <button
-              onClick={handleRunClick}
-              aria-label={runPanelOpen ? "Hide output" : "Run code"}
-              title={runPanelOpen ? "Hide output" : "Run code"}
+              onClick={() => setRunPanelOpen((o) => !o)}
+              aria-label={runPanelOpen ? "Hide output panel" : "Show output panel"}
+              title={runPanelOpen ? "Hide output" : "Show output"}
               className={`rounded-md p-1.5 transition-colors ${
-                runPanelOpen
-                  ? "bg-ink-100 text-ink-950"
-                  : "text-ink-400 hover:bg-ink-800 hover:text-ink-100"
+                runPanelOpen ? "bg-ink-100 text-ink-950" : "text-ink-400 hover:bg-ink-800 hover:text-ink-100"
               }`}
             >
-              <Play className="h-4 w-4" />
+              <Terminal className="h-4 w-4" />
             </button>
             <button
               onClick={handleFormat}
@@ -498,17 +642,20 @@ export default function RoomPage({
               remoteUpdate={remoteUpdate}
               onChange={handleCodeChange}
               onCursorMove={sendCursorMove}
-              remoteCursors={remoteCursors.filter((c) => c.userId !== currentUserId)}
+              onRunShortcut={handleRun}
+              remoteCursors={editorCursors}
               saveStatus={saveStatus}
               minimapEnabled={minimapEnabled}
               fontSize={fontSize}
             />
           </div>
           <RunPanel
-            getCode={() => codeEditorRef.current?.getValue() ?? ""}
-            language={language}
             open={runPanelOpen}
             onClose={() => setRunPanelOpen(false)}
+            onRun={handleRun}
+            onClear={() => setRunState(IDLE_RUN_STATE)}
+            runState={runState}
+            language={language}
           />
         </div>
 
@@ -536,7 +683,11 @@ export default function RoomPage({
                         transition={{ type: "spring", bounce: 0.2, duration: 0.3 }}
                       />
                     )}
-                    <span className={`relative z-10 inline-flex items-center gap-1.5 ${activeTab === tab ? "text-ink-950" : "text-ink-400"}`}>
+                    <span
+                      className={`relative z-10 inline-flex items-center gap-1.5 ${
+                        activeTab === tab ? "text-ink-950" : "text-ink-400"
+                      }`}
+                    >
                       {tab === "chat" ? "Chat" : `Online — ${onlineUsers.length}`}
                       {tab === "chat" && unreadCount > 0 && activeTab !== "chat" && (
                         <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">

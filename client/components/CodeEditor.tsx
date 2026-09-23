@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
+import { AvatarIcon } from "@/components/AvatarIcon";
 import { LANGUAGES } from "@/lib/languages";
-import { getCursorShadeClass, getAvatarShade } from "@/lib/colors";
+import { getCursorShadeClass } from "@/lib/colors";
 import { installSafariClipboardShim } from "@/lib/safariClipboardShim";
 
 export type RemoteCursor = {
   userId: string;
   name: string;
+  avatarId: string;
   line: number;
   column: number;
 };
@@ -31,6 +34,7 @@ type CodeEditorProps = {
   remoteUpdate: RemoteCodeUpdate | null;
   onChange: (value: string, line: number, column: number) => void;
   onCursorMove: (line: number, column: number) => void;
+  onRunShortcut?: () => void;
   remoteCursors: RemoteCursor[];
   saveStatus: "saved" | "saving";
   minimapEnabled: boolean;
@@ -38,9 +42,9 @@ type CodeEditorProps = {
   handleRef?: MutableRefObject<CodeEditorHandle | null>;
 };
 
+const NAME_FLASH_MS = 1600;
+
 function handleEditorWillMount(monaco: Monaco) {
-  // Must run before any user interaction reaches Monaco's WebKit clipboard
-  // workaround. Idempotent and a no-op outside Safari/WebKit.
   installSafariClipboardShim();
 
   monaco.editor.defineTheme("codeshare-dark", {
@@ -93,27 +97,55 @@ function offsetToPosition(text: string, offset: number): { lineNumber: number; c
 
 class RemoteCursorWidget {
   private domNode: HTMLElement;
+  private badgeRoot: Root;
+  private nameTimer: ReturnType<typeof setTimeout> | null = null;
+  private avatarId: string;
+  private position: { lineNumber: number; column: number };
 
   constructor(
     private readonly id: string,
-    label: string,
-    private position: { lineNumber: number; column: number },
+    name: string,
+    avatarId: string,
+    position: { lineNumber: number; column: number },
     private readonly preference: number,
     lineColorClass: string,
-    badgeClasses: string
+    lineHeight: number
   ) {
+    this.avatarId = avatarId;
+    this.position = position;
+
     this.domNode = document.createElement("div");
     this.domNode.className = "remote-cursor-flag";
+    this.setLineHeight(lineHeight);
 
     const line = document.createElement("div");
     line.className = `remote-cursor-line ${lineColorClass}`;
 
     const badge = document.createElement("div");
-    badge.className = `remote-cursor-badge ${badgeClasses}`;
-    badge.textContent = label.charAt(0).toUpperCase();
+    badge.className = "remote-cursor-badge";
 
-    this.domNode.appendChild(line);
-    this.domNode.appendChild(badge);
+    const label = document.createElement("div");
+    label.className = "remote-cursor-name";
+    label.textContent = name;
+
+    this.domNode.append(line, badge, label);
+
+    // Each badge is its own small React root so it can render the person's
+    // real generated avatar. identifierPrefix keeps its SVG gradient/clip IDs
+    // from colliding with IDs generated in the main app root.
+    this.badgeRoot = createRoot(badge, { identifierPrefix: `${id}-` });
+    this.renderAvatar();
+    this.flashName();
+  }
+
+  private renderAvatar() {
+    this.badgeRoot.render(<AvatarIcon avatarId={this.avatarId} className="h-full w-full rounded-full" />);
+  }
+
+  private flashName() {
+    this.domNode.classList.add("is-active");
+    if (this.nameTimer) clearTimeout(this.nameTimer);
+    this.nameTimer = setTimeout(() => this.domNode.classList.remove("is-active"), NAME_FLASH_MS);
   }
 
   getId() {
@@ -124,15 +156,36 @@ class RemoteCursorWidget {
     return this.domNode;
   }
 
-  updatePosition(position: { lineNumber: number; column: number }) {
-    this.position = position;
-  }
-
   getPosition() {
     return {
       position: this.position,
       preference: [this.preference],
     };
+  }
+
+  updatePosition(position: { lineNumber: number; column: number }) {
+    const moved =
+      position.lineNumber !== this.position.lineNumber || position.column !== this.position.column;
+    this.position = position;
+    if (moved) this.flashName();
+  }
+
+  setAvatar(avatarId: string) {
+    if (avatarId === this.avatarId) return;
+    this.avatarId = avatarId;
+    this.renderAvatar();
+  }
+
+  setLineHeight(lineHeight: number) {
+    this.domNode.style.setProperty("--cursor-line-height", `${lineHeight}px`);
+  }
+
+  dispose() {
+    if (this.nameTimer) clearTimeout(this.nameTimer);
+    // Deferred: unmounting a root synchronously while React is committing
+    // another tree triggers a warning.
+    const root = this.badgeRoot;
+    setTimeout(() => root.unmount(), 0);
   }
 }
 
@@ -142,6 +195,7 @@ export function CodeEditor({
   remoteUpdate,
   onChange,
   onCursorMove,
+  onRunShortcut,
   remoteCursors,
   saveStatus,
   minimapEnabled,
@@ -154,6 +208,11 @@ export function CodeEditor({
   const widgetsRef = useRef<Map<string, RemoteCursorWidget>>(new Map());
   const lastEmitRef = useRef(0);
   const isApplyingRemoteRef = useRef(false);
+  const onRunShortcutRef = useRef(onRunShortcut);
+
+  useEffect(() => {
+    onRunShortcutRef.current = onRunShortcut;
+  });
 
   useEffect(() => {
     if (!handleRef) return;
@@ -173,8 +232,8 @@ export function CodeEditor({
     };
   }, [handleRef]);
 
-  // Safety net, kept from before: if a "Canceled" rejection ever slips past
-  // the shim, don't let it surface as an unhandled rejection.
+  // Safety net: if a "Canceled" rejection ever slips past the Safari shim,
+  // don't let it surface as an unhandled rejection.
   useEffect(() => {
     function handleUnhandledRejection(event: PromiseRejectionEvent) {
       const reason = event.reason;
@@ -188,9 +247,26 @@ export function CodeEditor({
     return () => window.removeEventListener("unhandledrejection", handleUnhandledRejection);
   }, []);
 
+  useEffect(() => {
+    const widgets = widgetsRef.current;
+    return () => {
+      widgets.forEach((widget) => {
+        editorRef.current?.removeContentWidget(widget);
+        widget.dispose();
+      });
+      widgets.clear();
+    };
+  }, []);
+
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+
+    // ⌘↵ / Ctrl+↵ runs the code. Registering it here also overrides Monaco's
+    // default "insert line below" binding for that key combination.
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      onRunShortcutRef.current?.();
+    });
 
     editor.onDidChangeCursorPosition((e) => {
       setPosition({ line: e.position.lineNumber, column: e.position.column });
@@ -261,11 +337,13 @@ export function CodeEditor({
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
 
+    const cursorLineHeight = Math.round(fontSize * 1.5) - 2;
     const activeIds = new Set(remoteCursors.map((c) => c.userId));
 
     for (const [userId, widget] of widgetsRef.current) {
       if (!activeIds.has(userId)) {
         editor.removeContentWidget(widget);
+        widget.dispose();
         widgetsRef.current.delete(userId);
       }
     }
@@ -278,19 +356,22 @@ export function CodeEditor({
         widget = new RemoteCursorWidget(
           `cursor-${cursor.userId}`,
           cursor.name,
+          cursor.avatarId,
           pos,
           monaco.editor.ContentWidgetPositionPreference.EXACT,
           getCursorShadeClass(cursor.userId),
-          getAvatarShade(cursor.userId)
+          cursorLineHeight
         );
         widgetsRef.current.set(cursor.userId, widget);
         editor.addContentWidget(widget);
       } else {
         widget.updatePosition(pos);
+        widget.setAvatar(cursor.avatarId);
+        widget.setLineHeight(cursorLineHeight);
         editor.layoutContentWidget(widget);
       }
     }
-  }, [remoteCursors]);
+  }, [remoteCursors, fontSize]);
 
   const languageLabel = LANGUAGES.find((l) => l.value === language)?.label ?? language;
 
@@ -315,13 +396,14 @@ export function CodeEditor({
             lineHeight: fontSize * 1.5,
             minimap: { enabled: minimapEnabled },
             scrollBeyondLastLine: false,
-            padding: { top: 16 },
+            padding: { top: 20 },
           }}
         />
       </div>
       <div className="flex items-center justify-between border-t border-ink-800 bg-ink-900 px-3 py-1 text-xs text-ink-500">
         <span>{languageLabel}</span>
         <div className="flex items-center gap-3">
+          <span className="hidden sm:inline">⌘↵ to run</span>
           <span>
             Ln {position.line}, Col {position.column}
           </span>
