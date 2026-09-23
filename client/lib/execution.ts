@@ -4,8 +4,58 @@ export type ExecutionResult = {
   durationMs: number;
 };
 
+export type RunRunner = {
+  name: string;
+  avatarId: string;
+  isSelf: boolean;
+};
+
+export type RunState = {
+  status: "idle" | "running" | "done";
+  result: ExecutionResult | null;
+  runner: RunRunner | null;
+  language: string | null;
+};
+
+export const IDLE_RUN_STATE: RunState = {
+  status: "idle",
+  result: null,
+  runner: null,
+  language: null,
+};
+
 const EXECUTION_TIMEOUT_MS = 5000;
 const PYODIDE_VERSION = "314.0.6";
+const MAX_OUTPUT_CHARS = 20000;
+const RUNNABLE_LANGUAGES = new Set(["javascript", "typescript", "python"]);
+
+export function isRunnable(language: string): boolean {
+  return RUNNABLE_LANGUAGES.has(language);
+}
+
+function truncate(text: string): string {
+  return text.length > MAX_OUTPUT_CHARS ? `${text.slice(0, MAX_OUTPUT_CHARS)}\n… output truncated` : text;
+}
+
+export async function executeCode(code: string, language: string): Promise<ExecutionResult> {
+  let result: ExecutionResult;
+
+  if (language === "javascript") {
+    result = await runJavaScript(code);
+  } else if (language === "typescript") {
+    result = await runTypeScript(code);
+  } else if (language === "python") {
+    result = await runPython(code);
+  } else {
+    result = { output: "", error: "Running code isn't supported for this language yet.", durationMs: 0 };
+  }
+
+  return {
+    ...result,
+    output: truncate(result.output),
+    error: result.error ? truncate(result.error) : null,
+  };
+}
 
 export function runJavaScript(code: string): Promise<ExecutionResult> {
   const start = performance.now();
