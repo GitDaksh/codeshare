@@ -2,7 +2,6 @@ import type { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import { getAuth } from "@clerk/express";
 import { Room } from "../models/Room";
-import { Profile } from "../models/Profile";
 
 export async function createRoom(req: Request, res: Response, next: NextFunction) {
   try {
@@ -60,23 +59,46 @@ export async function getRoom(req: Request, res: Response, next: NextFunction) {
     }
 
     res.json(room);
+  } catch (err) {
+    next(err);
+  }
+}
 
-    // Best-effort "recently joined" tracking — fires after the response is
-    // already sent, and its own failure can never affect the request above.
+export async function updateRoom(req: Request, res: Response, next: NextFunction) {
+  try {
     const { userId } = getAuth(req);
-    if (userId && room.ownerId !== userId) {
-      Profile.findOne({ clerkUserId: userId })
-        .then((profile) => {
-          if (!profile) return;
-          const roomIdStr = room._id.toString();
-          profile.recentRoomIds = [
-            roomIdStr,
-            ...profile.recentRoomIds.filter((rid) => rid !== roomIdStr),
-          ].slice(0, 10);
-          return profile.save();
-        })
-        .catch((err) => console.error("Failed to record room visit:", err));
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
+
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+
+    const room = await Room.findById(id);
+
+    if (!room) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+
+    if (room.ownerId !== userId) {
+      return res.status(403).json({ error: "Only the room owner can update this room" });
+    }
+
+    const { name } = req.body;
+
+    if (name !== undefined) {
+      if (typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "Room name is required" });
+      }
+      room.name = name.trim();
+    }
+
+    await room.save();
+    res.json(room);
   } catch (err) {
     next(err);
   }

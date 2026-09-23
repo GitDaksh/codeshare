@@ -95,9 +95,13 @@ export function ChatPanel({
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
 
-  const initialMessageIdsRef = useRef<Set<string> | null>(null);
-  if (initialMessageIdsRef.current === null) {
-    initialMessageIdsRef.current = new Set(messages.map((m) => m._id));
+  // Snapshot of messages that already existed when history first appeared.
+  // Taken on the first non-empty render (not at mount), because chat history
+  // is fetched asynchronously and usually arrives after this panel mounts.
+  // Only messages that arrive after this snapshot get the entrance animation.
+  const historyIdsRef = useRef<Set<string> | null>(null);
+  if (historyIdsRef.current === null && messages.length > 0) {
+    historyIdsRef.current = new Set(messages.map((m) => m._id));
   }
 
   useEffect(() => {
@@ -115,7 +119,9 @@ export function ChatPanel({
   function handleScroll() {
     const el = scrollRef.current;
     if (!el) return;
-    setIsAtBottom(el.scrollTop < AT_BOTTOM_THRESHOLD);
+    // In a column-reverse scroller, scrollTop is 0 at the newest message and
+    // becomes increasingly NEGATIVE as you scroll up into older history.
+    setIsAtBottom(Math.abs(el.scrollTop) < AT_BOTTOM_THRESHOLD);
   }
 
   function scrollToBottom() {
@@ -147,6 +153,10 @@ export function ChatPanel({
     onSend();
   }
 
+  // Rendered newest-first; flex-col-reverse flips the ORDER of these blocks
+  // back to normal chronological order visually. It does NOT reverse the
+  // contents inside each block, so each block is laid out top-to-bottom as
+  // normal: date divider first, then the message.
   const reversedMessages = [...messages].reverse();
 
   return (
@@ -169,11 +179,18 @@ export function ChatPanel({
               !!older &&
               older.senderId === msg.senderId &&
               new Date(msg.createdAt).getTime() - new Date(older.createdAt).getTime() < GROUP_WINDOW_MS;
-            const isNewMessage = !initialMessageIdsRef.current!.has(msg._id);
-            const reactionGroups = groupReactions(msg.reactions);
+            const isNewMessage = historyIdsRef.current !== null && !historyIdsRef.current.has(msg._id);
+            const reactionGroups = groupReactions(msg.reactions ?? []);
 
             return (
               <div key={msg._id}>
+                {isNewDay && (
+                  <div className="my-3 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-ink-600">
+                    <span className="h-px flex-1 bg-ink-800" />
+                    {formatDateDivider(msg.createdAt)}
+                    <span className="h-px flex-1 bg-ink-800" />
+                  </div>
+                )}
                 <motion.div
                   initial={isNewMessage ? { opacity: 0, y: 6 } : false}
                   animate={{ opacity: 1, y: 0 }}
@@ -182,7 +199,7 @@ export function ChatPanel({
                     isGrouped ? "" : "mt-2.5"
                   }`}
                 >
-                  <div className="pointer-events-none absolute -top-3 right-2 flex gap-0.5 rounded-md border border-ink-700 bg-ink-900 p-0.5 opacity-0 shadow-lg transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+                  <div className="pointer-events-none absolute -top-3 right-2 z-10 flex gap-0.5 rounded-md border border-ink-700 bg-ink-900 p-0.5 opacity-0 shadow-lg transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
                     {REACTION_EMOJIS.map((emoji) => (
                       <button
                         key={emoji}
@@ -195,12 +212,18 @@ export function ChatPanel({
                   </div>
 
                   {isGrouped ? (
-                    <span className="w-7 shrink-0 text-center text-[9px] leading-6 text-ink-700 opacity-0 group-hover:opacity-100">
-                      {formatTime(msg.createdAt)}
-                    </span>
+                    // Fixed-width gutter. The hover timestamp is absolutely
+                    // positioned and non-wrapping, so it can never add height
+                    // to the row (the cause of the old spacing bug).
+                    <div className="relative w-7 shrink-0">
+                      <span className="absolute left-1/2 top-0 -translate-x-1/2 whitespace-nowrap text-[9px] leading-5 text-ink-600 opacity-0 transition-opacity group-hover:opacity-100">
+                        {formatTime(msg.createdAt)}
+                      </span>
+                    </div>
                   ) : (
                     <AvatarIcon avatarId={msg.senderAvatarId} className="h-7 w-7 shrink-0 rounded-full" />
                   )}
+
                   <div className="min-w-0 flex-1">
                     {!isGrouped && (
                       <div className="flex items-baseline gap-2">
@@ -210,7 +233,7 @@ export function ChatPanel({
                         <span className="text-[10px] text-ink-600">{formatTime(msg.createdAt)}</span>
                       </div>
                     )}
-                    <p className="break-words text-sm text-ink-300">{renderMessageText(msg.text)}</p>
+                    <p className="break-words text-sm leading-5 text-ink-300">{renderMessageText(msg.text)}</p>
                     {reactionGroups.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {reactionGroups.map(({ emoji, userIds }) => {
@@ -234,13 +257,6 @@ export function ChatPanel({
                     )}
                   </div>
                 </motion.div>
-                {isNewDay && (
-                  <div className="my-3 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-ink-600">
-                    <span className="h-px flex-1 bg-ink-800" />
-                    {formatDateDivider(msg.createdAt)}
-                    <span className="h-px flex-1 bg-ink-800" />
-                  </div>
-                )}
               </div>
             );
           })
@@ -254,7 +270,7 @@ export function ChatPanel({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             onClick={scrollToBottom}
-            className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-ink-100 shadow-lg"
+            className="absolute bottom-24 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-ink-700 bg-ink-900 px-3 py-1 text-xs text-ink-100 shadow-lg"
           >
             <ArrowDown className="h-3 w-3" />
             New messages
