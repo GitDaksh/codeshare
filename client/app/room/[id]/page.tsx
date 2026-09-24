@@ -33,6 +33,7 @@ import {
   MessageSquare,
   Users,
   Ellipsis,
+  WrapText,
   type LucideIcon,
 } from "lucide-react";
 import { useApi } from "@/lib/api";
@@ -148,6 +149,7 @@ export default function RoomPage({
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [minimapEnabled, setMinimapEnabled] = useState(false);
   const [fontSize, setFontSize] = useState(14);
+  const [wordWrap, setWordWrap] = useState(true);
   const [zenMode, setZenMode] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("code");
   const [sidebarWidth, setSidebarWidth] = useState(288);
@@ -162,9 +164,6 @@ export default function RoomPage({
 
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursorEvent[]>([]);
 
-  // Is the chat actually on screen right now? On desktop that means the Chat
-  // tab is selected and the sidebar isn't hidden by focus mode; on phones it
-  // means the Chat panel is the one showing. Drives the unread counter.
   const chatVisible = activeTab === "chat" && (isDesktop ? !zenMode : mobilePanel === "chat");
   const chatVisibleRef = useRef(chatVisible);
 
@@ -402,6 +401,10 @@ export default function RoomPage({
     if (!next && activeTab === "chat") setUnreadCount(0);
   }
 
+  function handleToggleWordWrap() {
+    setWordWrap((w) => !w);
+  }
+
   async function handleFormat() {
     const code = codeEditorRef.current?.getValue() ?? "";
     const result = await formatCode(code, language);
@@ -444,8 +447,6 @@ export default function RoomPage({
   }
 
   async function handleRun() {
-    // On phones, running from the Chat/People tab jumps back to the code
-    // view so the output panel is actually visible.
     setMobilePanel("code");
     setRunPanelOpen(true);
     if (!isRunnable(language) || isSelfRunningRef.current) return;
@@ -475,8 +476,6 @@ export default function RoomPage({
 
   const isOwner = room?.ownerId === currentUserId;
   const isSelfRunning = runState.status === "running" && !!runState.runner?.isSelf;
-  // Focus mode only exists on desktop; on phones the tab bar already gives
-  // the editor the whole screen.
   const showSidebar = !zenMode || !isDesktop;
 
   const desktopOnlyCommands: Command[] = isDesktop
@@ -518,6 +517,12 @@ export default function RoomPage({
       icon: AlignLeft,
       action: handleFormat,
       disabled: !isFormattable(language),
+    },
+    {
+      id: "word-wrap",
+      label: wordWrap ? "Disable word wrap" : "Enable word wrap",
+      icon: WrapText,
+      action: handleToggleWordWrap,
     },
     {
       id: "copy-link",
@@ -580,7 +585,6 @@ export default function RoomPage({
 
   return (
     <main className="flex h-dvh flex-col md:h-[calc(100dvh-56px)]">
-      {/* Header: a single row on every screen size */}
       <header className="flex shrink-0 items-center gap-2 border-b border-ink-800 px-3 py-2 sm:px-4 sm:py-2.5">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Link
@@ -675,7 +679,6 @@ export default function RoomPage({
               {zenMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
           </div>
-          {/* Phones: every secondary action lives in the command palette */}
           <button
             onClick={() => setCommandPaletteOpen(true)}
             aria-label="More actions"
@@ -686,7 +689,6 @@ export default function RoomPage({
         </div>
       </header>
 
-      {/* Body: editor + sidebar side by side on desktop; one panel at a time on phones */}
       <div className="flex min-h-0 flex-1">
         <div
           className={`${mobilePanel === "code" ? "flex" : "hidden"} min-w-0 flex-1 flex-col md:flex`}
@@ -704,6 +706,8 @@ export default function RoomPage({
               saveStatus={saveStatus}
               minimapEnabled={minimapEnabled}
               fontSize={fontSize}
+              wordWrap={wordWrap}
+              onToggleWordWrap={handleToggleWordWrap}
             />
           </div>
           <RunPanel
@@ -798,7 +802,6 @@ export default function RoomPage({
         )}
       </div>
 
-      {/* Phones: bottom tab bar */}
       <nav className="flex shrink-0 border-t border-ink-800 bg-ink-950 pb-[env(safe-area-inset-bottom)] md:hidden">
         {MOBILE_TABS.map(({ id: tabId, label, icon: Icon }) => {
           const active = mobilePanel === tabId;
