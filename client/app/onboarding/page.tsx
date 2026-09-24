@@ -6,8 +6,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useApi } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { AvatarIcon } from "@/components/AvatarIcon";
-import { UsernameInput } from "@/components/UsernameInput";
 import { AvatarPicker } from "@/components/AvatarPicker";
+import { UsernameInput } from "@/components/UsernameInput";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import { LANGUAGES, getLanguageBadgeClasses } from "@/lib/languages";
 import type { Profile } from "@/types/profile";
@@ -69,7 +69,7 @@ export default function OnboardingPage() {
 
   if (checkingExisting) {
     return (
-      <main className="flex min-h-[calc(100vh-56px)] items-center justify-center">
+      <main className="flex min-h-[calc(100dvh-56px)] items-center justify-center">
         <p className="text-sm text-ink-500">Loading…</p>
       </main>
     );
@@ -78,12 +78,12 @@ export default function OnboardingPage() {
   const canGoNext = step === 1 ? usernameValid : true;
 
   return (
-    <main className="flex min-h-[calc(100vh-56px)] items-center justify-center px-4 py-12">
+    <main className="flex min-h-[calc(100dvh-56px)] items-start justify-center px-4 py-8 sm:items-center sm:py-12">
       <div className="w-full max-w-sm">
         {step > 0 && (
-          <div className="mb-4 flex items-center gap-2 text-xs text-ink-500">
-            <AvatarIcon avatarId={avatarId} className="h-6 w-6 rounded-full" />
-            <span>{username ? `@${username}` : "Setting up your profile…"}</span>
+          <div className="mb-4 flex min-w-0 items-center gap-2 text-xs text-ink-500">
+            <AvatarIcon avatarId={avatarId} className="h-6 w-6 shrink-0 rounded-full" />
+            <span className="truncate">{username ? `@${username}` : "Setting up your profile…"}</span>
           </div>
         )}
 
@@ -107,7 +107,7 @@ export default function OnboardingPage() {
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.2 }}
             >
-              <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-ink-100">
+              <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100 sm:text-2xl">
                 Welcome to CodeShare!
               </h1>
               <p className="mt-1.5 text-sm text-ink-500">
@@ -127,7 +127,7 @@ export default function OnboardingPage() {
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.2 }}
             >
-              <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-ink-100">
+              <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100 sm:text-2xl">
                 Pick a username
               </h1>
               <p className="mt-1.5 text-sm text-ink-500">
@@ -147,25 +147,25 @@ export default function OnboardingPage() {
           )}
 
           {step === 2 && (
-  <motion.div
-    key="avatar"
-    initial={{ opacity: 0, x: 16 }}
-    animate={{ opacity: 1, x: 0 }}
-    exit={{ opacity: 0, x: -16 }}
-    transition={{ duration: 0.2 }}
-  >
-    <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-ink-100">
-      Choose an avatar
-    </h1>
-    <p className="mt-1.5 text-sm text-ink-500">Shuffle until one feels right — infinite options.</p>
-    <div className="mt-6 flex justify-center">
-      <AvatarIcon avatarId={avatarId} className="h-20 w-20 rounded-full" />
-    </div>
-    <div className="mt-6">
-      <AvatarPicker value={avatarId} onChange={setAvatarId} />
-    </div>
-  </motion.div>
-)}
+            <motion.div
+              key="avatar"
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.2 }}
+            >
+              <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100 sm:text-2xl">
+                Choose an avatar
+              </h1>
+              <p className="mt-1.5 text-sm text-ink-500">Shuffle until one feels right — infinite options.</p>
+              <div className="mt-6 flex justify-center">
+                <AvatarIcon avatarId={avatarId} className="h-20 w-20 rounded-full" />
+              </div>
+              <div className="mt-6">
+                <AvatarPicker value={avatarId} onChange={setAvatarId} />
+              </div>
+            </motion.div>
+          )}
 
           {step === 3 && (
             <motion.div
@@ -175,7 +175,7 @@ export default function OnboardingPage() {
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.2 }}
             >
-              <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-ink-100">
+              <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100 sm:text-2xl">
                 Tell us more
               </h1>
               <p className="mt-1.5 text-sm text-ink-500">
@@ -206,6 +206,8 @@ export default function OnboardingPage() {
                     onChange={(e) => setGithubUsername(e.target.value)}
                     placeholder="octocat"
                     maxLength={39}
+                    autoCapitalize="none"
+                    autoCorrect="off"
                     className="w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none"
                   />
                 </div>
@@ -233,7 +235,7 @@ export default function OnboardingPage() {
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.2 }}
             >
-              <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-ink-100">
+              <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100 sm:text-2xl">
                 Looking good!
               </h1>
               <p className="mt-1.5 text-sm text-ink-500">
@@ -243,7 +245,7 @@ export default function OnboardingPage() {
               <div className="mt-6 flex items-center gap-3 rounded-lg border border-ink-800 p-4">
                 <AvatarIcon avatarId={avatarId} className="h-14 w-14 shrink-0 rounded-full" />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink-100">@{username}</p>
+                  <p className="truncate text-sm font-medium text-ink-100">@{username}</p>
                   {bio && <p className="mt-0.5 truncate text-xs text-ink-400">{bio}</p>}
                 </div>
               </div>
@@ -255,7 +257,7 @@ export default function OnboardingPage() {
                       {favoriteLanguage}
                     </span>
                   )}
-                  {githubUsername && <span>github.com/{githubUsername}</span>}
+                  {githubUsername && <span className="truncate">github.com/{githubUsername}</span>}
                 </div>
               )}
             </motion.div>
@@ -266,7 +268,7 @@ export default function OnboardingPage() {
           {step > 0 ? (
             <button
               onClick={() => setStep((s) => s - 1)}
-              className="text-sm text-ink-500 transition-colors hover:text-ink-100"
+              className="py-2 text-sm text-ink-500 transition-colors hover:text-ink-100"
             >
               Back
             </button>
@@ -278,7 +280,7 @@ export default function OnboardingPage() {
             <button
               onClick={() => setStep((s) => s + 1)}
               disabled={!canGoNext}
-              className="rounded-md bg-ink-100 px-5 py-2 text-sm font-medium text-ink-950 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-md bg-ink-100 px-5 py-2.5 text-sm font-medium text-ink-950 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:py-2"
             >
               Continue
             </button>
@@ -286,7 +288,7 @@ export default function OnboardingPage() {
             <button
               onClick={handleFinish}
               disabled={submitting}
-              className="rounded-md bg-ink-100 px-5 py-2 text-sm font-medium text-ink-950 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md bg-ink-100 px-5 py-2.5 text-sm font-medium text-ink-950 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 sm:py-2"
             >
               {submitting ? "Setting up…" : "Get started"}
             </button>

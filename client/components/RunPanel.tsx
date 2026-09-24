@@ -34,17 +34,20 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
           transition={{ duration: 0.2, ease: "easeInOut" }}
           className="flex shrink-0 flex-col overflow-hidden border-t border-ink-800 bg-ink-950"
         >
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-ink-800 px-3 py-1.5">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-ink-800 px-3 py-1.5 sm:gap-3">
             <div className="flex min-w-0 items-center gap-2 text-xs">
-              <span className="font-medium uppercase tracking-wide text-ink-500">Output</span>
+              <span
+                className={`font-medium uppercase tracking-wide text-ink-500 ${runner ? "hidden sm:inline" : ""}`}
+              >
+                Output
+              </span>
               {runner && (
                 <span className="flex min-w-0 items-center gap-1.5 text-ink-500">
-                  <span className="text-ink-700">·</span>
+                  <span className="hidden text-ink-700 sm:inline">·</span>
                   <AvatarIcon avatarId={runner.avatarId} className="h-4 w-4 shrink-0 rounded-full" />
                   <span className="truncate text-ink-300">{runner.isSelf ? "You" : runner.name}</span>
-                  <span className="shrink-0">
-                    {status === "running" ? "running" : "ran"} {languageLabel(runState.language)}
-                  </span>
+                  <span className="shrink-0">{status === "running" ? "running" : "ran"}</span>
+                  <span className="hidden shrink-0 sm:inline">{languageLabel(runState.language)}</span>
                   {status === "done" && result && (
                     <span className="shrink-0 text-ink-600">{Math.round(result.durationMs)}ms</span>
                   )}
@@ -72,7 +75,7 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
               <button
                 onClick={onClose}
                 aria-label="Close output panel"
-                className="rounded-md p-1 text-ink-500 transition-colors hover:text-ink-100"
+                className="rounded-md p-1.5 text-ink-500 transition-colors hover:text-ink-100"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -81,7 +84,7 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
 
           <div className="flex-1 overflow-y-auto p-3 font-[family-name:var(--font-mono)] text-xs">
             {status === "running" ? (
-              <p className="flex items-center gap-2 text-ink-500">
+              <p className="flex flex-wrap items-center gap-2 text-ink-500">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Running…
                 {runState.language === "python" && runner?.isSelf && (
@@ -90,8 +93,8 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
               </p>
             ) : status === "done" && result ? (
               <>
-                {result.output && <pre className="whitespace-pre-wrap text-ink-300">{result.output}</pre>}
-                {result.error && <pre className="whitespace-pre-wrap text-red-400">{result.error}</pre>}
+                {result.output && <pre className="whitespace-pre-wrap break-words text-ink-300">{result.output}</pre>}
+                {result.error && <pre className="whitespace-pre-wrap break-words text-red-400">{result.error}</pre>}
                 {!result.output && !result.error && <p className="text-ink-600">Ran with no output.</p>}
               </>
             ) : !canRun ? (
@@ -101,9 +104,11 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
               </p>
             ) : (
               <p className="text-ink-600">
-                Press <kbd className="rounded border border-ink-700 px-1 text-ink-400">⌘↵</kbd> /{" "}
-                <kbd className="rounded border border-ink-700 px-1 text-ink-400">Ctrl+↵</kbd> or Run to execute. Output
-                is shared with everyone in the room.
+                <span className="hidden sm:inline">
+                  Press <kbd className="rounded border border-ink-700 px-1 text-ink-400">⌘↵</kbd> /{" "}
+                  <kbd className="rounded border border-ink-700 px-1 text-ink-400">Ctrl+↵</kbd> or{" "}
+                </span>
+                Tap Run to execute. Output is shared with everyone in the room.
               </p>
             )}
           </div>

@@ -7,6 +7,7 @@ import { AvatarIcon } from "@/components/AvatarIcon";
 import { LANGUAGES } from "@/lib/languages";
 import { getCursorShadeClass } from "@/lib/colors";
 import { installSafariClipboardShim } from "@/lib/safariClipboardShim";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 
 export type RemoteCursor = {
   userId: string;
@@ -130,9 +131,6 @@ class RemoteCursorWidget {
 
     this.domNode.append(line, badge, label);
 
-    // Each badge is its own small React root so it can render the person's
-    // real generated avatar. identifierPrefix keeps its SVG gradient/clip IDs
-    // from colliding with IDs generated in the main app root.
     this.badgeRoot = createRoot(badge, { identifierPrefix: `${id}-` });
     this.renderAvatar();
     this.flashName();
@@ -182,8 +180,6 @@ class RemoteCursorWidget {
 
   dispose() {
     if (this.nameTimer) clearTimeout(this.nameTimer);
-    // Deferred: unmounting a root synchronously while React is committing
-    // another tree triggers a warning.
     const root = this.badgeRoot;
     setTimeout(() => root.unmount(), 0);
   }
@@ -209,6 +205,9 @@ export function CodeEditor({
   const lastEmitRef = useRef(0);
   const isApplyingRemoteRef = useRef(false);
   const onRunShortcutRef = useRef(onRunShortcut);
+  // Phone-sized screens: wrap long lines and use a narrower gutter so code
+  // is readable without sideways scrolling.
+  const isNarrow = useMediaQuery("(max-width: 639px)");
 
   useEffect(() => {
     onRunShortcutRef.current = onRunShortcut;
@@ -232,8 +231,6 @@ export function CodeEditor({
     };
   }, [handleRef]);
 
-  // Safety net: if a "Canceled" rejection ever slips past the Safari shim,
-  // don't let it surface as an unhandled rejection.
   useEffect(() => {
     function handleUnhandledRejection(event: PromiseRejectionEvent) {
       const reason = event.reason;
@@ -262,8 +259,6 @@ export function CodeEditor({
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // ⌘↵ / Ctrl+↵ runs the code. Registering it here also overrides Monaco's
-    // default "insert line below" binding for that key combination.
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       onRunShortcutRef.current?.();
     });
@@ -397,12 +392,18 @@ export function CodeEditor({
             minimap: { enabled: minimapEnabled },
             scrollBeyondLastLine: false,
             padding: { top: 20 },
+            // Re-measure whenever the container resizes: sidebar drags,
+            // mobile tab switches, rotating a phone, window resizes.
+            automaticLayout: true,
+            wordWrap: isNarrow ? "on" : "off",
+            lineNumbersMinChars: isNarrow ? 3 : 5,
+            folding: !isNarrow,
           }}
         />
       </div>
-      <div className="flex items-center justify-between border-t border-ink-800 bg-ink-900 px-3 py-1 text-xs text-ink-500">
-        <span>{languageLabel}</span>
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3 border-t border-ink-800 bg-ink-900 px-3 py-1 text-xs text-ink-500">
+        <span className="truncate">{languageLabel}</span>
+        <div className="flex shrink-0 items-center gap-3">
           <span className="hidden sm:inline">⌘↵ to run</span>
           <span>
             Ln {position.line}, Col {position.column}

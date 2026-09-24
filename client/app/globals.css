@@ -15,6 +15,26 @@
 body {
   background: var(--color-ink-950);
   color: var(--color-ink-100);
+  /* Safety net against accidental sideways scrolling on small screens.
+     "clip" (unlike "hidden") doesn't create a scroll container, so sticky
+     headers keep working. */
+  overflow-x: clip;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS Safari zooms the whole page into any focused form field whose text is
+   smaller than 16px. On phone-sized screens, bump text fields to 16px.
+   Monaco's hidden input textarea (.inputarea) is deliberately excluded. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea:not(.inputarea) {
+    font-size: 16px;
+  }
 }
 
 /* ---------- Remote cursors ---------- */
