@@ -83,8 +83,13 @@ const STATUS_META: Record<string, { label: string; dot: string; live: boolean }>
   disconnected: { label: "Offline", dot: "bg-red-500", live: false },
 };
 
+// Standalone icon buttons in the header (back, more).
 const ICON_BUTTON =
-  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-ink-900 hover:text-ink-100";
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100";
+
+// Buttons inside the grouped header toolbar.
+const TOOL_BUTTON =
+  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100";
 
 function languageLabel(value: string): string {
   return LANGUAGES.find((l) => l.value === value)?.label ?? value;
@@ -556,14 +561,14 @@ export default function RoomPage({
   if (notFound || !room) {
     return (
       <main className="flex h-dvh flex-col items-center justify-center gap-3 px-4 text-center md:h-[calc(100dvh-56px)]">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-ink-800 bg-ink-900">
-          <Code2 className="h-5 w-5 text-ink-500" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-ink-700 bg-ink-900">
+          <Code2 className="h-5 w-5 text-ink-300" />
         </div>
-        <p className="font-medium text-ink-100">This room doesn&apos;t exist</p>
-        <p className="max-w-xs text-sm text-ink-500">It may have been deleted, or the link might be mistyped.</p>
+        <p className="font-semibold text-ink-100">This room doesn&apos;t exist</p>
+        <p className="max-w-xs text-sm text-ink-400">It may have been deleted, or the link might be mistyped.</p>
         <Link
           href="/dashboard"
-          className="mt-2 inline-flex h-9 items-center rounded-full border border-ink-800 px-4 text-sm text-ink-300 transition-colors hover:border-ink-600 hover:text-ink-100"
+          className="mt-2 inline-flex h-9 items-center rounded-full border border-ink-700 bg-ink-900 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500"
         >
           Back to dashboard
         </Link>
@@ -576,7 +581,7 @@ export default function RoomPage({
   return (
     <main className="flex h-dvh flex-col bg-ink-950 md:h-[calc(100dvh-56px)]">
       {/* ---------- Header ---------- */}
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-ink-900 bg-ink-950 px-2 sm:gap-3 sm:px-3">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-ink-800 bg-ink-950 px-2 sm:gap-3 sm:px-3 md:border-transparent">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
           <Link href="/dashboard" aria-label="Back to dashboard" title="Back to dashboard" className={ICON_BUTTON}>
             <ArrowLeft className="h-4 w-4" />
@@ -591,7 +596,7 @@ export default function RoomPage({
                 onClick={() => setSettingsOpen(true)}
                 aria-label="Room settings"
                 title="Room settings"
-                className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-600 transition-colors hover:bg-ink-900 hover:text-ink-100 sm:flex"
+                className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 sm:flex"
               >
                 <Settings className="h-3.5 w-3.5" />
               </button>
@@ -600,7 +605,7 @@ export default function RoomPage({
 
           <span
             title={statusMeta.label}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-ink-800 px-2 py-0.5 text-[11px] text-ink-400"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-ink-700 bg-ink-900 px-2 py-0.5 text-[11px] font-medium text-ink-300"
           >
             <span className="relative flex h-1.5 w-1.5">
               {statusMeta.live && (
@@ -614,7 +619,7 @@ export default function RoomPage({
           <button
             onClick={handleCopyRoomId}
             title="Copy room ID"
-            className="hidden items-center gap-1.5 rounded-md px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-ink-600 transition-colors hover:bg-ink-900 hover:text-ink-300 lg:flex"
+            className="hidden items-center gap-1.5 rounded-md px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 lg:flex"
           >
             {shortRoomId}
             <Copy className="h-3 w-3" />
@@ -630,11 +635,11 @@ export default function RoomPage({
             onClick={() => setCommandPaletteOpen(true)}
             aria-label="Open command palette"
             title="Command palette (⌘K)"
-            className="hidden h-8 items-center gap-2 rounded-lg border border-ink-800 bg-ink-900/50 px-2.5 text-xs text-ink-500 transition-colors hover:border-ink-700 hover:text-ink-300 md:flex"
+            className="hidden h-8 items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 px-2.5 text-xs text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100 md:flex"
           >
             <Search className="h-3.5 w-3.5" />
             <span className="hidden xl:inline">Commands</span>
-            <kbd className="rounded border border-ink-800 bg-ink-950 px-1 font-[family-name:var(--font-mono)] text-[10px] text-ink-500">
+            <kbd className="rounded border border-ink-700 bg-ink-950 px-1 font-[family-name:var(--font-mono)] text-[10px] text-ink-400">
               ⌘K
             </kbd>
           </button>
@@ -648,7 +653,7 @@ export default function RoomPage({
             className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 ${
               runnable
                 ? "bg-ink-100 text-ink-950 shadow-[0_0_20px_-6px_rgba(255,255,255,0.5)] hover:bg-white"
-                : "border border-ink-800 text-ink-500 hover:border-ink-600"
+                : "border border-ink-700 bg-ink-900 text-ink-400 hover:border-ink-500"
             }`}
           >
             {isSelfRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
@@ -660,13 +665,13 @@ export default function RoomPage({
             )}
           </button>
 
-          <div className="hidden items-center gap-0.5 sm:flex">
-            <span className="mx-1 h-5 w-px bg-ink-800" />
+          {/* Grouped toolbar */}
+          <div className="hidden items-center gap-0.5 rounded-lg border border-ink-800 bg-ink-900 p-0.5 sm:flex">
             <button
               onClick={() => setRunPanelOpen((o) => !o)}
               aria-label={runPanelOpen ? "Hide output panel" : "Show output panel"}
               title={runPanelOpen ? "Hide output" : "Show output"}
-              className={`${ICON_BUTTON} ${runPanelOpen ? "bg-ink-900 text-ink-100" : ""}`}
+              className={`${TOOL_BUTTON} ${runPanelOpen ? "bg-ink-800 text-ink-100" : ""}`}
             >
               <Terminal className="h-4 w-4" />
             </button>
@@ -675,18 +680,18 @@ export default function RoomPage({
               disabled={!isFormattable(language)}
               aria-label="Format code"
               title={isFormattable(language) ? "Format code" : "Formatting not supported for this language"}
-              className={`${ICON_BUTTON} disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent`}
+              className={`${TOOL_BUTTON} disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent`}
             >
               <AlignLeft className="h-4 w-4" />
             </button>
-            <button onClick={handleCopyLink} aria-label="Copy room link" title="Copy room link" className={ICON_BUTTON}>
+            <button onClick={handleCopyLink} aria-label="Copy room link" title="Copy room link" className={TOOL_BUTTON}>
               <LinkIcon className="h-4 w-4" />
             </button>
             <button
               onClick={handleToggleZen}
               aria-label={zenMode ? "Show sidebar" : "Enter focus mode"}
               title={zenMode ? "Show sidebar" : "Focus mode"}
-              className={`${ICON_BUTTON} hidden md:flex ${zenMode ? "bg-ink-900 text-ink-100" : ""}`}
+              className={`${TOOL_BUTTON} hidden md:flex ${zenMode ? "bg-ink-800 text-ink-100" : ""}`}
             >
               {zenMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
@@ -702,9 +707,11 @@ export default function RoomPage({
         </div>
       </header>
 
-      {/* ---------- Body ---------- */}
-      <div className="flex min-h-0 flex-1">
-        <div className={`${mobilePanel === "code" ? "flex" : "hidden"} min-w-0 flex-1 flex-col md:flex`}>
+      {/* ---------- Body: floating panels on desktop, full-bleed on phones ---------- */}
+      <div className="flex min-h-0 flex-1 md:px-2 md:pb-2">
+        <div
+          className={`${mobilePanel === "code" ? "flex" : "hidden"} min-w-0 flex-1 flex-col bg-ink-900 md:flex md:overflow-hidden md:rounded-xl md:border md:border-ink-800`}
+        >
           <div className="min-h-0 flex-1">
             <CodeEditor
               handleRef={codeEditorRef}
@@ -736,19 +743,21 @@ export default function RoomPage({
 
         {showSidebar && (
           <>
+            {/* Resize gutter: an 8px gap with a grab handle that appears on hover */}
             <div
               onMouseDown={handleDragStart}
-              className="relative hidden w-px shrink-0 cursor-col-resize bg-ink-900 transition-colors hover:bg-ink-600 md:block"
+              className="group relative hidden w-2 shrink-0 cursor-col-resize md:block"
+              title="Drag to resize"
             >
-              <div className="absolute inset-y-0 -left-1.5 -right-1.5" />
+              <div className="absolute left-1/2 top-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink-700 opacity-0 transition-opacity group-hover:opacity-100" />
             </div>
 
             <aside
               style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
-              className={`${mobilePanel === "code" ? "hidden" : "flex"} w-full min-w-0 flex-col bg-ink-950 md:flex md:w-[var(--sidebar-width)] md:shrink-0`}
+              className={`${mobilePanel === "code" ? "hidden" : "flex"} w-full min-w-0 flex-col bg-ink-900 md:flex md:w-[var(--sidebar-width)] md:shrink-0 md:overflow-hidden md:rounded-xl md:border md:border-ink-800`}
             >
               <div className="hidden p-2 md:block">
-                <div className="relative flex rounded-lg bg-ink-900 p-1">
+                <div className="relative flex rounded-lg border border-ink-800 bg-ink-950/60 p-1">
                   {(["chat", "online"] as const).map((tab) => {
                     const active = activeTab === tab;
                     return (
@@ -760,18 +769,18 @@ export default function RoomPage({
                         {active && (
                           <motion.div
                             layoutId="sidebar-tab-pill"
-                            className="absolute inset-0 rounded-md bg-ink-800 shadow-sm ring-1 ring-ink-700/60"
+                            className="absolute inset-0 rounded-md bg-ink-800 shadow-sm ring-1 ring-ink-700"
                             transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
                           />
                         )}
                         <span
                           className={`relative z-10 inline-flex items-center justify-center gap-1.5 transition-colors ${
-                            active ? "text-ink-100" : "text-ink-500 hover:text-ink-300"
+                            active ? "text-ink-100" : "text-ink-400 hover:text-ink-100"
                           }`}
                         >
                           {tab === "chat" ? "Chat" : "People"}
                           {tab === "online" && (
-                            <span className="rounded bg-ink-950/60 px-1 text-[10px] tabular-nums text-ink-400">
+                            <span className="rounded border border-ink-700 bg-ink-900 px-1 text-[10px] tabular-nums text-ink-300">
                               {onlineUsers.length}
                             </span>
                           )}
@@ -789,7 +798,7 @@ export default function RoomPage({
 
               {activeTab === "online" ? (
                 <div className="flex min-h-0 flex-1 flex-col">
-                  <p className="px-4 pb-1.5 pt-3 text-[11px] font-medium uppercase tracking-wider text-ink-600 md:pt-1">
+                  <p className="px-4 pb-1.5 pt-3 text-[11px] font-medium uppercase tracking-wider text-ink-400 md:pt-1">
                     In this room · {onlineUsers.length}
                   </p>
                   <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
@@ -798,15 +807,17 @@ export default function RoomPage({
                       return (
                         <li
                           key={u.socketId}
-                          className="flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-ink-900"
+                          className="flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-ink-800/60"
                         >
                           <span className="relative shrink-0">
                             <AvatarIcon avatarId={u.avatarId} className="h-8 w-8 rounded-full md:h-7 md:w-7" />
-                            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-950 bg-ink-100" />
+                            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-900 bg-ink-100" />
                           </span>
-                          <span className="min-w-0 flex-1 truncate text-sm text-ink-100">{isYou ? "You" : u.name}</span>
+                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink-100">
+                            {isYou ? "You" : u.name}
+                          </span>
                           {u.userId === room.ownerId && (
-                            <span className="shrink-0 rounded border border-ink-800 px-1.5 py-px text-[10px] text-ink-500">
+                            <span className="shrink-0 rounded border border-ink-700 bg-ink-800 px-1.5 py-px text-[10px] font-medium text-ink-300">
                               Owner
                             </span>
                           )}
@@ -814,6 +825,21 @@ export default function RoomPage({
                       );
                     })}
                   </ul>
+
+                  {onlineUsers.length <= 1 && (
+                    <div className="mx-2 mb-2 rounded-xl border border-dashed border-ink-700 bg-ink-950/50 p-4 text-center">
+                      <p className="text-sm font-medium text-ink-100">You&apos;re the only one here</p>
+                      <p className="mt-1 text-xs text-ink-400">Share the room link to code together.</p>
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full bg-ink-100 px-3.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-white active:scale-[0.98]"
+                      >
+                        <LinkIcon className="h-3.5 w-3.5" />
+                        Copy invite link
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <ChatPanel
@@ -833,7 +859,7 @@ export default function RoomPage({
       </div>
 
       {/* ---------- Phones: bottom tab bar ---------- */}
-      <nav className="flex shrink-0 gap-1 border-t border-ink-900 bg-ink-950 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1.5 md:hidden">
+      <nav className="flex shrink-0 gap-1 border-t border-ink-800 bg-ink-950 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1.5 md:hidden">
         {MOBILE_TABS.map(({ id: tabId, label, icon: Icon }) => {
           const active = mobilePanel === tabId;
           return (
@@ -847,19 +873,19 @@ export default function RoomPage({
               {active && (
                 <motion.span
                   layoutId="mobile-tab-indicator"
-                  className="absolute inset-0 rounded-xl bg-ink-900"
+                  className="absolute inset-0 rounded-xl border border-ink-700 bg-ink-800"
                   transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
                 />
               )}
               <span className="relative">
-                <Icon className={`h-5 w-5 transition-colors ${active ? "text-ink-100" : "text-ink-500"}`} />
+                <Icon className={`h-5 w-5 transition-colors ${active ? "text-ink-100" : "text-ink-400"}`} />
                 {tabId === "chat" && unreadCount > 0 && (
                   <span className="absolute -right-2.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
               </span>
-              <span className={`relative transition-colors ${active ? "text-ink-100" : "text-ink-500"}`}>
+              <span className={`relative transition-colors ${active ? "text-ink-100" : "text-ink-400"}`}>
                 {tabId === "online" ? `${label} · ${onlineUsers.length}` : label}
               </span>
             </button>

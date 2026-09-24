@@ -32,22 +32,22 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
           animate={{ height: 220, opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.22, ease: [0.21, 0.47, 0.32, 0.98] }}
-          className="flex shrink-0 flex-col overflow-hidden border-t border-ink-800/60 bg-ink-950"
+          className="flex shrink-0 flex-col overflow-hidden border-t border-ink-800 bg-ink-950"
         >
-          <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-ink-900 px-3">
+          <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-ink-800 px-3">
             <div className="flex min-w-0 items-center gap-2 text-xs">
-              <span className={`flex items-center gap-1.5 font-medium text-ink-300 ${runner ? "hidden sm:flex" : ""}`}>
-                <Terminal className="h-3.5 w-3.5 text-ink-500" />
+              <span className={`flex items-center gap-1.5 font-semibold text-ink-100 ${runner ? "hidden sm:flex" : ""}`}>
+                <Terminal className="h-3.5 w-3.5 text-ink-400" />
                 Output
               </span>
               {runner && (
-                <span className="flex min-w-0 items-center gap-1.5 rounded-full border border-ink-800 bg-ink-900/60 py-0.5 pl-0.5 pr-2 text-[11px] text-ink-500">
+                <span className="flex min-w-0 items-center gap-1.5 rounded-full border border-ink-700 bg-ink-900 py-0.5 pl-0.5 pr-2 text-[11px] text-ink-400">
                   <AvatarIcon avatarId={runner.avatarId} className="h-4 w-4 shrink-0 rounded-full" />
-                  <span className="truncate text-ink-300">{runner.isSelf ? "You" : runner.name}</span>
+                  <span className="truncate font-medium text-ink-100">{runner.isSelf ? "You" : runner.name}</span>
                   <span className="shrink-0">{status === "running" ? "running" : "ran"}</span>
                   <span className="hidden shrink-0 sm:inline">{languageLabel(runState.language)}</span>
                   {status === "done" && result && (
-                    <span className="shrink-0 tabular-nums text-ink-600">· {Math.round(result.durationMs)}ms</span>
+                    <span className="shrink-0 tabular-nums text-ink-500">· {Math.round(result.durationMs)}ms</span>
                   )}
                 </span>
               )}
@@ -57,7 +57,7 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
               {status === "done" && (
                 <button
                   onClick={onClear}
-                  className="h-7 rounded-lg px-2 text-xs text-ink-500 transition-colors hover:bg-ink-900 hover:text-ink-100"
+                  className="h-7 rounded-lg px-2 text-xs text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100"
                 >
                   Clear
                 </button>
@@ -73,7 +73,7 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
               <button
                 onClick={onClose}
                 aria-label="Close output panel"
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-500 transition-colors hover:bg-ink-900 hover:text-ink-100"
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -82,32 +82,32 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
 
           <div className="flex-1 overflow-y-auto px-4 py-3 font-[family-name:var(--font-mono)] text-xs leading-5">
             {status === "running" ? (
-              <p className="flex flex-wrap items-center gap-2 text-ink-500">
+              <p className="flex flex-wrap items-center gap-2 text-ink-300">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Running…
                 {runState.language === "python" && runner?.isSelf && (
-                  <span className="text-ink-600">(the first Python run downloads the runtime, which takes a few seconds)</span>
+                  <span className="text-ink-500">(the first Python run downloads the runtime, which takes a few seconds)</span>
                 )}
               </p>
             ) : status === "done" && result ? (
               <div className="space-y-2">
-                {result.output && <pre className="whitespace-pre-wrap break-words text-ink-300">{result.output}</pre>}
+                {result.output && <pre className="whitespace-pre-wrap break-words text-ink-100">{result.output}</pre>}
                 {result.error && (
-                  <pre className="whitespace-pre-wrap break-words border-l-2 border-red-500/60 pl-3 text-red-300">
+                  <pre className="whitespace-pre-wrap break-words border-l-2 border-red-500/70 pl-3 text-red-300">
                     {result.error}
                   </pre>
                 )}
-                {!result.output && !result.error && <p className="text-ink-600">Ran with no output.</p>}
+                {!result.output && !result.error && <p className="text-ink-400">Ran with no output.</p>}
               </div>
             ) : !canRun ? (
-              <p className="text-ink-600">
+              <p className="text-ink-400">
                 Running {languageLabel(language)} isn&apos;t supported yet. JavaScript, TypeScript, and Python only,
                 for now.
               </p>
             ) : (
-              <p className="text-ink-600">
+              <p className="text-ink-400">
                 <span className="hidden sm:inline">
-                  Press <kbd className="rounded border border-ink-800 px-1 text-ink-400">⌘↵</kbd> or{" "}
+                  Press <kbd className="rounded border border-ink-700 bg-ink-900 px-1 text-ink-300">⌘↵</kbd> or{" "}
                 </span>
                 Run to execute. Output is shared with everyone in the room.
               </p>
