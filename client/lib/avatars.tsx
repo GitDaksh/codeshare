@@ -58,6 +58,48 @@ export type AvatarDefinition = {
 export const DEFAULT_AVATAR_ID = "codeshare";
 
 // ============================================================================
+// Geometry helpers (used by the newer styles)
+// ============================================================================
+
+// Round to 2 decimals so generated SVG path strings stay compact.
+const f = (n: number) => Math.round(n * 100) / 100;
+
+// Smooth closed curve through the given points (Catmull-Rom → cubic Bézier).
+function closedCurve(points: [number, number][]): string {
+  const count = points.length;
+  let d = `M ${f(points[0][0])} ${f(points[0][1])}`;
+  for (let i = 0; i < count; i++) {
+    const p0 = points[(i - 1 + count) % count];
+    const p1 = points[i];
+    const p2 = points[(i + 1) % count];
+    const p3 = points[(i + 2) % count];
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C ${f(c1x)} ${f(c1y)}, ${f(c2x)} ${f(c2y)}, ${f(p2[0])} ${f(p2[1])}`;
+  }
+  return `${d} Z`;
+}
+
+// Points evenly spaced around a center, each at its own radius.
+function radialPoints(cx: number, cy: number, radii: number[], rotation = 0): [number, number][] {
+  return radii.map((r, i) => {
+    const angle = rotation + (i / radii.length) * Math.PI * 2;
+    return [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
+  });
+}
+
+// Blend two "#rrggbb" colors; t = 0 gives a, t = 1 gives b.
+function mixHex(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const channel = (shift: number) =>
+    Math.round(((pa >> shift) & 255) * (1 - t) + ((pb >> shift) & 255) * t);
+  return `#${[16, 8, 0].map((s) => channel(s).toString(16).padStart(2, "0")).join("")}`;
+}
+
+// ============================================================================
 // v1 generator (legacy)
 // Kept exactly as it was, so every avatar chosen before v2 still renders
 // identically. Any seed that doesn't start with "v2-" uses this.
@@ -254,14 +296,40 @@ function generateV1(seed: string): AvatarDefinition {
 }
 
 // ============================================================================
-// v2 generator: five distinct styles, seeds look like "v2-<style>-<random>"
+// v2 generator: seeds look like "v2-<style>-<random>"
+// The palettes and the original five styles are unchanged, so every existing
+// v2 avatar renders exactly as before. New styles only ever apply to new seeds.
 // ============================================================================
 
-export type AvatarStyle = "pixel" | "orbit" | "wave" | "bauhaus" | "ripple";
+export type AvatarStyle =
+  | "pixel"
+  | "orbit"
+  | "wave"
+  | "bauhaus"
+  | "ripple"
+  | "marble"
+  | "sphere"
+  | "blob"
+  | "topo"
+  | "cubes"
+  | "constellation"
+  | "glass"
+  | "albers"
+  | "rays";
+
 export type AvatarStyleFilter = AvatarStyle | "all";
 
 export const AVATAR_STYLES: { id: AvatarStyleFilter; label: string }[] = [
   { id: "all", label: "All" },
+  { id: "marble", label: "Marble" },
+  { id: "sphere", label: "Sphere" },
+  { id: "blob", label: "Blob" },
+  { id: "topo", label: "Topo" },
+  { id: "cubes", label: "Cubes" },
+  { id: "constellation", label: "Stars" },
+  { id: "glass", label: "Glass" },
+  { id: "albers", label: "Albers" },
+  { id: "rays", label: "Rays" },
   { id: "pixel", label: "Pixel" },
   { id: "orbit", label: "Orbit" },
   { id: "wave", label: "Wave" },
@@ -284,6 +352,8 @@ const V2_PALETTES: V2Palette[] = [
 
 type StyleOutput = { bgKind: "linear" | "radial"; render: (uid: string) => ReactNode };
 type StyleFn = (rng: Rng, p: V2Palette) => StyleOutput;
+
+// ---------- Original v2 styles (unchanged) ----------
 
 // Symmetric 5x5 identicon.
 const pixelStyle: StyleFn = (rng, p) => {
@@ -513,12 +583,416 @@ const rippleStyle: StyleFn = (rng, p) => {
   };
 };
 
+// ---------- New styles ----------
+
+// Liquid marble: soft blurred blobs swirled together.
+const marbleStyle: StyleFn = (rng, p) => {
+  const blobs = [p.fg, p.fg2, p.bg[1]].map((color) => ({
+    cx: rng.float(2, 38),
+    cy: rng.float(2, 38),
+    r: rng.float(10, 20),
+    color,
+    opacity: rng.float(0.6, 0.95),
+  }));
+  const swirl = {
+    x1: rng.float(-4, 12),
+    y1: rng.float(6, 34),
+    qx: rng.float(12, 28),
+    qy: rng.float(-8, 48),
+    x2: rng.float(28, 44),
+    y2: rng.float(6, 34),
+    width: rng.float(4, 8),
+  };
+
+  return {
+    bgKind: "linear",
+    render: (uid) => {
+      const filterId = `${uid}-marble`;
+      return (
+        <>
+          <defs>
+            <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="4.5" />
+            </filter>
+          </defs>
+          <g filter={`url(#${filterId})`}>
+            {blobs.map((b, i) => (
+              <circle key={i} cx={b.cx} cy={b.cy} r={b.r} fill={b.color} opacity={b.opacity} />
+            ))}
+            <path
+              d={`M ${f(swirl.x1)} ${f(swirl.y1)} Q ${f(swirl.qx)} ${f(swirl.qy)} ${f(swirl.x2)} ${f(swirl.y2)}`}
+              fill="none"
+              stroke={p.fg}
+              strokeWidth={swirl.width}
+              strokeLinecap="round"
+              opacity={0.7}
+            />
+          </g>
+        </>
+      );
+    },
+  };
+};
+
+// A lit 3D sphere with a specular highlight, rim light, and contact shadow.
+const sphereStyle: StyleFn = (rng, p) => {
+  const r = rng.float(10, 13);
+  const cx = 20 + rng.float(-2, 2);
+  const cy = 18 + rng.float(-2, 2);
+  const lightX = rng.float(28, 40);
+  const lightY = rng.float(22, 34);
+  const highlightAngle = rng.float(-40, -20);
+
+  return {
+    bgKind: "radial",
+    render: (uid) => {
+      const shadeId = `${uid}-sphere-shade`;
+      const shadowId = `${uid}-sphere-shadow`;
+      const hx = cx - r * 0.35;
+      const hy = cy - r * 0.42;
+      return (
+        <>
+          <defs>
+            <radialGradient id={shadeId} cx={`${f(lightX)}%`} cy={`${f(lightY)}%`} r="85%">
+              <stop offset="0%" stopColor={p.fg} />
+              <stop offset="55%" stopColor={p.fg2} />
+              <stop offset="100%" stopColor={p.bg[0]} />
+            </radialGradient>
+            <radialGradient id={shadowId}>
+              <stop offset="0%" stopColor="#000000" stopOpacity={0.55} />
+              <stop offset="100%" stopColor="#000000" stopOpacity={0} />
+            </radialGradient>
+          </defs>
+          <ellipse cx={cx} cy={cy + r + 3} rx={r * 0.95} ry={2.6} fill={`url(#${shadowId})`} />
+          <circle cx={cx} cy={cy} r={r} fill={`url(#${shadeId})`} />
+          <circle cx={cx} cy={cy} r={r - 0.3} fill="none" stroke={p.fg} strokeOpacity={0.14} strokeWidth={0.6} />
+          <ellipse
+            cx={hx}
+            cy={hy}
+            rx={r * 0.3}
+            ry={r * 0.16}
+            fill="#ffffff"
+            opacity={0.3}
+            transform={`rotate(${f(highlightAngle)} ${f(hx)} ${f(hy)})`}
+          />
+        </>
+      );
+    },
+  };
+};
+
+// An organic 3D blob: gradient body, offset shadow, soft highlight.
+const blobStyle: StyleFn = (rng, p) => {
+  const points = rng.int(6, 8);
+  const radii = Array.from({ length: points }, () => rng.float(10, 15));
+  const rotation = rng.float(0, Math.PI * 2);
+  const cx = 20 + rng.float(-1.5, 1.5);
+  const cy = 20 + rng.float(-1.5, 1.5);
+  const angle = rng.int(0, 7) * 45;
+
+  return {
+    bgKind: "linear",
+    render: (uid) => {
+      const gradientId = `${uid}-blob`;
+      const body = closedCurve(radialPoints(cx, cy, radii, rotation));
+      const shadow = closedCurve(radialPoints(cx + 1.8, cy + 2.4, radii, rotation));
+      const highlight = closedCurve(
+        radialPoints(cx - 2.5, cy - 3, radii.map((r) => r * 0.45), rotation + 0.4)
+      );
+      return (
+        <>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1" gradientTransform={`rotate(${angle} 0.5 0.5)`}>
+              <stop offset="0%" stopColor={p.fg} />
+              <stop offset="100%" stopColor={p.fg2} />
+            </linearGradient>
+          </defs>
+          <path d={shadow} fill="#000000" opacity={0.35} />
+          <path d={body} fill={`url(#${gradientId})`} />
+          <path d={highlight} fill="#ffffff" opacity={0.18} />
+        </>
+      );
+    },
+  };
+};
+
+// Topographic contour lines around an off-center peak.
+const topoStyle: StyleFn = (rng, p) => {
+  const points = 9;
+  const noise = Array.from({ length: points }, () => rng.float(-1, 1));
+  const cx = rng.float(12, 28);
+  const cy = rng.float(12, 28);
+  const rotation = rng.float(0, Math.PI * 2);
+  const ringCount = rng.int(6, 9);
+  const step = rng.float(3.2, 4.4);
+  const filledCore = rng.bool(0.5);
+
+  return {
+    bgKind: "linear",
+    render: () => (
+      <g fill="none">
+        {filledCore && (
+          <path
+            d={closedCurve(radialPoints(cx, cy, noise.map((n) => step * 0.9 * (1 + n * 0.15)), rotation))}
+            fill={p.fg}
+            opacity={0.9}
+          />
+        )}
+        {Array.from({ length: ringCount }, (_, k) => {
+          const base = step * (k + 1);
+          const radii = noise.map((n) => base * (1 + n * (0.12 + k * 0.015)));
+          const major = k % 3 === 2;
+          return (
+            <path
+              key={k}
+              d={closedCurve(radialPoints(cx, cy, radii, rotation + k * 0.08))}
+              stroke={major ? p.fg : p.fg2}
+              strokeWidth={major ? 1.1 : 0.7}
+              opacity={Math.max(0.35, 1 - k * 0.07)}
+            />
+          );
+        })}
+      </g>
+    ),
+  };
+};
+
+// Isometric cubes, stacked 1 to 3 high.
+function isoCube(cx: number, cy: number, s: number) {
+  const w = s * 0.866;
+  return {
+    top: `M ${f(cx)} ${f(cy - s)} L ${f(cx + w)} ${f(cy - s / 2)} L ${f(cx)} ${f(cy)} L ${f(cx - w)} ${f(cy - s / 2)} Z`,
+    left: `M ${f(cx - w)} ${f(cy - s / 2)} L ${f(cx)} ${f(cy)} L ${f(cx)} ${f(cy + s)} L ${f(cx - w)} ${f(cy + s / 2)} Z`,
+    right: `M ${f(cx)} ${f(cy)} L ${f(cx + w)} ${f(cy - s / 2)} L ${f(cx + w)} ${f(cy + s / 2)} L ${f(cx)} ${f(cy + s)} Z`,
+  };
+}
+
+const cubesStyle: StyleFn = (rng, p) => {
+  const count = rng.int(1, 3);
+  const s = count === 1 ? rng.float(10.5, 12) : count === 2 ? rng.float(7.5, 8.5) : rng.float(5.8, 6.4);
+  const cx = 20 + rng.float(-1.5, 1.5);
+  const bottomCy = 20 + ((count - 1) * s) / 2 + rng.float(-1, 1);
+  const midTone = mixHex(p.fg, p.fg2, 0.5);
+
+  return {
+    bgKind: "linear",
+    render: () => {
+      const floor = isoCube(cx, bottomCy + s, s * 1.15).top;
+      return (
+        <>
+          <path d={floor} fill="#000000" opacity={0.22} />
+          {Array.from({ length: count }, (_, k) => {
+            const cube = isoCube(cx, bottomCy - k * s, s);
+            return (
+              <g key={k} stroke={p.bg[0]} strokeWidth={0.4} strokeOpacity={0.45} strokeLinejoin="round">
+                <path d={cube.left} fill={p.fg2} />
+                <path d={cube.right} fill={midTone} />
+                <path d={cube.top} fill={p.fg} />
+              </g>
+            );
+          })}
+        </>
+      );
+    },
+  };
+};
+
+// A constellation: glowing stars joined by faint lines over star dust.
+const constellationStyle: StyleFn = (rng, p) => {
+  const count = rng.int(5, 7);
+  const rawStars = Array.from({ length: count }, () => ({
+    x: rng.float(7, 33),
+    y: rng.float(7, 33),
+    r: rng.float(0.9, 1.6),
+  }));
+  const dust = Array.from({ length: 14 }, () => ({
+    x: rng.float(1, 39),
+    y: rng.float(1, 39),
+    r: rng.float(0.2, 0.5),
+    o: rng.float(0.2, 0.6),
+  }));
+  const closed = rng.bool(0.4);
+
+  // Order stars by angle around their center so the lines trace a clean shape.
+  const meanX = rawStars.reduce((sum, s) => sum + s.x, 0) / count;
+  const meanY = rawStars.reduce((sum, s) => sum + s.y, 0) / count;
+  const stars = [...rawStars].sort(
+    (a, b) => Math.atan2(a.y - meanY, a.x - meanX) - Math.atan2(b.y - meanY, b.x - meanX)
+  );
+  const brightest = stars.reduce((best, s) => (s.r > best.r ? s : best), stars[0]);
+  const linePath =
+    stars.map((s, i) => `${i === 0 ? "M" : "L"} ${f(s.x)} ${f(s.y)}`).join(" ") + (closed ? " Z" : "");
+
+  return {
+    bgKind: "radial",
+    render: () => (
+      <>
+        {dust.map((d, i) => (
+          <circle key={`dust-${i}`} cx={d.x} cy={d.y} r={d.r} fill={p.fg} opacity={d.o} />
+        ))}
+        <path d={linePath} fill="none" stroke={p.fg} strokeWidth={0.5} strokeOpacity={0.35} strokeLinejoin="round" />
+        {stars.map((s, i) => (
+          <g key={`star-${i}`}>
+            <circle cx={s.x} cy={s.y} r={s.r * 2.6} fill={p.fg} opacity={0.12} />
+            <circle cx={s.x} cy={s.y} r={s.r} fill={p.fg} />
+          </g>
+        ))}
+        <g stroke={p.fg} strokeWidth={0.4} strokeLinecap="round" opacity={0.7}>
+          <line x1={brightest.x - 4} y1={brightest.y} x2={brightest.x + 4} y2={brightest.y} />
+          <line x1={brightest.x} y1={brightest.y - 4} x2={brightest.x} y2={brightest.y + 4} />
+        </g>
+      </>
+    ),
+  };
+};
+
+// Frosted glass shapes with bright edges.
+const glassStyle: StyleFn = (rng, p) => {
+  const shapes = Array.from({ length: 3 }, () => ({
+    kind: rng.bool(0.5) ? ("circle" as const) : ("rect" as const),
+    x: rng.float(6, 34),
+    y: rng.float(6, 34),
+    size: rng.float(12, 20),
+    rotation: rng.float(-30, 30),
+    angle: rng.int(0, 7) * 45,
+  }));
+
+  return {
+    bgKind: "linear",
+    render: (uid) => (
+      <>
+        <defs>
+          {shapes.map((s, i) => (
+            <linearGradient
+              key={i}
+              id={`${uid}-glass-${i}`}
+              x1="0"
+              y1="0"
+              x2="1"
+              y2="1"
+              gradientTransform={`rotate(${s.angle} 0.5 0.5)`}
+            >
+              <stop offset="0%" stopColor={p.fg} stopOpacity={0.55} />
+              <stop offset="100%" stopColor={p.fg} stopOpacity={0.06} />
+            </linearGradient>
+          ))}
+        </defs>
+        {shapes.map((s, i) =>
+          s.kind === "circle" ? (
+            <circle
+              key={i}
+              cx={s.x}
+              cy={s.y}
+              r={s.size / 2}
+              fill={`url(#${uid}-glass-${i})`}
+              stroke={p.fg}
+              strokeOpacity={0.35}
+              strokeWidth={0.6}
+            />
+          ) : (
+            <rect
+              key={i}
+              x={s.x - s.size / 2}
+              y={s.y - s.size / 2}
+              width={s.size}
+              height={s.size}
+              rx={s.size * 0.22}
+              fill={`url(#${uid}-glass-${i})`}
+              stroke={p.fg}
+              strokeOpacity={0.35}
+              strokeWidth={0.6}
+              transform={`rotate(${f(s.rotation)} ${f(s.x)} ${f(s.y)})`}
+            />
+          )
+        )}
+      </>
+    ),
+  };
+};
+
+// Nested squares, drifting in one direction (after Josef Albers).
+const albersStyle: StyleFn = (rng, p) => {
+  const direction = rng.int(0, 3);
+  const diamond = rng.bool(0.3);
+  const sizes = [34, 25, 16, 8];
+  const opacities = [0.18, 0.4, 0.7, 1];
+
+  return {
+    bgKind: "linear",
+    render: () => (
+      <g transform={diamond ? "rotate(45 20 20)" : undefined}>
+        {sizes.map((size, i) => {
+          const offset = i * 2.2;
+          const dx = direction === 2 ? -offset : direction === 3 ? offset : 0;
+          const dy = direction === 0 ? offset : direction === 1 ? -offset : 0;
+          return (
+            <rect
+              key={i}
+              x={20 - size / 2 + dx}
+              y={20 - size / 2 + dy}
+              width={size}
+              height={size}
+              rx={i === sizes.length - 1 ? 1.5 : 1}
+              fill={i % 2 === 0 ? p.fg : p.fg2}
+              opacity={opacities[i]}
+            />
+          );
+        })}
+      </g>
+    ),
+  };
+};
+
+// A sunburst radiating from an off-center point.
+const raysStyle: StyleFn = (rng, p) => {
+  const ox = rng.float(10, 30);
+  const oy = rng.float(10, 30);
+  const count = rng.int(10, 18) * 2;
+  const rotation = rng.float(0, 360);
+  const coreR = rng.float(3, 5.5);
+
+  return {
+    bgKind: "linear",
+    render: () => {
+      const wedges: ReactNode[] = [];
+      for (let i = 0; i < count; i += 2) {
+        const a1 = ((rotation + (i * 360) / count) * Math.PI) / 180;
+        const a2 = ((rotation + ((i + 1) * 360) / count) * Math.PI) / 180;
+        wedges.push(
+          <path
+            key={i}
+            d={`M ${f(ox)} ${f(oy)} L ${f(ox + 60 * Math.cos(a1))} ${f(oy + 60 * Math.sin(a1))} L ${f(ox + 60 * Math.cos(a2))} ${f(oy + 60 * Math.sin(a2))} Z`}
+            fill={p.fg}
+            opacity={0.85}
+          />
+        );
+      }
+      return (
+        <g>
+          {wedges}
+          <circle cx={ox} cy={oy} r={coreR + 2} fill={p.bg[0]} />
+          <circle cx={ox} cy={oy} r={coreR} fill={p.fg2} />
+        </g>
+      );
+    },
+  };
+};
+
 const V2_STYLES: Record<AvatarStyle, StyleFn> = {
   pixel: pixelStyle,
   orbit: orbitStyle,
   wave: waveStyle,
   bauhaus: bauhausStyle,
   ripple: rippleStyle,
+  marble: marbleStyle,
+  sphere: sphereStyle,
+  blob: blobStyle,
+  topo: topoStyle,
+  cubes: cubesStyle,
+  constellation: constellationStyle,
+  glass: glassStyle,
+  albers: albersStyle,
+  rays: raysStyle,
 };
 
 const V2_STYLE_IDS = Object.keys(V2_STYLES) as AvatarStyle[];

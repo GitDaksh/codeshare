@@ -18,7 +18,6 @@ export const metadata: Metadata = {
   description: "Real-time collaborative coding rooms",
 };
 
-// Makes the phone browser's toolbar match the app's black theme.
 export const viewport: Viewport = {
   themeColor: "#000000",
   colorScheme: "dark",
@@ -28,7 +27,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${inter.className} ${jetbrainsMono.variable} ${spaceGrotesk.variable} antialiased`}>
-        <ClerkProvider appearance={{ theme: dark }}>
+        <ClerkProvider
+          appearance={{
+            theme: dark,
+            // Matches Clerk's sign-in/up cards and the account settings modal
+            // to the app's monochrome design. Plain hex values are used for the
+            // widest browser support (Clerk derives hover shades from these).
+            variables: {
+              colorPrimary: "#f5f5f5",
+              colorPrimaryForeground: "#000000",
+              colorBackground: "#0d0d0d",
+              colorForeground: "#f5f5f5",
+              colorMutedForeground: "#999999",
+              colorInput: "#000000",
+              colorInputForeground: "#f5f5f5",
+              borderRadius: "0.75rem",
+            },
+          }}
+        >
           <ToastProvider>
             <Navbar />
             {children}

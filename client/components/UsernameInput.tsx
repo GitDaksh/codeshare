@@ -67,34 +67,39 @@ export function UsernameInput({ value, onChange, onValidityChange }: UsernameInp
   const helper = {
     idle: "3-20 characters: lowercase letters, numbers, underscores.",
     checking: "Checking availability…",
-    available: "Username available.",
+    available: "Nice, that username is available.",
     taken: "That username is already taken.",
     invalid: "3-20 characters: lowercase letters, numbers, underscores only.",
   }[status];
 
+  const isError = status === "taken" || status === "invalid";
+
+  const borderClass = isError
+    ? "border-red-500/50"
+    : status === "available"
+      ? "border-ink-500"
+      : "border-ink-800";
+
   return (
     <div>
-      <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500">
-          @
-        </span>
+      <div
+        className={`relative flex h-12 items-center rounded-xl border bg-ink-950 transition-colors focus-within:border-ink-500 ${borderClass}`}
+      >
+        <span className="pointer-events-none pl-4 text-ink-500">@</span>
         <input
           value={value}
           onChange={(e) => onChange(e.target.value.toLowerCase())}
           placeholder="username"
           maxLength={20}
           autoFocus
-          className="w-full rounded-md border border-ink-700 bg-ink-950 py-2.5 pl-7 pr-9 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          className="h-full min-w-0 flex-1 bg-transparent pl-1 pr-10 text-sm text-ink-100 placeholder:text-ink-700 focus:outline-none"
         />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2">{icon}</span>
+        <span className="absolute right-3.5 top-1/2 -translate-y-1/2">{icon}</span>
       </div>
-      <p
-        className={`mt-1.5 text-xs ${
-          status === "taken" || status === "invalid" ? "text-red-400" : "text-ink-500"
-        }`}
-      >
-        {helper}
-      </p>
+      <p className={`mt-2 text-xs transition-colors ${isError ? "text-red-400" : "text-ink-500"}`}>{helper}</p>
     </div>
   );
 }
