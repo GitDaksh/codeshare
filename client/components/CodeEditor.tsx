@@ -40,6 +40,8 @@ type CodeEditorProps = {
   saveStatus: "saved" | "saving";
   minimapEnabled: boolean;
   fontSize: number;
+  wordWrap: boolean;
+  onToggleWordWrap?: () => void;
   handleRef?: MutableRefObject<CodeEditorHandle | null>;
 };
 
@@ -196,6 +198,8 @@ export function CodeEditor({
   saveStatus,
   minimapEnabled,
   fontSize,
+  wordWrap,
+  onToggleWordWrap,
   handleRef,
 }: CodeEditorProps) {
   const [position, setPosition] = useState({ line: 1, column: 1 });
@@ -205,8 +209,8 @@ export function CodeEditor({
   const lastEmitRef = useRef(0);
   const isApplyingRemoteRef = useRef(false);
   const onRunShortcutRef = useRef(onRunShortcut);
-  // Phone-sized screens: wrap long lines and use a narrower gutter so code
-  // is readable without sideways scrolling.
+  // Phone-sized screens: narrower line-number gutter and no code folding,
+  // to leave as much width as possible for the code itself.
   const isNarrow = useMediaQuery("(max-width: 639px)");
 
   useEffect(() => {
@@ -392,10 +396,11 @@ export function CodeEditor({
             minimap: { enabled: minimapEnabled },
             scrollBeyondLastLine: false,
             padding: { top: 20 },
-            // Re-measure whenever the container resizes: sidebar drags,
-            // mobile tab switches, rotating a phone, window resizes.
             automaticLayout: true,
-            wordWrap: isNarrow ? "on" : "off",
+            // Wrap long lines at the edge of the editor instead of scrolling
+            // sideways. Wrapped lines keep the original line's indentation.
+            wordWrap: wordWrap ? "on" : "off",
+            wrappingIndent: "same",
             lineNumbersMinChars: isNarrow ? 3 : 5,
             folding: !isNarrow,
           }}
@@ -405,6 +410,16 @@ export function CodeEditor({
         <span className="truncate">{languageLabel}</span>
         <div className="flex shrink-0 items-center gap-3">
           <span className="hidden sm:inline">⌘↵ to run</span>
+          {onToggleWordWrap && (
+            <button
+              type="button"
+              onClick={onToggleWordWrap}
+              title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+              className="hidden transition-colors hover:text-ink-100 sm:inline"
+            >
+              Wrap: {wordWrap ? "on" : "off"}
+            </button>
+          )}
           <span>
             Ln {position.line}, Col {position.column}
           </span>
