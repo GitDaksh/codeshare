@@ -22,7 +22,6 @@ import {
   Play,
   AlignLeft,
   Settings,
-  Command as CommandIcon,
   Map as MapIcon,
   ZoomIn,
   ZoomOut,
@@ -34,15 +33,19 @@ import {
   Users,
   Ellipsis,
   WrapText,
+  Copy,
+  Search,
+  Palette,
   type LucideIcon,
 } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { useSocket, type ReactionUpdate } from "@/lib/socket";
 import { useOnboardingGate } from "@/lib/useOnboardingGate";
 import { useMediaQuery } from "@/lib/useMediaQuery";
+import { useEditorTheme } from "@/lib/useEditorTheme";
 import { useToast } from "@/components/ToastProvider";
 import { AvatarIcon } from "@/components/AvatarIcon";
-import { Skeleton } from "@/components/Skeleton";
+import { RoomSkeleton } from "@/components/RoomSkeleton";
 import { CodeEditor, type RemoteCursor, type RemoteCodeUpdate, type CodeEditorHandle } from "@/components/CodeEditor";
 import { LanguageDropdown } from "@/components/LanguageDropdown";
 import { RunPanel } from "@/components/RunPanel";
@@ -53,6 +56,7 @@ import { RoomSettingsModal } from "@/components/RoomSettingsModal";
 import { getStarterCode, LANGUAGES } from "@/lib/languages";
 import { formatCode, isFormattable } from "@/lib/format";
 import { executeCode, isRunnable, IDLE_RUN_STATE, type RunState } from "@/lib/execution";
+import { EDITOR_THEMES } from "@/lib/editorTheme";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
@@ -73,47 +77,17 @@ const MOBILE_TABS: { id: MobilePanel; label: string; icon: LucideIcon }[] = [
   { id: "online", label: "People", icon: Users },
 ];
 
+const STATUS_META: Record<string, { label: string; dot: string; live: boolean }> = {
+  connected: { label: "Live", dot: "bg-ink-100", live: true },
+  connecting: { label: "Connecting", dot: "bg-ink-500", live: false },
+  disconnected: { label: "Offline", dot: "bg-red-500", live: false },
+};
+
+const ICON_BUTTON =
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-ink-900 hover:text-ink-100";
+
 function languageLabel(value: string): string {
   return LANGUAGES.find((l) => l.value === value)?.label ?? value;
-}
-
-function RoomLoadingSkeleton() {
-  return (
-    <main className="flex h-dvh flex-col md:h-[calc(100dvh-56px)]">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-ink-800 px-3 py-2 sm:px-4 sm:py-2.5">
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-4 w-4 rounded" />
-          <Skeleton className="h-4 w-28 sm:w-32" />
-        </div>
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-7 w-20 rounded-lg" />
-          <Skeleton className="h-7 w-16 rounded-lg" />
-        </div>
-      </div>
-      <div className="flex min-h-0 flex-1">
-        <Skeleton className="flex-1 rounded-none" />
-        <div className="hidden w-72 shrink-0 border-l border-ink-800 bg-ink-900/40 p-3 md:block">
-          <Skeleton className="mb-3 h-9 w-full rounded-lg" />
-          <div className="space-y-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
-                <div className="flex-1 space-y-1.5">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-3 w-full" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="flex h-14 shrink-0 items-center justify-around border-t border-ink-800 md:hidden">
-        {[...Array(3)].map((_, i) => (
-          <Skeleton key={i} className="h-5 w-5 rounded" />
-        ))}
-      </div>
-    </main>
-  );
 }
 
 export default function RoomPage({
@@ -128,6 +102,7 @@ export default function RoomPage({
   const { toast } = useToast();
   const { checking } = useOnboardingGate();
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const [editorTheme, setEditorTheme] = useEditorTheme();
 
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
@@ -378,6 +353,12 @@ export default function RoomPage({
     toast("Link copied to clipboard");
   }
 
+  function handleCopyRoomId() {
+    if (!room) return;
+    navigator.clipboard.writeText(room._id);
+    toast("Room ID copied");
+  }
+
   function handleSend() {
     if (!draft.trim()) return;
     sendMessage(draft.trim());
@@ -477,6 +458,8 @@ export default function RoomPage({
   const isOwner = room?.ownerId === currentUserId;
   const isSelfRunning = runState.status === "running" && !!runState.runner?.isSelf;
   const showSidebar = !zenMode || !isDesktop;
+  const runnable = isRunnable(language);
+  const statusMeta = STATUS_META[status] ?? STATUS_META.connecting;
 
   const desktopOnlyCommands: Command[] = isDesktop
     ? [
@@ -494,6 +477,13 @@ export default function RoomPage({
         },
       ]
     : [];
+
+  const themeCommands: Command[] = EDITOR_THEMES.map((theme) => ({
+    id: `theme-${theme.id}`,
+    label: `Editor theme: ${theme.label}${theme.id === editorTheme ? " (current)" : ""}`,
+    icon: Palette,
+    action: () => setEditorTheme(theme.id),
+  }));
 
   const commands: Command[] = [
     {
@@ -524,6 +514,7 @@ export default function RoomPage({
       icon: WrapText,
       action: handleToggleWordWrap,
     },
+    ...themeCommands,
     {
       id: "copy-link",
       label: "Copy room link",
@@ -559,16 +550,20 @@ export default function RoomPage({
   ];
 
   if (checking || loading || initialCode === null) {
-    return <RoomLoadingSkeleton />;
+    return <RoomSkeleton />;
   }
 
   if (notFound || !room) {
     return (
-      <main className="flex h-dvh flex-col items-center justify-center gap-2 px-4 text-center md:h-[calc(100dvh-56px)]">
-        <p className="text-sm text-ink-300">This room doesn't exist.</p>
+      <main className="flex h-dvh flex-col items-center justify-center gap-3 px-4 text-center md:h-[calc(100dvh-56px)]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-ink-800 bg-ink-900">
+          <Code2 className="h-5 w-5 text-ink-500" />
+        </div>
+        <p className="font-medium text-ink-100">This room doesn&apos;t exist</p>
+        <p className="max-w-xs text-sm text-ink-500">It may have been deleted, or the link might be mistyped.</p>
         <Link
           href="/dashboard"
-          className="text-sm text-ink-500 underline transition-colors hover:text-ink-300"
+          className="mt-2 inline-flex h-9 items-center rounded-full border border-ink-800 px-4 text-sm text-ink-300 transition-colors hover:border-ink-600 hover:text-ink-100"
         >
           Back to dashboard
         </Link>
@@ -576,80 +571,102 @@ export default function RoomPage({
     );
   }
 
-  const statusColor =
-    status === "connected"
-      ? "bg-ink-100 animate-pulse"
-      : status === "connecting"
-        ? "bg-ink-500"
-        : "bg-red-500";
+  const shortRoomId = `${room._id.slice(0, 6)}…${room._id.slice(-4)}`;
 
   return (
-    <main className="flex h-dvh flex-col md:h-[calc(100dvh-56px)]">
-      <header className="flex shrink-0 items-center gap-2 border-b border-ink-800 px-3 py-2 sm:px-4 sm:py-2.5">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <Link
-            href="/dashboard"
-            aria-label="Back to dashboard"
-            className="-ml-1 shrink-0 rounded-md p-1 text-ink-500 transition-colors hover:text-ink-100"
-          >
+    <main className="flex h-dvh flex-col bg-ink-950 md:h-[calc(100dvh-56px)]">
+      {/* ---------- Header ---------- */}
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-ink-900 bg-ink-950 px-2 sm:gap-3 sm:px-3">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+          <Link href="/dashboard" aria-label="Back to dashboard" title="Back to dashboard" className={ICON_BUTTON}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <span className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-ink-100">
-            {room.name}
+
+          <div className="flex min-w-0 items-center gap-1">
+            <span className="truncate font-[family-name:var(--font-display)] text-sm font-semibold tracking-tight text-ink-100">
+              {room.name}
+            </span>
+            {isOwner && (
+              <button
+                onClick={() => setSettingsOpen(true)}
+                aria-label="Room settings"
+                title="Room settings"
+                className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-600 transition-colors hover:bg-ink-900 hover:text-ink-100 sm:flex"
+              >
+                <Settings className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          <span
+            title={statusMeta.label}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-ink-800 px-2 py-0.5 text-[11px] text-ink-400"
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              {statusMeta.live && (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ink-100 opacity-40" />
+              )}
+              <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
+            </span>
+            <span className="hidden sm:inline">{statusMeta.label}</span>
           </span>
-          {isOwner && (
-            <button
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Room settings"
-              title="Room settings"
-              className="hidden shrink-0 text-ink-600 transition-colors hover:text-ink-100 sm:block"
-            >
-              <Settings className="h-3.5 w-3.5" />
-            </button>
-          )}
-          <span className="hidden shrink-0 rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500 lg:inline">
-            {room._id}
-          </span>
-          <span className="flex shrink-0 items-center gap-1.5 text-xs text-ink-500" title={status}>
-            <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
-            <span className="hidden sm:inline">{status}</span>
-          </span>
+
+          <button
+            onClick={handleCopyRoomId}
+            title="Copy room ID"
+            className="hidden items-center gap-1.5 rounded-md px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-ink-600 transition-colors hover:bg-ink-900 hover:text-ink-300 lg:flex"
+          >
+            {shortRoomId}
+            <Copy className="h-3 w-3" />
+          </button>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <div className="hidden md:block">
             <PresenceStack users={onlineUsers} currentUserId={currentUserId ?? null} />
           </div>
+
           <button
             onClick={() => setCommandPaletteOpen(true)}
             aria-label="Open command palette"
             title="Command palette (⌘K)"
-            className="hidden items-center gap-1 rounded-md border border-ink-700 px-2 py-1 text-xs text-ink-500 transition-colors hover:border-ink-500 hover:text-ink-100 md:flex"
+            className="hidden h-8 items-center gap-2 rounded-lg border border-ink-800 bg-ink-900/50 px-2.5 text-xs text-ink-500 transition-colors hover:border-ink-700 hover:text-ink-300 md:flex"
           >
-            <CommandIcon className="h-3 w-3" />K
+            <Search className="h-3.5 w-3.5" />
+            <span className="hidden xl:inline">Commands</span>
+            <kbd className="rounded border border-ink-800 bg-ink-950 px-1 font-[family-name:var(--font-mono)] text-[10px] text-ink-500">
+              ⌘K
+            </kbd>
           </button>
+
           <LanguageDropdown value={language} onChange={handleLanguageChange} />
+
           <button
             onClick={handleRun}
             disabled={isSelfRunning}
-            title={isRunnable(language) ? "Run (⌘↵)" : `Running ${languageLabel(language)} isn't supported yet`}
-            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 ${
-              isRunnable(language)
-                ? "bg-ink-100 text-ink-950 hover:bg-white"
-                : "border border-ink-700 text-ink-500 hover:border-ink-500"
+            title={runnable ? "Run (⌘↵)" : `Running ${languageLabel(language)} isn't supported yet`}
+            className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 ${
+              runnable
+                ? "bg-ink-100 text-ink-950 shadow-[0_0_20px_-6px_rgba(255,255,255,0.5)] hover:bg-white"
+                : "border border-ink-800 text-ink-500 hover:border-ink-600"
             }`}
           >
             {isSelfRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
             Run
+            {runnable && (
+              <kbd className="ml-0.5 hidden rounded bg-ink-950/10 px-1 font-[family-name:var(--font-mono)] text-[10px] text-ink-950/60 lg:inline">
+                ⌘↵
+              </kbd>
+            )}
           </button>
-          <div className="hidden items-center gap-0.5 rounded-lg bg-ink-900/60 p-1 sm:flex">
+
+          <div className="hidden items-center gap-0.5 sm:flex">
+            <span className="mx-1 h-5 w-px bg-ink-800" />
             <button
               onClick={() => setRunPanelOpen((o) => !o)}
               aria-label={runPanelOpen ? "Hide output panel" : "Show output panel"}
               title={runPanelOpen ? "Hide output" : "Show output"}
-              className={`rounded-md p-1.5 transition-colors ${
-                runPanelOpen ? "bg-ink-100 text-ink-950" : "text-ink-400 hover:bg-ink-800 hover:text-ink-100"
-              }`}
+              className={`${ICON_BUTTON} ${runPanelOpen ? "bg-ink-900 text-ink-100" : ""}`}
             >
               <Terminal className="h-4 w-4" />
             </button>
@@ -658,41 +675,36 @@ export default function RoomPage({
               disabled={!isFormattable(language)}
               aria-label="Format code"
               title={isFormattable(language) ? "Format code" : "Formatting not supported for this language"}
-              className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+              className={`${ICON_BUTTON} disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent`}
             >
               <AlignLeft className="h-4 w-4" />
             </button>
-            <button
-              onClick={handleCopyLink}
-              aria-label="Copy room link"
-              title="Copy room link"
-              className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100"
-            >
+            <button onClick={handleCopyLink} aria-label="Copy room link" title="Copy room link" className={ICON_BUTTON}>
               <LinkIcon className="h-4 w-4" />
             </button>
             <button
               onClick={handleToggleZen}
               aria-label={zenMode ? "Show sidebar" : "Enter focus mode"}
               title={zenMode ? "Show sidebar" : "Focus mode"}
-              className="hidden rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 md:block"
+              className={`${ICON_BUTTON} hidden md:flex ${zenMode ? "bg-ink-900 text-ink-100" : ""}`}
             >
               {zenMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
           </div>
+
           <button
             onClick={() => setCommandPaletteOpen(true)}
             aria-label="More actions"
-            className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 sm:hidden"
+            className={`${ICON_BUTTON} sm:hidden`}
           >
             <Ellipsis className="h-5 w-5" />
           </button>
         </div>
       </header>
 
+      {/* ---------- Body ---------- */}
       <div className="flex min-h-0 flex-1">
-        <div
-          className={`${mobilePanel === "code" ? "flex" : "hidden"} min-w-0 flex-1 flex-col md:flex`}
-        >
+        <div className={`${mobilePanel === "code" ? "flex" : "hidden"} min-w-0 flex-1 flex-col md:flex`}>
           <div className="min-h-0 flex-1">
             <CodeEditor
               handleRef={codeEditorRef}
@@ -708,6 +720,8 @@ export default function RoomPage({
               fontSize={fontSize}
               wordWrap={wordWrap}
               onToggleWordWrap={handleToggleWordWrap}
+              themeId={editorTheme}
+              onThemeChange={setEditorTheme}
             />
           </div>
           <RunPanel
@@ -724,59 +738,75 @@ export default function RoomPage({
           <>
             <div
               onMouseDown={handleDragStart}
-              className="hidden w-1 shrink-0 cursor-col-resize bg-ink-800 transition-colors hover:bg-ink-600 md:block"
-            />
+              className="relative hidden w-px shrink-0 cursor-col-resize bg-ink-900 transition-colors hover:bg-ink-600 md:block"
+            >
+              <div className="absolute inset-y-0 -left-1.5 -right-1.5" />
+            </div>
+
             <aside
               style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
-              className={`${mobilePanel === "code" ? "hidden" : "flex"} w-full min-w-0 flex-col bg-ink-900/40 md:flex md:w-[var(--sidebar-width)] md:shrink-0 md:border-l md:border-ink-800`}
+              className={`${mobilePanel === "code" ? "hidden" : "flex"} w-full min-w-0 flex-col bg-ink-950 md:flex md:w-[var(--sidebar-width)] md:shrink-0`}
             >
-              <div className="relative hidden gap-1 p-2 md:flex">
-                {(["chat", "online"] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => handleTabClick(tab)}
-                    className="relative flex-1 rounded-md px-3 py-1.5 text-xs font-medium"
-                  >
-                    {activeTab === tab && (
-                      <motion.div
-                        layoutId="sidebar-tab-pill"
-                        className="absolute inset-0 rounded-md bg-ink-100"
-                        transition={{ type: "spring", bounce: 0.2, duration: 0.3 }}
-                      />
-                    )}
-                    <span
-                      className={`relative z-10 inline-flex items-center gap-1.5 ${
-                        activeTab === tab ? "text-ink-950" : "text-ink-400"
-                      }`}
-                    >
-                      {tab === "chat" ? "Chat" : `Online — ${onlineUsers.length}`}
-                      {tab === "chat" && unreadCount > 0 && activeTab !== "chat" && (
-                        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
-                          {unreadCount > 9 ? "9+" : unreadCount}
+              <div className="hidden p-2 md:block">
+                <div className="relative flex rounded-lg bg-ink-900 p-1">
+                  {(["chat", "online"] as const).map((tab) => {
+                    const active = activeTab === tab;
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => handleTabClick(tab)}
+                        className="relative flex-1 rounded-md px-3 py-1.5 text-xs font-medium"
+                      >
+                        {active && (
+                          <motion.div
+                            layoutId="sidebar-tab-pill"
+                            className="absolute inset-0 rounded-md bg-ink-800 shadow-sm ring-1 ring-ink-700/60"
+                            transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
+                          />
+                        )}
+                        <span
+                          className={`relative z-10 inline-flex items-center justify-center gap-1.5 transition-colors ${
+                            active ? "text-ink-100" : "text-ink-500 hover:text-ink-300"
+                          }`}
+                        >
+                          {tab === "chat" ? "Chat" : "People"}
+                          {tab === "online" && (
+                            <span className="rounded bg-ink-950/60 px-1 text-[10px] tabular-nums text-ink-400">
+                              {onlineUsers.length}
+                            </span>
+                          )}
+                          {tab === "chat" && unreadCount > 0 && !active && (
+                            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                              {unreadCount > 9 ? "9+" : unreadCount}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                  </button>
-                ))}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {activeTab === "online" ? (
                 <div className="flex min-h-0 flex-1 flex-col">
-                  <p className="px-4 pb-1 pt-3 text-xs font-medium uppercase tracking-wide text-ink-500 md:hidden">
-                    Online — {onlineUsers.length}
+                  <p className="px-4 pb-1.5 pt-3 text-[11px] font-medium uppercase tracking-wider text-ink-600 md:pt-1">
+                    In this room · {onlineUsers.length}
                   </p>
-                  <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
+                  <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
                     {onlineUsers.map((u) => {
-                      const label = u.userId === currentUserId ? "You" : u.name;
+                      const isYou = u.userId === currentUserId;
                       return (
                         <li
                           key={u.socketId}
-                          className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-ink-100 transition-colors hover:bg-ink-900/60 md:gap-2 md:px-1.5 md:py-1"
+                          className="flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-ink-900"
                         >
-                          <AvatarIcon avatarId={u.avatarId} className="h-8 w-8 shrink-0 rounded-full md:h-6 md:w-6" />
-                          <span className="truncate">{label}</span>
+                          <span className="relative shrink-0">
+                            <AvatarIcon avatarId={u.avatarId} className="h-8 w-8 rounded-full md:h-7 md:w-7" />
+                            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-950 bg-ink-100" />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-sm text-ink-100">{isYou ? "You" : u.name}</span>
                           {u.userId === room.ownerId && (
-                            <span className="ml-auto shrink-0 text-[9px] uppercase tracking-wide text-ink-600">
+                            <span className="shrink-0 rounded border border-ink-800 px-1.5 py-px text-[10px] text-ink-500">
                               Owner
                             </span>
                           )}
@@ -802,7 +832,8 @@ export default function RoomPage({
         )}
       </div>
 
-      <nav className="flex shrink-0 border-t border-ink-800 bg-ink-950 pb-[env(safe-area-inset-bottom)] md:hidden">
+      {/* ---------- Phones: bottom tab bar ---------- */}
+      <nav className="flex shrink-0 gap-1 border-t border-ink-900 bg-ink-950 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1.5 md:hidden">
         {MOBILE_TABS.map(({ id: tabId, label, icon: Icon }) => {
           const active = mobilePanel === tabId;
           return (
@@ -811,26 +842,26 @@ export default function RoomPage({
               onClick={() => handleMobilePanel(tabId)}
               aria-label={label}
               aria-current={active ? "page" : undefined}
-              className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
-                active ? "text-ink-100" : "text-ink-500"
-              }`}
+              className="relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-medium"
             >
               {active && (
                 <motion.span
                   layoutId="mobile-tab-indicator"
-                  className="absolute inset-x-8 top-0 h-0.5 rounded-full bg-ink-100"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.3 }}
+                  className="absolute inset-0 rounded-xl bg-ink-900"
+                  transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
                 />
               )}
               <span className="relative">
-                <Icon className="h-5 w-5" />
+                <Icon className={`h-5 w-5 transition-colors ${active ? "text-ink-100" : "text-ink-500"}`} />
                 {tabId === "chat" && unreadCount > 0 && (
                   <span className="absolute -right-2.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
               </span>
-              {tabId === "online" ? `${label} · ${onlineUsers.length}` : label}
+              <span className={`relative transition-colors ${active ? "text-ink-100" : "text-ink-500"}`}>
+                {tabId === "online" ? `${label} · ${onlineUsers.length}` : label}
+              </span>
             </button>
           );
         })}
