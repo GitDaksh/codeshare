@@ -75,12 +75,12 @@ function Section({
       initial={reduce ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay, ease: EASE }}
-      className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-950"
+      className="overflow-hidden rounded-2xl border border-ink-700 bg-ink-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
     >
-      <div className="flex items-start justify-between gap-4 border-b border-ink-900 px-5 py-4">
+      <div className="flex items-start justify-between gap-4 border-b border-ink-800 px-5 py-4">
         <div className="min-w-0">
-          <h2 className="text-sm font-medium text-ink-100">{title}</h2>
-          {description && <p className="mt-0.5 text-xs text-ink-500">{description}</p>}
+          <h2 className="text-sm font-semibold text-ink-100">{title}</h2>
+          {description && <p className="mt-0.5 text-xs text-ink-400">{description}</p>}
         </div>
         {action}
       </div>
@@ -113,7 +113,7 @@ function EditButton({ onClick, label = "Edit" }: { onClick: () => void; label?: 
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-ink-800 px-3 text-xs text-ink-300 transition-colors hover:border-ink-600 hover:text-ink-100"
+      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-800 px-3 text-xs text-ink-100 transition-colors hover:border-ink-500"
     >
       <Pencil className="h-3 w-3" />
       {label}
@@ -159,14 +159,14 @@ function SaveBar({
 function DetailRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1 px-5 py-3.5 sm:flex-row sm:items-start sm:gap-6">
-      <dt className="w-36 shrink-0 text-xs text-ink-500 sm:pt-0.5">{label}</dt>
+      <dt className="w-36 shrink-0 text-xs text-ink-400 sm:pt-0.5">{label}</dt>
       <dd className="min-w-0 flex-1 break-words text-sm text-ink-100">{children}</dd>
     </div>
   );
 }
 
 function Muted({ children }: { children: ReactNode }) {
-  return <span className="text-ink-600">{children}</span>;
+  return <span className="text-ink-500">{children}</span>;
 }
 
 function ProfileSkeleton() {
@@ -305,11 +305,11 @@ export default function ProfilePage() {
     return (
       <main className="flex min-h-[calc(100dvh-56px)] flex-col items-center justify-center gap-3 px-4 text-center">
         <p className="font-medium text-ink-100">Couldn&apos;t load your profile</p>
-        <p className="max-w-xs text-sm text-ink-500">Check your connection and try again.</p>
+        <p className="max-w-xs text-sm text-ink-400">Check your connection and try again.</p>
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="mt-2 inline-flex h-9 items-center rounded-full border border-ink-800 px-4 text-sm text-ink-300 transition-colors hover:border-ink-600 hover:text-ink-100"
+          className="mt-2 inline-flex h-9 items-center rounded-full border border-ink-700 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500"
         >
           Try again
         </button>
@@ -339,315 +339,324 @@ export default function ProfilePage() {
   ];
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-      {/* ---------- Header ---------- */}
-      <motion.div
-        initial={reduce ? false : { opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: EASE }}
-        className="mb-8 sm:mb-10"
-      >
-        <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.25em] text-ink-500">
-          Profile
-        </p>
-        <h1 className="text-gradient mt-2 pb-1 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight sm:text-4xl">
-          Your profile
-        </h1>
-        <p className="mt-2 text-sm text-ink-400">
-          This is how you show up in rooms, in chat, and next to your cursor.
-        </p>
-      </motion.div>
+    <main className="relative overflow-hidden">
+      <div className="hero-grid pointer-events-none absolute inset-x-0 top-0 h-[520px] opacity-70" />
+      <div className="pointer-events-none absolute left-1/2 top-[-14rem] h-[28rem] w-[56rem] max-w-[140vw] -translate-x-1/2 rounded-full bg-white/[0.05] blur-[130px]" />
 
-      <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-10">
-        {/* ---------- Live member card ---------- */}
-        <aside className="lg:sticky lg:top-24 lg:self-start">
-          <motion.div
-            initial={reduce ? false : { opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.05, ease: EASE }}
-          >
-            <ProfilePreviewCard
-              avatarId={previewAvatar}
-              username={previewUsername}
-              bio={previewBio}
-              favoriteLanguage={previewLanguage}
-              githubUsername={previewGithub}
-            />
-            <p className="mt-4 text-center text-xs text-ink-600">Updates live as you edit</p>
-          </motion.div>
-        </aside>
+      <div className="relative mx-auto max-w-6xl px-4 py-8 sm:py-12">
+        {/* ---------- Header ---------- */}
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: EASE }}
+          className="mb-8 sm:mb-10"
+        >
+          <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.25em] text-ink-400">
+            Profile
+          </p>
+          <h1 className="text-gradient mt-2 pb-1 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight sm:text-4xl">
+            Your profile
+          </h1>
+          <p className="mt-2 text-sm text-ink-400">
+            This is how you show up in rooms, in chat, and next to your cursor.
+          </p>
+        </motion.div>
 
-        <div className="min-w-0 space-y-6">
-          {/* ---------- Identity ---------- */}
-          <Section title="Identity" description="Your avatar and username." delay={0.08}>
-            {/* Avatar */}
-            <div className="px-5 py-4">
-              <div className="flex items-center gap-4">
-                <AvatarIcon avatarId={previewAvatar} className="h-12 w-12 shrink-0 rounded-full" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-ink-100">Avatar</p>
-                  <p className="text-xs text-ink-500">Shown next to your cursor, your messages, and in rooms.</p>
-                </div>
-                {avatarDraft === null && (
-                  <EditButton label="Change" onClick={() => setAvatarDraft(profile.avatarId)} />
-                )}
-              </div>
-              <Expand open={avatarDraft !== null}>
-                <div className="pt-5">
-                  <div className="rounded-xl border border-ink-800 bg-ink-900/30 p-4">
-                    <AvatarPicker value={avatarDraft ?? profile.avatarId} onChange={setAvatarDraft} />
+        <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-10">
+          {/* ---------- Live member card ---------- */}
+          <aside className="lg:sticky lg:top-24 lg:self-start">
+            <motion.div
+              initial={reduce ? false : { opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.05, ease: EASE }}
+            >
+              <ProfilePreviewCard
+                avatarId={previewAvatar}
+                username={previewUsername}
+                bio={previewBio}
+                favoriteLanguage={previewLanguage}
+                githubUsername={previewGithub}
+              />
+              <p className="mt-4 text-center text-xs text-ink-500">Updates live as you edit</p>
+            </motion.div>
+          </aside>
+
+          <div className="min-w-0 space-y-6">
+            {/* ---------- Identity ---------- */}
+            <Section title="Identity" description="Your avatar and username." delay={0.08}>
+              {/* Avatar */}
+              <div className="px-5 py-4">
+                <div className="flex items-center gap-4">
+                  <AvatarIcon avatarId={previewAvatar} className="h-12 w-12 shrink-0 rounded-full" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-ink-100">Avatar</p>
+                    <p className="text-xs text-ink-400">Shown next to your cursor, your messages, and in rooms.</p>
                   </div>
-                  <div className="mt-4">
+                  {avatarDraft === null && (
+                    <EditButton label="Change" onClick={() => setAvatarDraft(profile.avatarId)} />
+                  )}
+                </div>
+                <Expand open={avatarDraft !== null}>
+                  <div className="pt-5">
+                    <div className="rounded-xl border border-ink-700 bg-black/40 p-4">
+                      <AvatarPicker value={avatarDraft ?? profile.avatarId} onChange={setAvatarDraft} />
+                    </div>
+                    <div className="mt-4">
+                      <SaveBar
+                        onSave={handleAvatarSave}
+                        onCancel={() => setAvatarDraft(null)}
+                        saving={savingAvatar}
+                        saveLabel="Save avatar"
+                      />
+                    </div>
+                  </div>
+                </Expand>
+              </div>
+
+              {/* Username */}
+              <div className="border-t border-ink-800 px-5 py-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-ink-700 bg-ink-800 font-[family-name:var(--font-mono)] text-lg text-ink-300">
+                    @
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-ink-400">Username</p>
+                    <p className="truncate text-sm font-semibold text-ink-100">@{profile.username}</p>
+                  </div>
+                  {!editingUsername && (
+                    <EditButton
+                      onClick={() => {
+                        setUsernameDraft(profile.username);
+                        setEditingUsername(true);
+                      }}
+                    />
+                  )}
+                </div>
+                <Expand open={editingUsername}>
+                  <div className="space-y-4 pt-5">
+                    <UsernameInput
+                      value={usernameDraft}
+                      onChange={setUsernameDraft}
+                      onValidityChange={setUsernameDraftValid}
+                    />
                     <SaveBar
-                      onSave={handleAvatarSave}
-                      onCancel={() => setAvatarDraft(null)}
-                      saving={savingAvatar}
-                      saveLabel="Save avatar"
+                      onSave={handleSaveUsername}
+                      onCancel={() => {
+                        setUsernameDraft(profile.username);
+                        setEditingUsername(false);
+                      }}
+                      saving={savingUsername}
+                      disabled={!usernameDraftValid}
                     />
                   </div>
-                </div>
-              </Expand>
-            </div>
-
-            {/* Username */}
-            <div className="border-t border-ink-900 px-5 py-4">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-ink-800 bg-ink-900 font-[family-name:var(--font-mono)] text-lg text-ink-400">
-                  @
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs text-ink-500">Username</p>
-                  <p className="truncate text-sm font-medium text-ink-100">@{profile.username}</p>
-                </div>
-                {!editingUsername && (
-                  <EditButton
-                    onClick={() => {
-                      setUsernameDraft(profile.username);
-                      setEditingUsername(true);
-                    }}
-                  />
-                )}
+                </Expand>
               </div>
-              <Expand open={editingUsername}>
-                <div className="space-y-4 pt-5">
-                  <UsernameInput
-                    value={usernameDraft}
-                    onChange={setUsernameDraft}
-                    onValidityChange={setUsernameDraftValid}
-                  />
+            </Section>
+
+            {/* ---------- About ---------- */}
+            <Section
+              title="About"
+              description="A little about you, visible on your member card."
+              delay={0.14}
+              action={!editingDetails ? <EditButton onClick={() => setEditingDetails(true)} /> : undefined}
+            >
+              {!editingDetails && (
+                <dl className="divide-y divide-ink-800">
+                  <DetailRow label="Bio">{profile.bio || <Muted>No bio yet</Muted>}</DetailRow>
+                  <DetailRow label="Favorite language">
+                    {profile.favoriteLanguage ? (
+                      <span className="inline-block rounded-full border border-ink-700 bg-ink-800 px-2.5 py-0.5 text-xs text-ink-100">
+                        {languageLabel(profile.favoriteLanguage)}
+                      </span>
+                    ) : (
+                      <Muted>No preference</Muted>
+                    )}
+                  </DetailRow>
+                  <DetailRow label="GitHub">
+                    {profile.githubUsername ? (
+                      <Link
+                        href={`https://github.com/${profile.githubUsername}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group inline-flex max-w-full items-center gap-1.5 text-ink-100 transition-colors hover:text-white"
+                      >
+                        <GithubIcon className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+                        <span className="truncate">{profile.githubUsername}</span>
+                        <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-ink-500 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                      </Link>
+                    ) : (
+                      <Muted>Not linked</Muted>
+                    )}
+                  </DetailRow>
+                </dl>
+              )}
+
+              <Expand open={editingDetails}>
+                <div className="space-y-6 px-5 py-5">
+                  <div>
+                    <div className="mb-2 flex items-baseline justify-between gap-3">
+                      <span className="text-xs font-medium text-ink-300">Favorite language</span>
+                      <span className="text-[11px] text-ink-500">Pre-selected when you create rooms</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {LANGUAGE_CHOICES.map((lang) => {
+                        const active = languageDraft === lang.value;
+                        return (
+                          <button
+                            key={lang.value || "none"}
+                            type="button"
+                            onClick={() => setLanguageDraft(lang.value)}
+                            aria-pressed={active}
+                            className={`h-8 rounded-full border px-3 text-xs transition-colors ${
+                              active
+                                ? "border-ink-100 bg-ink-100 text-ink-950"
+                                : "border-ink-700 bg-ink-800 text-ink-300 hover:border-ink-500 hover:text-ink-100"
+                            }`}
+                          >
+                            {lang.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="mb-2 block text-xs font-medium text-ink-300">GitHub</span>
+                    <div className="flex h-11 items-center rounded-xl border border-ink-700 bg-black/40 transition-colors focus-within:border-ink-500">
+                      <span className="pl-3.5 text-sm text-ink-500">github.com/</span>
+                      <input
+                        value={githubDraft}
+                        onChange={(e) => setGithubDraft(e.target.value)}
+                        placeholder="octocat"
+                        maxLength={39}
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        className="h-full min-w-0 flex-1 bg-transparent pr-3 text-sm text-ink-100 placeholder:text-ink-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-baseline justify-between gap-3">
+                      <span className="text-xs font-medium text-ink-300">Bio</span>
+                      <span className="text-[11px] tabular-nums text-ink-500">{bioDraft.length}/160</span>
+                    </div>
+                    <textarea
+                      value={bioDraft}
+                      onChange={(e) => setBioDraft(e.target.value.slice(0, 160))}
+                      placeholder="Building things, learning as I go."
+                      rows={3}
+                      className="w-full resize-none rounded-xl border border-ink-700 bg-black/40 px-3.5 py-3 text-sm text-ink-100 placeholder:text-ink-600 transition-colors focus:border-ink-500 focus:outline-none"
+                    />
+                  </div>
+
                   <SaveBar
-                    onSave={handleSaveUsername}
+                    onSave={handleSaveDetails}
                     onCancel={() => {
-                      setUsernameDraft(profile.username);
-                      setEditingUsername(false);
+                      setBioDraft(profile.bio);
+                      setLanguageDraft(profile.favoriteLanguage);
+                      setGithubDraft(profile.githubUsername);
+                      setEditingDetails(false);
                     }}
-                    saving={savingUsername}
-                    disabled={!usernameDraftValid}
+                    saving={savingDetails}
                   />
                 </div>
               </Expand>
-            </div>
-          </Section>
+            </Section>
 
-          {/* ---------- About ---------- */}
-          <Section
-            title="About"
-            description="A little about you, visible on your member card."
-            delay={0.14}
-            action={!editingDetails ? <EditButton onClick={() => setEditingDetails(true)} /> : undefined}
-          >
-            {!editingDetails && (
-              <dl className="divide-y divide-ink-900">
-                <DetailRow label="Bio">{profile.bio || <Muted>No bio yet</Muted>}</DetailRow>
-                <DetailRow label="Favorite language">
-                  {profile.favoriteLanguage ? (
-                    <span className="inline-block rounded-full border border-ink-800 bg-ink-900 px-2.5 py-0.5 text-xs text-ink-300">
-                      {languageLabel(profile.favoriteLanguage)}
-                    </span>
-                  ) : (
-                    <Muted>No preference</Muted>
-                  )}
-                </DetailRow>
-                <DetailRow label="GitHub">
-                  {profile.githubUsername ? (
-                    <a
-                      href={`https://github.com/${profile.githubUsername}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group inline-flex max-w-full items-center gap-1.5 text-ink-100 transition-colors hover:text-white"
-                    >
-                      <GithubIcon className="h-3.5 w-3.5 shrink-0 text-ink-400" />
-                      <span className="truncate">{profile.githubUsername}</span>
-                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-ink-600 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-                    </a>
-                  ) : (
-                    <Muted>Not linked</Muted>
-                  )}
-                </DetailRow>
-              </dl>
-            )}
-
-            <Expand open={editingDetails}>
-              <div className="space-y-6 px-5 py-5">
-                <div>
-                  <div className="mb-2 flex items-baseline justify-between gap-3">
-                    <span className="text-xs font-medium text-ink-300">Favorite language</span>
-                    <span className="text-[11px] text-ink-600">Pre-selected when you create rooms</span>
+            {/* ---------- Activity ---------- */}
+            <Section title="Activity" delay={0.2}>
+              <div className="grid grid-cols-2 gap-px bg-ink-800 sm:grid-cols-4">
+                {stats.map(({ label, value, icon: Icon }) => (
+                  <div key={label} className="bg-ink-900 p-4 sm:p-5">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-ink-400">
+                      <Icon className="h-3.5 w-3.5 text-ink-500" />
+                      {label}
+                    </div>
+                    <p className="mt-2 truncate font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-ink-100">
+                      {value}
+                    </p>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {LANGUAGE_CHOICES.map((lang) => {
-                      const active = languageDraft === lang.value;
-                      return (
-                        <button
-                          key={lang.value || "none"}
-                          type="button"
-                          onClick={() => setLanguageDraft(lang.value)}
-                          aria-pressed={active}
-                          className={`h-8 rounded-full border px-3 text-xs transition-colors ${
-                            active
-                              ? "border-ink-100 bg-ink-100 text-ink-950"
-                              : "border-ink-800 text-ink-400 hover:border-ink-600 hover:text-ink-100"
-                          }`}
-                        >
-                          {lang.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="mb-2 block text-xs font-medium text-ink-300">GitHub</span>
-                  <div className="flex h-11 items-center rounded-xl border border-ink-800 bg-ink-950 transition-colors focus-within:border-ink-500">
-                    <span className="pl-3.5 text-sm text-ink-600">github.com/</span>
-                    <input
-                      value={githubDraft}
-                      onChange={(e) => setGithubDraft(e.target.value)}
-                      placeholder="octocat"
-                      maxLength={39}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      className="h-full min-w-0 flex-1 bg-transparent pr-3 text-sm text-ink-100 placeholder:text-ink-700 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="mb-2 flex items-baseline justify-between gap-3">
-                    <span className="text-xs font-medium text-ink-300">Bio</span>
-                    <span className="text-[11px] tabular-nums text-ink-600">{bioDraft.length}/160</span>
-                  </div>
-                  <textarea
-                    value={bioDraft}
-                    onChange={(e) => setBioDraft(e.target.value.slice(0, 160))}
-                    placeholder="Building things, learning as I go."
-                    rows={3}
-                    className="w-full resize-none rounded-xl border border-ink-800 bg-ink-950 px-3.5 py-3 text-sm text-ink-100 placeholder:text-ink-700 transition-colors focus:border-ink-500 focus:outline-none"
-                  />
-                </div>
-
-                <SaveBar
-                  onSave={handleSaveDetails}
-                  onCancel={() => {
-                    setBioDraft(profile.bio);
-                    setLanguageDraft(profile.favoriteLanguage);
-                    setGithubDraft(profile.githubUsername);
-                    setEditingDetails(false);
-                  }}
-                  saving={savingDetails}
-                />
-              </div>
-            </Expand>
-          </Section>
-
-          {/* ---------- Activity ---------- */}
-          <Section title="Activity" delay={0.2}>
-            <div className="grid grid-cols-2 gap-px bg-ink-900 sm:grid-cols-4">
-              {stats.map(({ label, value, icon: Icon }) => (
-                <div key={label} className="bg-ink-950 p-4 sm:p-5">
-                  <div className="flex items-center gap-1.5 text-xs text-ink-500">
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </div>
-                  <p className="mt-2 truncate font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-ink-100">
-                    {value}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </Section>
-
-          {/* ---------- Rooms ---------- */}
-          <Section
-            title="Your rooms"
-            description={rooms.length > 0 ? "Your most recently active rooms." : undefined}
-            delay={0.26}
-            action={
-              rooms.length > 0 ? (
-                <Link
-                  href="/dashboard"
-                  className="group inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-ink-400 transition-colors hover:text-ink-100"
-                >
-                  {rooms.length > ROOMS_PREVIEW_COUNT ? `View all ${rooms.length}` : "Open dashboard"}
-                  <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                </Link>
-              ) : undefined
-            }
-          >
-            {sortedRooms.length === 0 ? (
-              <div className="flex flex-col items-center px-5 py-10 text-center">
-                <p className="text-sm text-ink-400">No rooms yet.</p>
-                <Link
-                  href="/dashboard"
-                  className="mt-3 text-sm text-ink-100 underline underline-offset-4 transition-colors hover:text-ink-300"
-                >
-                  Create one from your dashboard
-                </Link>
-              </div>
-            ) : (
-              <div className="grid gap-4 p-5 sm:grid-cols-2">
-                {sortedRooms.slice(0, ROOMS_PREVIEW_COUNT).map((room) => (
-                  <RoomCard
-                    key={room._id}
-                    room={room}
-                    updatedLabel={`updated ${timeAgo(room.updatedAt)}`}
-                    canDelete={false}
-                    confirmingDelete={false}
-                    onRequestDelete={() => {}}
-                  />
                 ))}
               </div>
-            )}
-          </Section>
+            </Section>
 
-          {/* ---------- Account ---------- */}
-          <Section title="Account" description="Email, password, and security are managed securely by Clerk." delay={0.32}>
-            <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="text-xs text-ink-500">Signed in as</p>
-                <p className="truncate text-sm text-ink-100">{email ?? "—"}</p>
+            {/* ---------- Rooms ---------- */}
+            <Section
+              title="Your rooms"
+              description={rooms.length > 0 ? "Your most recently active rooms." : undefined}
+              delay={0.26}
+              action={
+                rooms.length > 0 ? (
+                  <Link
+                    href="/dashboard"
+                    className="group inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-ink-300 transition-colors hover:text-ink-100"
+                  >
+                    {rooms.length > ROOMS_PREVIEW_COUNT ? `View all ${rooms.length}` : "Open dashboard"}
+                    <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                ) : undefined
+              }
+            >
+              {sortedRooms.length === 0 ? (
+                <div className="flex flex-col items-center px-5 py-10 text-center">
+                  <p className="text-sm text-ink-300">No rooms yet.</p>
+                  <Link
+                    href="/dashboard"
+                    className="mt-3 text-sm text-ink-100 underline underline-offset-4 transition-colors hover:text-ink-300"
+                  >
+                    Create one from your dashboard
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid gap-4 p-5 sm:grid-cols-2">
+                  {sortedRooms.slice(0, ROOMS_PREVIEW_COUNT).map((room) => (
+                    <RoomCard
+                      key={room._id}
+                      room={room}
+                      updatedLabel={`updated ${timeAgo(room.updatedAt)}`}
+                      canDelete={false}
+                      confirmingDelete={false}
+                      onRequestDelete={() => {}}
+                    />
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            {/* ---------- Account ---------- */}
+            <Section
+              title="Account"
+              description="Email, password, and security are managed securely by Clerk."
+              delay={0.32}
+            >
+              <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs text-ink-400">Signed in as</p>
+                  <p className="truncate text-sm text-ink-100">{email ?? "—"}</p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openUserProfile()}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-full border border-ink-700 bg-ink-800 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500"
+                  >
+                    <Settings className="h-3.5 w-3.5" />
+                    Manage account
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void signOut({ redirectUrl: "/" })}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm text-ink-300 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    Sign out
+                  </button>
+                </div>
               </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => openUserProfile()}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-ink-800 px-4 text-sm text-ink-300 transition-colors hover:border-ink-600 hover:text-ink-100"
-                >
-                  <Settings className="h-3.5 w-3.5" />
-                  Manage account
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void signOut({ redirectUrl: "/" })}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm text-ink-400 transition-colors hover:bg-red-500/10 hover:text-red-400"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  Sign out
-                </button>
-              </div>
-            </div>
-          </Section>
+            </Section>
+          </div>
         </div>
       </div>
     </main>
