@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 
 export type Command = {
   id: string;
@@ -22,6 +23,9 @@ export function CommandPalette({ open, onClose, commands }: CommandPaletteProps)
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  // On phones this opens from the ⋯ button and works as an action menu.
+  // Auto-focusing the search box there would pop the keyboard over the list.
+  const isTouch = useMediaQuery("(hover: none)");
 
   const filtered = useMemo(
     () => commands.filter((c) => c.label.toLowerCase().includes(query.trim().toLowerCase())),
@@ -32,9 +36,11 @@ export function CommandPalette({ open, onClose, commands }: CommandPaletteProps)
     if (open) {
       setQuery("");
       setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 0);
+      if (!isTouch) {
+        setTimeout(() => inputRef.current?.focus(), 0);
+      }
     }
-  }, [open]);
+  }, [open, isTouch]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -69,7 +75,7 @@ export function CommandPalette({ open, onClose, commands }: CommandPaletteProps)
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-[15vh]"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-3 pt-[8vh] sm:px-4 sm:pt-[15vh]"
           onClick={onClose}
         >
           <motion.div
@@ -85,10 +91,10 @@ export function CommandPalette({ open, onClose, commands }: CommandPaletteProps)
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type a command…"
+              placeholder={isTouch ? "Search actions…" : "Type a command…"}
               className="w-full border-b border-ink-800 bg-transparent px-4 py-3 text-sm text-ink-100 placeholder:text-ink-600 focus:outline-none"
             />
-            <div className="max-h-72 overflow-y-auto p-1.5">
+            <div className="max-h-[60dvh] overflow-y-auto p-1.5 sm:max-h-72">
               {filtered.length === 0 ? (
                 <p className="px-3 py-4 text-center text-xs text-ink-600">No matching commands.</p>
               ) : (
@@ -100,9 +106,9 @@ export function CommandPalette({ open, onClose, commands }: CommandPaletteProps)
                       onClick={() => runCommand(command)}
                       onMouseEnter={() => setSelectedIndex(i)}
                       disabled={command.disabled}
-                      className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                        i === selectedIndex ? "bg-ink-800 text-ink-100" : "text-ink-300"
-                      } ${command.disabled ? "cursor-not-allowed opacity-40" : ""}`}
+                      className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-left text-sm transition-colors sm:py-2 ${
+                        i === selectedIndex && !isTouch ? "bg-ink-800 text-ink-100" : "text-ink-300"
+                      } ${command.disabled ? "cursor-not-allowed opacity-40" : "active:bg-ink-800"}`}
                     >
                       <Icon className="h-4 w-4 shrink-0 text-ink-500" />
                       {command.label}

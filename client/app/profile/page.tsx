@@ -6,9 +6,9 @@ import { Pencil } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { AvatarIcon } from "@/components/AvatarIcon";
+import { AvatarPicker } from "@/components/AvatarPicker";
 import { GithubIcon } from "@/components/GithubIcon";
 import { UsernameInput } from "@/components/UsernameInput";
-import { AvatarPicker } from "@/components/AvatarPicker";
 import { LANGUAGES, getLanguageBadgeClasses } from "@/lib/languages";
 import type { Profile } from "@/types/profile";
 import type { Room } from "@/types/room";
@@ -20,7 +20,11 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
-  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // null = picker closed. While open, this holds the avatar being previewed,
+  // so you can browse freely and only save when you're happy.
+  const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
+  const [savingAvatar, setSavingAvatar] = useState(false);
 
   const [editingUsername, setEditingUsername] = useState(false);
   const [usernameDraft, setUsernameDraft] = useState("");
@@ -51,21 +55,23 @@ export default function ProfilePage() {
       .finally(() => setLoading(false));
   }, [api]);
 
-  async function handleAvatarSelect(avatarId: string) {
-    if (!profile || avatarId === profile.avatarId) {
-      setPickerOpen(false);
+  async function handleAvatarSave() {
+    if (!profile || avatarDraft === null) return;
+    if (avatarDraft === profile.avatarId) {
+      setAvatarDraft(null);
       return;
     }
-    const previous = profile.avatarId;
-    setProfile({ ...profile, avatarId });
+
+    setSavingAvatar(true);
     try {
-      await api.put<Profile>("/api/profile", { avatarId });
+      const res = await api.put<Profile>("/api/profile", { avatarId: avatarDraft });
+      setProfile(res.data);
+      setAvatarDraft(null);
       toast("Avatar updated");
     } catch {
-      setProfile((p) => (p ? { ...p, avatarId: previous } : p));
       toast("Could not update your avatar.", "error");
     } finally {
-      setPickerOpen(false);
+      setSavingAvatar(false);
     }
   }
 
@@ -112,23 +118,28 @@ export default function ProfilePage() {
 
   if (loading || !profile) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-12">
+      <main className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
         <p className="text-sm text-ink-500">Loading profile…</p>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-12">
+    <main className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
       <div className="flex items-start gap-4">
         <button
-          onClick={() => setPickerOpen((o) => !o)}
+          onClick={() => setAvatarDraft(avatarDraft === null ? profile.avatarId : null)}
           aria-label="Change avatar"
           className="group relative shrink-0"
         >
-          <AvatarIcon avatarId={profile.avatarId} className="h-16 w-16 rounded-full" />
-          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-medium text-ink-100 opacity-0 transition-opacity group-hover:opacity-100">
+          <AvatarIcon avatarId={avatarDraft ?? profile.avatarId} className="h-16 w-16 rounded-full" />
+          {/* Hover hint for mouse users */}
+          <span className="absolute inset-0 hidden items-center justify-center rounded-full bg-black/50 text-[10px] font-medium text-ink-100 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:hover)]:flex">
             Change
+          </span>
+          {/* Always-visible edit badge for touch screens, where hover hints never appear */}
+          <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-ink-950 bg-ink-100 text-ink-950 [@media(hover:hover)]:hidden">
+            <Pencil className="h-3 w-3" />
           </span>
         </button>
 
@@ -144,7 +155,7 @@ export default function ProfilePage() {
                 <button
                   onClick={handleSaveUsername}
                   disabled={!usernameDraftValid || savingUsername}
-                  className="rounded-md bg-ink-100 px-3 py-1 text-xs font-medium text-ink-950 hover:bg-white disabled:opacity-50"
+                  className="rounded-md bg-ink-100 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-white disabled:opacity-50"
                 >
                   {savingUsername ? "Saving…" : "Save"}
                 </button>
@@ -153,7 +164,7 @@ export default function ProfilePage() {
                     setUsernameDraft(profile.username);
                     setEditingUsername(false);
                   }}
-                  className="text-xs text-ink-500 hover:text-ink-100"
+                  className="px-2 py-1.5 text-xs text-ink-500 hover:text-ink-100"
                 >
                   Cancel
                 </button>
@@ -162,12 +173,12 @@ export default function ProfilePage() {
           ) : (
             <button
               onClick={() => setEditingUsername(true)}
-              className="group flex items-center gap-1.5"
+              className="group flex max-w-full items-center gap-1.5"
             >
-              <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100">
+              <h1 className="truncate font-[family-name:var(--font-display)] text-lg font-semibold text-ink-100 sm:text-xl">
                 @{profile.username}
               </h1>
-              <Pencil className="h-3.5 w-3.5 text-ink-600 opacity-0 transition-opacity group-hover:opacity-100" />
+              <Pencil className="h-3.5 w-3.5 shrink-0 text-ink-600 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100" />
             </button>
           )}
 
@@ -186,14 +197,14 @@ export default function ProfilePage() {
             {profile.githubUsername && (
               <>
                 <span>·</span>
-                <a
+                
                   href={`https://github.com/${profile.githubUsername}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-ink-400 transition-colors hover:text-ink-100"
-                >
-                  <GithubIcon className="h-3 w-3" />
-                  {profile.githubUsername}
+                  className="flex min-w-0 items-center gap-1 text-ink-400 transition-colors hover:text-ink-100"
+                <a>
+                  <GithubIcon className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{profile.githubUsername}</span>
                 </a>
               </>
             )}
@@ -201,11 +212,26 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {pickerOpen && (
-  <div className="mt-6 rounded-lg border border-ink-800 p-4">
-    <AvatarPicker value={profile.avatarId} onChange={handleAvatarSelect} />
-  </div>
-)}
+      {avatarDraft !== null && (
+        <div className="mt-6 rounded-lg border border-ink-800 p-4">
+          <AvatarPicker value={avatarDraft} onChange={setAvatarDraft} />
+          <div className="mt-4 flex justify-end gap-2 border-t border-ink-800 pt-4">
+            <button
+              onClick={() => setAvatarDraft(null)}
+              className="rounded-md px-3 py-1.5 text-sm text-ink-400 transition-colors hover:text-ink-100"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAvatarSave}
+              disabled={savingAvatar}
+              className="rounded-md bg-ink-100 px-4 py-1.5 text-sm font-medium text-ink-950 transition-colors hover:bg-white disabled:opacity-50"
+            >
+              {savingAvatar ? "Saving…" : "Save avatar"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 rounded-lg border border-ink-800 p-4">
         {editingDetails ? (
@@ -232,6 +258,8 @@ export default function ProfilePage() {
                 onChange={(e) => setGithubDraft(e.target.value)}
                 placeholder="octocat"
                 maxLength={39}
+                autoCapitalize="none"
+                autoCorrect="off"
                 className="w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none"
               />
             </div>
@@ -260,7 +288,7 @@ export default function ProfilePage() {
                   setGithubDraft(profile.githubUsername);
                   setEditingDetails(false);
                 }}
-                className="text-xs text-ink-500 hover:text-ink-100"
+                className="px-2 py-1.5 text-xs text-ink-500 hover:text-ink-100"
               >
                 Cancel
               </button>
@@ -269,7 +297,7 @@ export default function ProfilePage() {
         ) : (
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm text-ink-300">{profile.bio || "No bio yet."}</p>
+              <p className="break-words text-sm text-ink-300">{profile.bio || "No bio yet."}</p>
               {profile.favoriteLanguage && (
                 <span
                   className={`mt-2 inline-block rounded border px-1.5 py-0.5 text-xs ${getLanguageBadgeClasses(profile.favoriteLanguage)}`}
@@ -280,7 +308,7 @@ export default function ProfilePage() {
             </div>
             <button
               onClick={() => setEditingDetails(true)}
-              className="shrink-0 text-xs text-ink-500 transition-colors hover:text-ink-100"
+              className="shrink-0 py-1 text-xs text-ink-500 transition-colors hover:text-ink-100"
             >
               Edit details
             </button>
@@ -312,7 +340,7 @@ export default function ProfilePage() {
                     </span>
                   </div>
                   <p className="mt-0.5 text-xs text-ink-500">
-                    updated {new Date(room.updatedAt).toLocaleString()}
+                    updated {new Date(room.updatedAt).toLocaleDateString()}
                   </p>
                 </div>
                 <Link

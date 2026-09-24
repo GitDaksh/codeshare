@@ -44,7 +44,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+      {/* Centered and raised on phones (clear of the room page's bottom tab
+          bar); bottom-right corner on larger screens. */}
+      <div className="pointer-events-none fixed inset-x-4 bottom-20 z-50 flex flex-col items-center gap-2 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:items-end">
         <AnimatePresence>
           {toasts.map((t) => {
             const Icon = ICONS[t.type];
@@ -55,10 +57,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
-                className="pointer-events-auto flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 px-4 py-2.5 text-sm text-ink-100 shadow-lg"
+                className="pointer-events-auto flex max-w-full items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 px-4 py-2.5 text-sm text-ink-100 shadow-lg sm:max-w-sm"
               >
                 <Icon className={`h-4 w-4 shrink-0 ${COLORS[t.type]}`} />
-                {t.message}
+                <span className="min-w-0">{t.message}</span>
               </motion.div>
             );
           })}

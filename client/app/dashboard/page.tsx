@@ -17,6 +17,8 @@ import type { Room } from "@/types/room";
 
 type SortMode = "updated" | "name";
 
+const DELETE_CONFIRM_WINDOW_MS = 3000;
+
 function timeAgo(dateStr: string): string {
   const diffMs = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diffMs / 60000);
@@ -52,6 +54,7 @@ export default function DashboardPage() {
   const [languageFilter, setLanguageFilter] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [joinInput, setJoinInput] = useState("");
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = "Dashboard — CodeShare";
@@ -86,11 +89,25 @@ export default function DashboardPage() {
   async function handleDeleteRoom(id: string, name: string) {
     try {
       await api.delete(`/api/rooms/${id}`);
-      setRooms(rooms.filter((room) => room._id !== id));
+      setRooms((prev) => prev.filter((room) => room._id !== id));
       toast(`"${name}" deleted`);
     } catch {
       toast("Could not delete the room.", "error");
     }
+  }
+
+  // Two-step delete: first tap arms it, second tap within 3s confirms.
+  // Prevents a stray tap (especially on phones) from wiping a room.
+  function requestDelete(id: string, name: string) {
+    if (pendingDeleteId === id) {
+      setPendingDeleteId(null);
+      handleDeleteRoom(id, name);
+      return;
+    }
+    setPendingDeleteId(id);
+    setTimeout(() => {
+      setPendingDeleteId((current) => (current === id ? null : current));
+    }, DELETE_CONFIRM_WINDOW_MS);
   }
 
   function handleJoinByLink() {
@@ -127,19 +144,19 @@ export default function DashboardPage() {
 
   if (checking) {
     return (
-      <main className="flex min-h-[calc(100vh-56px)] items-center justify-center">
+      <main className="flex min-h-[calc(100dvh-56px)] items-center justify-center">
         <p className="text-sm text-ink-500">Loading…</p>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-12">
+    <main className="mx-auto max-w-4xl px-4 py-8 sm:py-12">
       {profile && (
-        <div className="mb-8 flex items-center gap-3">
-          <AvatarIcon avatarId={profile.avatarId} className="h-12 w-12 rounded-full" />
+        <div className="mb-6 flex items-center gap-3 sm:mb-8">
+          <AvatarIcon avatarId={profile.avatarId} className="h-10 w-10 shrink-0 rounded-full sm:h-12 sm:w-12" />
           <div className="min-w-0 flex-1">
-            <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100">
+            <h1 className="truncate font-[family-name:var(--font-display)] text-lg font-semibold text-ink-100 sm:text-xl">
               Welcome back, @{profile.username}
             </h1>
             {profile.bio && <p className="truncate text-sm text-ink-500">{profile.bio}</p>}
@@ -153,24 +170,24 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:mb-8 sm:grid-cols-4 sm:gap-3">
         <div className="rounded-lg border border-ink-800 p-3">
           <p className="text-xs text-ink-500">Rooms</p>
-          <p className="mt-1 text-lg font-medium text-ink-100">{rooms.length}</p>
+          <p className="mt-1 text-base font-medium text-ink-100 sm:text-lg">{rooms.length}</p>
         </div>
         <div className="rounded-lg border border-ink-800 p-3">
           <p className="text-xs text-ink-500">Languages used</p>
-          <p className="mt-1 text-lg font-medium text-ink-100">{availableLanguages.length}</p>
+          <p className="mt-1 text-base font-medium text-ink-100 sm:text-lg">{availableLanguages.length}</p>
         </div>
         <div className="rounded-lg border border-ink-800 p-3">
           <p className="text-xs text-ink-500">Last active</p>
-          <p className="mt-1 text-lg font-medium text-ink-100">
+          <p className="mt-1 text-base font-medium text-ink-100 sm:text-lg">
             {lastActive ? timeAgo(lastActive) : "—"}
           </p>
         </div>
         <div className="rounded-lg border border-ink-800 p-3">
           <p className="text-xs text-ink-500">Favorite language</p>
-          <p className="mt-1 truncate text-lg font-medium text-ink-100">
+          <p className="mt-1 truncate text-base font-medium text-ink-100 sm:text-lg">
             {profile?.favoriteLanguage || "Not set"}
           </p>
         </div>
@@ -179,7 +196,7 @@ export default function DashboardPage() {
       <div className="mb-8 flex flex-col gap-2 sm:flex-row">
         <button
           onClick={() => setModalOpen(true)}
-          className="flex items-center justify-center gap-1.5 rounded-md bg-ink-100 px-4 py-2 text-sm font-medium text-ink-950 transition-colors hover:bg-white"
+          className="flex items-center justify-center gap-1.5 rounded-md bg-ink-100 px-4 py-2.5 text-sm font-medium text-ink-950 transition-colors hover:bg-white sm:py-2"
         >
           <Plus className="h-4 w-4" />
           New room
@@ -189,7 +206,8 @@ export default function DashboardPage() {
             value={joinInput}
             onChange={(e) => setJoinInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleJoinByLink()}
-            placeholder="Paste a room link or ID to join…"
+            placeholder="Paste a room link or ID…"
+            enterKeyHint="go"
             className="min-w-0 flex-1 rounded-md border border-ink-800 bg-ink-900 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-600 focus:outline-none"
           />
           <button
@@ -236,21 +254,23 @@ export default function DashboardPage() {
       {rooms.length > 0 && (
         <>
           <div className="mb-3 flex gap-2">
-            <div className="relative flex-1">
+            <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-600" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search rooms…"
+                enterKeyHint="search"
                 className="w-full rounded-md border border-ink-800 bg-ink-900 py-2 pl-9 pr-3 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-600 focus:outline-none"
               />
             </div>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortMode)}
-              className="rounded-md border border-ink-800 bg-ink-900 px-2 text-sm text-ink-400 focus:border-ink-600 focus:outline-none"
+              aria-label="Sort rooms"
+              className="shrink-0 rounded-md border border-ink-800 bg-ink-900 px-2 text-sm text-ink-400 focus:border-ink-600 focus:outline-none"
             >
-              <option value="updated">Recently updated</option>
+              <option value="updated">Recent</option>
               <option value="name">Name A–Z</option>
             </select>
           </div>
@@ -295,7 +315,7 @@ export default function DashboardPage() {
           ))}
         </div>
       ) : rooms.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-ink-800 py-16 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-ink-800 px-4 py-12 text-center sm:py-16">
           <p className="text-sm text-ink-400">No rooms yet.</p>
           <button
             onClick={() => setModalOpen(true)}
@@ -308,45 +328,52 @@ export default function DashboardPage() {
         <p className="text-sm text-ink-500">No rooms match your filters.</p>
       ) : (
         <div className="divide-y divide-ink-800 rounded-lg border border-ink-800">
-          {filteredRooms.map((room, i) => (
-            <motion.div
-              key={room._id}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.15, delay: i * 0.03 }}
-              className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate text-sm font-medium text-ink-100">{room.name}</span>
-                  <span className="rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500">
-                    {room._id}
-                  </span>
-                  <span className={`rounded border px-1.5 py-0.5 text-xs ${getLanguageBadgeClasses(room.language)}`}>
-                    {room.language}
-                  </span>
+          {filteredRooms.map((room, i) => {
+            const confirming = pendingDeleteId === room._id;
+            return (
+              <motion.div
+                key={room._id}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.15, delay: i * 0.03 }}
+                className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-medium text-ink-100">{room.name}</span>
+                    <span className="hidden rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500 sm:inline">
+                      {room._id}
+                    </span>
+                    <span className={`rounded border px-1.5 py-0.5 text-xs ${getLanguageBadgeClasses(room.language)}`}>
+                      {room.language}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-ink-500">updated {timeAgo(room.updatedAt)}</p>
                 </div>
-                <p className="mt-0.5 text-xs text-ink-500">updated {timeAgo(room.updatedAt)}</p>
-              </div>
 
-              <div className="flex shrink-0 items-center gap-2">
-                <Link
-                  href={`/room/${room._id}`}
-                  className="rounded-md border border-ink-700 px-3 py-1.5 text-sm text-ink-100 transition-colors hover:border-ink-500"
-                >
-                  Join
-                </Link>
-                {room.ownerId === userId && (
-                  <button
-                    onClick={() => handleDeleteRoom(room._id, room.name)}
-                    className="rounded-md px-2 py-1.5 text-sm text-ink-500 transition-colors hover:text-red-400"
+                <div className="flex shrink-0 items-center gap-2">
+                  <Link
+                    href={`/room/${room._id}`}
+                    className="rounded-md border border-ink-700 px-3 py-1.5 text-sm text-ink-100 transition-colors hover:border-ink-500"
                   >
-                    Delete
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          ))}
+                    Join
+                  </Link>
+                  {room.ownerId === userId && (
+                    <button
+                      onClick={() => requestDelete(room._id, room.name)}
+                      className={`rounded-md px-2 py-1.5 text-sm transition-colors ${
+                        confirming
+                          ? "bg-red-500/10 text-red-400"
+                          : "text-ink-500 hover:text-red-400"
+                      }`}
+                    >
+                      {confirming ? "Confirm delete" : "Delete"}
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
 

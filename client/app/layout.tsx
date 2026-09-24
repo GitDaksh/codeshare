@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
@@ -16,6 +16,12 @@ export const metadata: Metadata = {
     template: "%s — CodeShare",
   },
   description: "Real-time collaborative coding rooms",
+};
+
+// Makes the phone browser's toolbar match the app's black theme.
+export const viewport: Viewport = {
+  themeColor: "#000000",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

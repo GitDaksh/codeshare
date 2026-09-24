@@ -37,17 +37,18 @@ export function RoomSettingsModal({ open, onClose, currentName, onSave }: RoomSe
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:px-4"
           onClick={onClose}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 8 }}
-            transition={{ duration: 0.15 }}
-            className="w-full max-w-sm rounded-xl border border-ink-700 bg-ink-900 p-5 shadow-2xl"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            transition={{ duration: 0.18 }}
+            className="w-full rounded-t-2xl border border-ink-700 bg-ink-900 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-2xl sm:max-w-sm sm:rounded-xl sm:pb-5"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-ink-700 sm:hidden" />
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-ink-100">Room settings</h2>
               <button
@@ -65,20 +66,21 @@ export function RoomSettingsModal({ open, onClose, currentName, onSave }: RoomSe
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSave()}
+              enterKeyHint="done"
               className="w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-ink-100 focus:border-ink-500 focus:outline-none"
             />
 
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={onClose}
-                className="rounded-md px-3 py-1.5 text-sm text-ink-400 transition-colors hover:text-ink-100"
+                className="rounded-md px-3 py-2 text-sm text-ink-400 transition-colors hover:text-ink-100 sm:py-1.5"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={!name.trim() || saving}
-                className="rounded-md bg-ink-100 px-4 py-1.5 text-sm font-medium text-ink-950 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-md bg-ink-100 px-4 py-2 text-sm font-medium text-ink-950 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 sm:py-1.5"
               >
                 {saving ? "Saving…" : "Save"}
               </button>

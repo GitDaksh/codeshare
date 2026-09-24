@@ -29,10 +29,16 @@ import {
   LayoutDashboard,
   Terminal,
   Loader2,
+  Code2,
+  MessageSquare,
+  Users,
+  Ellipsis,
+  type LucideIcon,
 } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { useSocket, type ReactionUpdate } from "@/lib/socket";
 import { useOnboardingGate } from "@/lib/useOnboardingGate";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import { useToast } from "@/components/ToastProvider";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { Skeleton } from "@/components/Skeleton";
@@ -58,25 +64,32 @@ const REMOTE_RUN_TIMEOUT_MS = 30000;
 const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 24;
 
+type MobilePanel = "code" | "chat" | "online";
+
+const MOBILE_TABS: { id: MobilePanel; label: string; icon: LucideIcon }[] = [
+  { id: "code", label: "Code", icon: Code2 },
+  { id: "chat", label: "Chat", icon: MessageSquare },
+  { id: "online", label: "People", icon: Users },
+];
+
 function languageLabel(value: string): string {
   return LANGUAGES.find((l) => l.value === value)?.label ?? value;
 }
 
 function RoomLoadingSkeleton() {
   return (
-    <main className="flex h-[calc(100vh-56px)] flex-col">
-      <div className="flex items-center justify-between border-b border-ink-800 px-4 py-2.5">
+    <main className="flex h-dvh flex-col md:h-[calc(100dvh-56px)]">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-ink-800 px-3 py-2 sm:px-4 sm:py-2.5">
         <div className="flex items-center gap-2">
           <Skeleton className="h-4 w-4 rounded" />
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-4 w-20 rounded" />
+          <Skeleton className="h-4 w-28 sm:w-32" />
         </div>
         <div className="flex items-center gap-2">
-          <Skeleton className="h-7 w-24 rounded-lg" />
           <Skeleton className="h-7 w-20 rounded-lg" />
+          <Skeleton className="h-7 w-16 rounded-lg" />
         </div>
       </div>
-      <div className="flex flex-1">
+      <div className="flex min-h-0 flex-1">
         <Skeleton className="flex-1 rounded-none" />
         <div className="hidden w-72 shrink-0 border-l border-ink-800 bg-ink-900/40 p-3 md:block">
           <Skeleton className="mb-3 h-9 w-full rounded-lg" />
@@ -93,6 +106,11 @@ function RoomLoadingSkeleton() {
           </div>
         </div>
       </div>
+      <div className="flex h-14 shrink-0 items-center justify-around border-t border-ink-800 md:hidden">
+        {[...Array(3)].map((_, i) => (
+          <Skeleton key={i} className="h-5 w-5 rounded" />
+        ))}
+      </div>
     </main>
   );
 }
@@ -108,6 +126,7 @@ export default function RoomPage({
   const router = useRouter();
   const { toast } = useToast();
   const { checking } = useOnboardingGate();
+  const isDesktop = useMediaQuery("(min-width: 768px)");
 
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,24 +148,33 @@ export default function RoomPage({
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [minimapEnabled, setMinimapEnabled] = useState(false);
   const [fontSize, setFontSize] = useState(14);
+  const [zenMode, setZenMode] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>("code");
+  const [sidebarWidth, setSidebarWidth] = useState(288);
+  const isDraggingRef = useRef(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [activeTab, setActiveTab] = useState<"chat" | "online">("chat");
-  const activeTabRef = useRef(activeTab);
   const [unreadCount, setUnreadCount] = useState(0);
   const [typingUsers, setTypingUsers] = useState<TypingEvent[]>([]);
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursorEvent[]>([]);
 
+  // Is the chat actually on screen right now? On desktop that means the Chat
+  // tab is selected and the sidebar isn't hidden by focus mode; on phones it
+  // means the Chat panel is the one showing. Drives the unread counter.
+  const chatVisible = activeTab === "chat" && (isDesktop ? !zenMode : mobilePanel === "chat");
+  const chatVisibleRef = useRef(chatVisible);
+
   useEffect(() => {
-    activeTabRef.current = activeTab;
-  }, [activeTab]);
+    chatVisibleRef.current = chatVisible;
+  }, [chatVisible]);
 
   const handleIncomingMessage = useCallback((message: ChatMessage) => {
     setMessages((prev) => [...prev, message]);
-    if (activeTabRef.current !== "chat") {
+    if (!chatVisibleRef.current) {
       setUnreadCount((c) => c + 1);
     }
   }, []);
@@ -204,8 +232,6 @@ export default function RoomPage({
     setRunState({ status: "running", result: null, runner, language: event.language });
     setRunPanelOpen(true);
 
-    // If the runner disconnects mid-run, their result never arrives.
-    // Don't leave everyone else staring at "running" forever.
     remoteRunTimeoutRef.current = setTimeout(() => {
       remoteRunTimeoutRef.current = null;
       setRunState((prev) =>
@@ -261,7 +287,6 @@ export default function RoomPage({
     onRunResult: handleRemoteRunResult,
   });
 
-  // Remote cursors enriched with each person's real avatar from presence.
   const editorCursors = useMemo<RemoteCursor[]>(
     () =>
       remoteCursors
@@ -272,10 +297,6 @@ export default function RoomPage({
         })),
     [remoteCursors, onlineUsers, currentUserId]
   );
-
-  const [zenMode, setZenMode] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(288);
-  const isDraggingRef = useRef(false);
 
   useEffect(() => {
     api
@@ -369,6 +390,18 @@ export default function RoomPage({
     if (tab === "chat") setUnreadCount(0);
   }
 
+  function handleMobilePanel(panel: MobilePanel) {
+    setMobilePanel(panel);
+    if (panel !== "code") setActiveTab(panel);
+    if (panel === "chat") setUnreadCount(0);
+  }
+
+  function handleToggleZen() {
+    const next = !zenMode;
+    setZenMode(next);
+    if (!next && activeTab === "chat") setUnreadCount(0);
+  }
+
   async function handleFormat() {
     const code = codeEditorRef.current?.getValue() ?? "";
     const result = await formatCode(code, language);
@@ -378,7 +411,6 @@ export default function RoomPage({
       return;
     }
     if (result.formatted && result.formatted !== code) {
-      // setValue triggers the editor's normal onChange, which syncs and saves.
       codeEditorRef.current?.setValue(result.formatted);
       toast("Code formatted");
     }
@@ -404,8 +436,6 @@ export default function RoomPage({
     setRoom((prev) => (prev ? { ...prev, language: next } : prev));
     sendLanguageChange(next);
 
-    // If the editor still holds only the untouched starter comment, swap it
-    // for the new language's comment style (e.g. // -> #).
     const current = codeEditorRef.current?.getValue() ?? "";
     const nextStarter = getStarterCode(next);
     if (current === getStarterCode(previous) && current !== nextStarter) {
@@ -414,6 +444,9 @@ export default function RoomPage({
   }
 
   async function handleRun() {
+    // On phones, running from the Chat/People tab jumps back to the code
+    // view so the output panel is actually visible.
+    setMobilePanel("code");
     setRunPanelOpen(true);
     if (!isRunnable(language) || isSelfRunningRef.current) return;
 
@@ -442,6 +475,26 @@ export default function RoomPage({
 
   const isOwner = room?.ownerId === currentUserId;
   const isSelfRunning = runState.status === "running" && !!runState.runner?.isSelf;
+  // Focus mode only exists on desktop; on phones the tab bar already gives
+  // the editor the whole screen.
+  const showSidebar = !zenMode || !isDesktop;
+
+  const desktopOnlyCommands: Command[] = isDesktop
+    ? [
+        {
+          id: "zen",
+          label: zenMode ? "Show sidebar" : "Enter focus mode",
+          icon: zenMode ? Minimize2 : Maximize2,
+          action: handleToggleZen,
+        },
+        {
+          id: "minimap",
+          label: minimapEnabled ? "Hide minimap" : "Show minimap",
+          icon: MapIcon,
+          action: () => setMinimapEnabled((m) => !m),
+        },
+      ]
+    : [];
 
   const commands: Command[] = [
     {
@@ -454,7 +507,10 @@ export default function RoomPage({
       id: "output",
       label: runPanelOpen ? "Hide output panel" : "Show output panel",
       icon: Terminal,
-      action: () => setRunPanelOpen((o) => !o),
+      action: () => {
+        setMobilePanel("code");
+        setRunPanelOpen((o) => !o);
+      },
     },
     {
       id: "format",
@@ -469,18 +525,7 @@ export default function RoomPage({
       icon: LinkIcon,
       action: handleCopyLink,
     },
-    {
-      id: "zen",
-      label: zenMode ? "Show sidebar" : "Enter focus mode",
-      icon: zenMode ? Minimize2 : Maximize2,
-      action: () => setZenMode((z) => !z),
-    },
-    {
-      id: "minimap",
-      label: minimapEnabled ? "Hide minimap" : "Show minimap",
-      icon: MapIcon,
-      action: () => setMinimapEnabled((m) => !m),
-    },
+    ...desktopOnlyCommands,
     {
       id: "font-increase",
       label: "Increase font size",
@@ -514,7 +559,7 @@ export default function RoomPage({
 
   if (notFound || !room) {
     return (
-      <main className="flex h-[calc(100vh-56px)] flex-col items-center justify-center gap-2">
+      <main className="flex h-dvh flex-col items-center justify-center gap-2 px-4 text-center md:h-[calc(100dvh-56px)]">
         <p className="text-sm text-ink-300">This room doesn't exist.</p>
         <Link
           href="/dashboard"
@@ -534,13 +579,14 @@ export default function RoomPage({
         : "bg-red-500";
 
   return (
-    <main className="flex flex-col md:h-[calc(100vh-56px)]">
-      <div className="flex flex-col gap-2 border-b border-ink-800 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
+    <main className="flex h-dvh flex-col md:h-[calc(100dvh-56px)]">
+      {/* Header: a single row on every screen size */}
+      <header className="flex shrink-0 items-center gap-2 border-b border-ink-800 px-3 py-2 sm:px-4 sm:py-2.5">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <Link
             href="/dashboard"
             aria-label="Back to dashboard"
-            className="shrink-0 text-ink-500 transition-colors hover:text-ink-100"
+            className="-ml-1 shrink-0 rounded-md p-1 text-ink-500 transition-colors hover:text-ink-100"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
@@ -552,7 +598,7 @@ export default function RoomPage({
               onClick={() => setSettingsOpen(true)}
               aria-label="Room settings"
               title="Room settings"
-              className="shrink-0 text-ink-600 transition-colors hover:text-ink-100"
+              className="hidden shrink-0 text-ink-600 transition-colors hover:text-ink-100 sm:block"
             >
               <Settings className="h-3.5 w-3.5" />
             </button>
@@ -560,21 +606,21 @@ export default function RoomPage({
           <span className="hidden shrink-0 rounded bg-ink-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-xs text-ink-500 lg:inline">
             {room._id}
           </span>
-          <span className="hidden shrink-0 items-center gap-1.5 text-xs text-ink-500 sm:flex">
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-ink-500" title={status}>
             <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
-            {status}
+            <span className="hidden sm:inline">{status}</span>
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="hidden sm:block">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="hidden md:block">
             <PresenceStack users={onlineUsers} currentUserId={currentUserId ?? null} />
           </div>
           <button
             onClick={() => setCommandPaletteOpen(true)}
             aria-label="Open command palette"
             title="Command palette (⌘K)"
-            className="hidden items-center gap-1 rounded-md border border-ink-700 px-2 py-1 text-xs text-ink-500 transition-colors hover:border-ink-500 hover:text-ink-100 sm:flex"
+            className="hidden items-center gap-1 rounded-md border border-ink-700 px-2 py-1 text-xs text-ink-500 transition-colors hover:border-ink-500 hover:text-ink-100 md:flex"
           >
             <CommandIcon className="h-3 w-3" />K
           </button>
@@ -583,7 +629,7 @@ export default function RoomPage({
             onClick={handleRun}
             disabled={isSelfRunning}
             title={isRunnable(language) ? "Run (⌘↵)" : `Running ${languageLabel(language)} isn't supported yet`}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 ${
               isRunnable(language)
                 ? "bg-ink-100 text-ink-950 hover:bg-white"
                 : "border border-ink-700 text-ink-500 hover:border-ink-500"
@@ -592,7 +638,7 @@ export default function RoomPage({
             {isSelfRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
             Run
           </button>
-          <div className="flex items-center gap-0.5 rounded-lg bg-ink-900/60 p-1">
+          <div className="hidden items-center gap-0.5 rounded-lg bg-ink-900/60 p-1 sm:flex">
             <button
               onClick={() => setRunPanelOpen((o) => !o)}
               aria-label={runPanelOpen ? "Hide output panel" : "Show output panel"}
@@ -621,7 +667,7 @@ export default function RoomPage({
               <LinkIcon className="h-4 w-4" />
             </button>
             <button
-              onClick={() => setZenMode((z) => !z)}
+              onClick={handleToggleZen}
               aria-label={zenMode ? "Show sidebar" : "Enter focus mode"}
               title={zenMode ? "Show sidebar" : "Focus mode"}
               className="hidden rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 md:block"
@@ -629,11 +675,22 @@ export default function RoomPage({
               {zenMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
           </div>
+          {/* Phones: every secondary action lives in the command palette */}
+          <button
+            onClick={() => setCommandPaletteOpen(true)}
+            aria-label="More actions"
+            className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 sm:hidden"
+          >
+            <Ellipsis className="h-5 w-5" />
+          </button>
         </div>
-      </div>
+      </header>
 
-      <div className="flex flex-1 flex-col md:min-h-0 md:flex-row">
-        <div className="flex min-h-[400px] min-w-0 flex-1 flex-col md:h-full md:min-h-0">
+      {/* Body: editor + sidebar side by side on desktop; one panel at a time on phones */}
+      <div className="flex min-h-0 flex-1">
+        <div
+          className={`${mobilePanel === "code" ? "flex" : "hidden"} min-w-0 flex-1 flex-col md:flex`}
+        >
           <div className="min-h-0 flex-1">
             <CodeEditor
               handleRef={codeEditorRef}
@@ -659,7 +716,7 @@ export default function RoomPage({
           />
         </div>
 
-        {!zenMode && (
+        {showSidebar && (
           <>
             <div
               onMouseDown={handleDragStart}
@@ -667,9 +724,9 @@ export default function RoomPage({
             />
             <aside
               style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
-              className="flex w-full flex-col border-t border-ink-800 bg-ink-900/40 md:h-full md:w-[var(--sidebar-width)] md:shrink-0 md:border-l md:border-t-0"
+              className={`${mobilePanel === "code" ? "hidden" : "flex"} w-full min-w-0 flex-col bg-ink-900/40 md:flex md:w-[var(--sidebar-width)] md:shrink-0 md:border-l md:border-ink-800`}
             >
-              <div className="relative flex gap-1 p-2">
+              <div className="relative hidden gap-1 p-2 md:flex">
                 {(["chat", "online"] as const).map((tab) => (
                   <button
                     key={tab}
@@ -700,23 +757,30 @@ export default function RoomPage({
               </div>
 
               {activeTab === "online" ? (
-                <ul className="max-h-96 flex-1 space-y-1 overflow-y-auto p-2 md:max-h-none">
-                  {onlineUsers.map((u) => {
-                    const label = u.userId === currentUserId ? "You" : u.name;
-                    return (
-                      <li
-                        key={u.socketId}
-                        className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-ink-100 transition-colors hover:bg-ink-900/60"
-                      >
-                        <AvatarIcon avatarId={u.avatarId} className="h-6 w-6 shrink-0 rounded-full" />
-                        {label}
-                        {u.userId === room.ownerId && (
-                          <span className="ml-auto text-[9px] uppercase tracking-wide text-ink-600">Owner</span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <p className="px-4 pb-1 pt-3 text-xs font-medium uppercase tracking-wide text-ink-500 md:hidden">
+                    Online — {onlineUsers.length}
+                  </p>
+                  <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
+                    {onlineUsers.map((u) => {
+                      const label = u.userId === currentUserId ? "You" : u.name;
+                      return (
+                        <li
+                          key={u.socketId}
+                          className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-ink-100 transition-colors hover:bg-ink-900/60 md:gap-2 md:px-1.5 md:py-1"
+                        >
+                          <AvatarIcon avatarId={u.avatarId} className="h-8 w-8 shrink-0 rounded-full md:h-6 md:w-6" />
+                          <span className="truncate">{label}</span>
+                          {u.userId === room.ownerId && (
+                            <span className="ml-auto shrink-0 text-[9px] uppercase tracking-wide text-ink-600">
+                              Owner
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               ) : (
                 <ChatPanel
                   messages={messages}
@@ -733,6 +797,41 @@ export default function RoomPage({
           </>
         )}
       </div>
+
+      {/* Phones: bottom tab bar */}
+      <nav className="flex shrink-0 border-t border-ink-800 bg-ink-950 pb-[env(safe-area-inset-bottom)] md:hidden">
+        {MOBILE_TABS.map(({ id: tabId, label, icon: Icon }) => {
+          const active = mobilePanel === tabId;
+          return (
+            <button
+              key={tabId}
+              onClick={() => handleMobilePanel(tabId)}
+              aria-label={label}
+              aria-current={active ? "page" : undefined}
+              className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
+                active ? "text-ink-100" : "text-ink-500"
+              }`}
+            >
+              {active && (
+                <motion.span
+                  layoutId="mobile-tab-indicator"
+                  className="absolute inset-x-8 top-0 h-0.5 rounded-full bg-ink-100"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.3 }}
+                />
+              )}
+              <span className="relative">
+                <Icon className="h-5 w-5" />
+                {tabId === "chat" && unreadCount > 0 && (
+                  <span className="absolute -right-2.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </span>
+              {tabId === "online" ? `${label} · ${onlineUsers.length}` : label}
+            </button>
+          );
+        })}
+      </nav>
 
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} commands={commands} />
       <RoomSettingsModal

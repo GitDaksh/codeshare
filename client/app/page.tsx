@@ -46,25 +46,25 @@ export default function Home() {
               "radial-gradient(ellipse 60% 50% at 50% 0%, black 40%, transparent 100%)",
           }}
         />
-        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-24 pt-20 lg:grid-cols-[1fr_1.1fr] lg:pt-28">
+        <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-12 sm:gap-12 sm:pb-24 sm:pt-20 lg:grid-cols-[1fr_1.1fr] lg:pt-28">
           <div>
-            <h1 className="font-[family-name:var(--font-display)] text-5xl font-semibold leading-[1.05] tracking-tight text-ink-100 sm:text-6xl lg:text-7xl">
+            <h1 className="font-[family-name:var(--font-display)] text-4xl font-semibold leading-[1.05] tracking-tight text-ink-100 sm:text-6xl lg:text-7xl">
               Code together, in real time.
             </h1>
-            <p className="mt-6 max-w-md text-ink-400">
+            <p className="mt-5 max-w-md text-ink-400 sm:mt-6">
               Create a room, share the link, and edit code with your team live —
               no setup, no friction.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/sign-up"
-                className="rounded-md bg-ink-100 px-5 py-2.5 text-center text-sm font-medium text-ink-950 transition-colors hover:bg-white"
+                className="rounded-md bg-ink-100 px-5 py-3 text-center text-sm font-medium text-ink-950 transition-colors hover:bg-white sm:py-2.5"
               >
                 Get started
               </Link>
               <Link
                 href="/sign-in"
-                className="rounded-md border border-ink-700 px-5 py-2.5 text-center text-sm font-medium text-ink-100 transition-colors hover:border-ink-500"
+                className="rounded-md border border-ink-700 px-5 py-3 text-center text-sm font-medium text-ink-100 transition-colors hover:border-ink-500 sm:py-2.5"
               >
                 Sign in
               </Link>
@@ -75,12 +75,12 @@ export default function Home() {
       </motion.section>
 
       {/* How it works */}
-      <section className="border-t border-ink-800 px-4 py-20">
+      <section className="border-t border-ink-800 px-4 py-14 sm:py-20">
         <div className="mx-auto max-w-5xl">
-          <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-ink-100">
+          <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100 sm:text-2xl">
             How it works
           </h2>
-          <div className="mt-10 grid gap-8 sm:grid-cols-3">
+          <div className="mt-8 grid gap-6 sm:mt-10 sm:grid-cols-3 sm:gap-8">
             {STEPS.map((s) => (
               <div key={s.step}>
                 <span className="font-[family-name:var(--font-mono)] text-sm text-ink-600">
@@ -95,14 +95,14 @@ export default function Home() {
       </section>
 
       {/* Bento feature section */}
-      <section className="border-t border-ink-800 px-4 py-20">
+      <section className="border-t border-ink-800 px-4 py-14 sm:py-20">
         <div className="mx-auto max-w-5xl">
-          <h2 className="max-w-md font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-ink-100">
+          <h2 className="max-w-md font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-ink-100 sm:text-2xl">
             Everything happens together
           </h2>
 
-          <div className="mt-10 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-8 transition-colors hover:border-ink-500">
+          <div className="mt-8 grid gap-4 sm:mt-10 lg:grid-cols-2">
+            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-6 transition-colors hover:border-ink-500 sm:p-8">
               <div className="flex gap-1.5">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-ink-100" />
                 <span
@@ -119,7 +119,7 @@ export default function Home() {
                 Every keystroke syncs instantly. No refresh, no merge conflicts, no waiting.
               </p>
             </div>
-            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-8 transition-colors hover:border-ink-500">
+            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-6 transition-colors hover:border-ink-500 sm:p-8">
               <div className="flex -space-x-2">
                 <span className="h-7 w-7 rounded-full border-2 border-ink-900 bg-ink-100" />
                 <span className="h-7 w-7 rounded-full border-2 border-ink-900 bg-ink-400" />
@@ -136,7 +136,7 @@ export default function Home() {
             {SMALL_FEATURES.map((f) => (
               <div
                 key={f.title}
-                className="rounded-2xl border border-ink-700 p-6 transition-colors hover:border-ink-500"
+                className="rounded-2xl border border-ink-700 p-5 transition-colors hover:border-ink-500 sm:p-6"
               >
                 <h3 className="text-sm font-medium text-ink-100">{f.title}</h3>
                 <p className="mt-1.5 text-sm text-ink-400">{f.description}</p>
@@ -147,16 +147,16 @@ export default function Home() {
       </section>
 
       {/* Final CTA */}
-      <section className="border-t border-ink-800 px-4 py-24 text-center">
-        <h2 className="font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-ink-100">
+      <section className="border-t border-ink-800 px-4 py-16 text-center sm:py-24">
+        <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-ink-100 sm:text-3xl">
           Ready to start a room?
         </h2>
-        <p className="mt-3 text-sm text-ink-400">
+        <p className="mx-auto mt-3 max-w-sm text-sm text-ink-400">
           Every room is authenticated, and access is verified on every request.
         </p>
         <Link
           href="/sign-up"
-          className="mt-8 inline-block rounded-md bg-ink-100 px-6 py-2.5 text-sm font-medium text-ink-950 transition-colors hover:bg-white"
+          className="mt-8 inline-block w-full rounded-md bg-ink-100 px-6 py-3 text-sm font-medium text-ink-950 transition-colors hover:bg-white sm:w-auto sm:py-2.5"
         >
           Get started free
         </Link>
