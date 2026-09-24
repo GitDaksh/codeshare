@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
+import { Check, Loader2 } from "lucide-react";
 import { AvatarIcon } from "@/components/AvatarIcon";
+import { EditorThemePicker } from "@/components/EditorThemePicker";
 import { LANGUAGES } from "@/lib/languages";
 import { getCursorShadeClass } from "@/lib/colors";
 import { installSafariClipboardShim } from "@/lib/safariClipboardShim";
 import { useMediaQuery } from "@/lib/useMediaQuery";
+import { defineEditorThemes } from "@/lib/editorTheme";
 
 export type RemoteCursor = {
   userId: string;
@@ -42,23 +45,21 @@ type CodeEditorProps = {
   fontSize: number;
   wordWrap: boolean;
   onToggleWordWrap?: () => void;
+  themeId: string;
+  onThemeChange?: (id: string) => void;
   handleRef?: MutableRefObject<CodeEditorHandle | null>;
 };
 
 const NAME_FLASH_MS = 1600;
+const LINE_HEIGHT_RATIO = 1.6;
+
+function lineHeightFor(fontSize: number): number {
+  return Math.round(fontSize * LINE_HEIGHT_RATIO);
+}
 
 function handleEditorWillMount(monaco: Monaco) {
   installSafariClipboardShim();
-
-  monaco.editor.defineTheme("codeshare-dark", {
-    base: "vs-dark",
-    inherit: true,
-    rules: [],
-    colors: {
-      "editor.background": "#0D0D0D",
-      "editor.lineHighlightBackground": "#1A1A1A",
-    },
-  });
+  defineEditorThemes(monaco);
 }
 
 function computeMinimalEdit(oldText: string, newText: string) {
@@ -200,6 +201,8 @@ export function CodeEditor({
   fontSize,
   wordWrap,
   onToggleWordWrap,
+  themeId,
+  onThemeChange,
   handleRef,
 }: CodeEditorProps) {
   const [position, setPosition] = useState({ line: 1, column: 1 });
@@ -209,8 +212,6 @@ export function CodeEditor({
   const lastEmitRef = useRef(0);
   const isApplyingRemoteRef = useRef(false);
   const onRunShortcutRef = useRef(onRunShortcut);
-  // Phone-sized screens: narrower line-number gutter and no code folding,
-  // to leave as much width as possible for the code itself.
   const isNarrow = useMediaQuery("(max-width: 639px)");
 
   useEffect(() => {
@@ -336,7 +337,7 @@ export function CodeEditor({
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
 
-    const cursorLineHeight = Math.round(fontSize * 1.5) - 2;
+    const cursorLineHeight = lineHeightFor(fontSize) - 2;
     const activeIds = new Set(remoteCursors.map((c) => c.userId));
 
     for (const [userId, widget] of widgetsRef.current) {
@@ -375,12 +376,12 @@ export function CodeEditor({
   const languageLabel = LANGUAGES.find((l) => l.value === language)?.label ?? language;
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-ink-900">
       <div className="min-h-0 flex-1">
         <Editor
           height="100%"
           language={language}
-          theme="codeshare-dark"
+          theme={themeId}
           defaultValue={initialValue}
           onChange={(val) => {
             if (isApplyingRemoteRef.current) return;
@@ -392,44 +393,65 @@ export function CodeEditor({
           options={{
             fontFamily: "var(--font-mono)",
             fontSize,
-            lineHeight: fontSize * 1.5,
+            lineHeight: lineHeightFor(fontSize),
+            fontLigatures: true,
             minimap: { enabled: minimapEnabled },
             scrollBeyondLastLine: false,
-            padding: { top: 20 },
+            padding: { top: 20, bottom: 20 },
             automaticLayout: true,
-            // Wrap long lines at the edge of the editor instead of scrolling
-            // sideways. Wrapped lines keep the original line's indentation.
             wordWrap: wordWrap ? "on" : "off",
             wrappingIndent: "same",
-            lineNumbersMinChars: isNarrow ? 3 : 5,
+            lineNumbersMinChars: isNarrow ? 3 : 4,
             folding: !isNarrow,
+            smoothScrolling: true,
+            cursorSmoothCaretAnimation: "on",
+            cursorBlinking: "smooth",
+            cursorWidth: 2,
+            renderLineHighlight: "line",
+            roundedSelection: true,
+            bracketPairColorization: { enabled: false },
+            guides: { indentation: true, highlightActiveIndentation: true, bracketPairs: false },
+            scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, useShadows: false },
+            overviewRulerBorder: false,
+            overviewRulerLanes: 0,
+            hideCursorInOverviewRuler: true,
+            glyphMargin: false,
+            renderWhitespace: "none",
+            stickyScroll: { enabled: false },
+            fixedOverflowWidgets: true,
           }}
         />
       </div>
-      <div className="flex items-center justify-between gap-3 border-t border-ink-800 bg-ink-900 px-3 py-1 text-xs text-ink-500">
-        <span className="truncate">{languageLabel}</span>
+      <div className="flex h-7 shrink-0 items-center justify-between gap-3 border-t border-ink-800/60 bg-ink-950 px-3 text-[11px] text-ink-500">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-ink-600" />
+          <span className="truncate">{languageLabel}</span>
+        </span>
         <div className="flex shrink-0 items-center gap-3">
-          <span className="hidden sm:inline">⌘↵ to run</span>
+          <span className="hidden items-center gap-1 lg:flex">
+            <kbd className="font-[family-name:var(--font-mono)] text-ink-400">⌘↵</kbd> run
+          </span>
+          {onThemeChange && <EditorThemePicker value={themeId} onChange={onThemeChange} />}
           {onToggleWordWrap && (
             <button
               type="button"
               onClick={onToggleWordWrap}
               title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
-              className="hidden transition-colors hover:text-ink-100 sm:inline"
+              className="hidden rounded px-1 transition-colors hover:bg-ink-900 hover:text-ink-100 sm:inline"
             >
-              Wrap: {wordWrap ? "on" : "off"}
+              Wrap {wordWrap ? "on" : "off"}
             </button>
           )}
-          <span>
+          <span className="tabular-nums">
             Ln {position.line}, Col {position.column}
           </span>
-          <span className="flex items-center gap-1.5">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                saveStatus === "saving" ? "animate-pulse bg-ink-500" : "bg-ink-100"
-              }`}
-            />
-            {saveStatus === "saving" ? "Saving…" : "Saved"}
+          <span className="flex items-center gap-1" title={saveStatus === "saving" ? "Saving…" : "All changes saved"}>
+            {saveStatus === "saving" ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Check className="h-3 w-3 text-ink-300" />
+            )}
+            <span className="hidden sm:inline">{saveStatus === "saving" ? "Saving" : "Saved"}</span>
           </span>
         </div>
       </div>
