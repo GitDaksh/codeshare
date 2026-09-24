@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, ArrowUp, MessageSquare } from "lucide-react";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import type { ChatMessage, Reaction } from "@/types/chat";
@@ -46,7 +46,7 @@ function renderMessageText(text: string) {
       return (
         <code
           key={i}
-          className="rounded bg-ink-800 px-1 py-0.5 font-[family-name:var(--font-mono)] text-[0.85em] text-ink-100"
+          className="rounded border border-ink-700 bg-ink-800 px-1 py-0.5 font-[family-name:var(--font-mono)] text-[0.85em] text-ink-100"
         >
           {part.slice(1, -1)}
         </code>
@@ -72,7 +72,7 @@ function TypingDots() {
       {[0, 1, 2].map((i) => (
         <motion.span
           key={i}
-          className="h-1 w-1 rounded-full bg-ink-500"
+          className="h-1 w-1 rounded-full bg-ink-400"
           animate={{ y: [0, -3, 0] }}
           transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
         />
@@ -161,6 +161,7 @@ export function ChatPanel({
   }
 
   const reversedMessages = [...messages].reverse();
+  const canSend = draft.trim().length > 0;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -170,7 +171,13 @@ export function ChatPanel({
         className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto px-3 py-2"
       >
         {messages.length === 0 ? (
-          <p className="text-xs text-ink-600">No messages yet — say hi.</p>
+          <div className="m-auto flex flex-col items-center gap-2 px-4 py-10 text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-ink-700 bg-ink-800">
+              <MessageSquare className="h-4 w-4 text-ink-300" />
+            </div>
+            <p className="text-sm font-medium text-ink-100">No messages yet</p>
+            <p className="max-w-[14rem] text-xs text-ink-400">Say hi. Everyone in the room will see it instantly.</p>
+          </div>
         ) : (
           reversedMessages.map((msg, revIndex) => {
             const older = reversedMessages[revIndex + 1];
@@ -189,7 +196,7 @@ export function ChatPanel({
             return (
               <div key={msg._id}>
                 {isNewDay && (
-                  <div className="my-3 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-ink-600">
+                  <div className="my-3 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-ink-400">
                     <span className="h-px flex-1 bg-ink-800" />
                     {formatDateDivider(msg.createdAt)}
                     <span className="h-px flex-1 bg-ink-800" />
@@ -202,12 +209,12 @@ export function ChatPanel({
                   onClick={() => {
                     if (isTouch) setActiveMessageId((prev) => (prev === msg._id ? null : msg._id));
                   }}
-                  className={`group relative flex gap-2.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-ink-900/60 ${
-                    isActive ? "bg-ink-900/60" : ""
+                  className={`group relative flex gap-2.5 rounded-lg px-1.5 py-0.5 transition-colors hover:bg-ink-800/50 ${
+                    isActive ? "bg-ink-800/50" : ""
                   } ${isGrouped ? "" : "mt-2.5"}`}
                 >
                   <div
-                    className={`absolute -top-3 right-2 z-10 flex gap-0.5 rounded-md border border-ink-700 bg-ink-900 p-0.5 shadow-lg transition-opacity ${
+                    className={`absolute -top-3 right-2 z-10 flex gap-0.5 rounded-lg border border-ink-700 bg-ink-800 p-0.5 shadow-lg shadow-black/40 transition-opacity ${
                       isActive
                         ? "pointer-events-auto opacity-100"
                         : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100"
@@ -217,7 +224,7 @@ export function ChatPanel({
                       <button
                         key={emoji}
                         onClick={(e) => handleReactClick(e, msg._id, emoji)}
-                        className={`rounded transition-transform hover:scale-125 hover:bg-ink-800 ${
+                        className={`rounded-md transition-transform hover:scale-125 hover:bg-ink-700 ${
                           isTouch ? "px-1.5 py-1 text-base" : "px-1 py-0.5 text-sm"
                         }`}
                       >
@@ -229,7 +236,7 @@ export function ChatPanel({
                   {isGrouped ? (
                     <div className="relative w-7 shrink-0">
                       <span
-                        className={`absolute left-1/2 top-0 -translate-x-1/2 whitespace-nowrap text-[9px] leading-5 text-ink-600 transition-opacity ${
+                        className={`absolute left-1/2 top-0 -translate-x-1/2 whitespace-nowrap text-[9px] leading-5 text-ink-500 transition-opacity ${
                           isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                         }`}
                       >
@@ -243,10 +250,10 @@ export function ChatPanel({
                   <div className="min-w-0 flex-1">
                     {!isGrouped && (
                       <div className="flex items-baseline gap-2">
-                        <span className="truncate text-sm font-medium text-ink-100">
+                        <span className="truncate text-sm font-semibold text-ink-100">
                           {msg.senderId === currentUserId ? "You" : msg.senderName}
                         </span>
-                        <span className="shrink-0 text-[10px] text-ink-600">{formatTime(msg.createdAt)}</span>
+                        <span className="shrink-0 text-[10px] text-ink-500">{formatTime(msg.createdAt)}</span>
                       </div>
                     )}
                     <p className="break-words text-sm leading-5 text-ink-300">{renderMessageText(msg.text)}</p>
@@ -260,12 +267,12 @@ export function ChatPanel({
                               onClick={(e) => handleReactClick(e, msg._id, emoji)}
                               className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition-colors ${
                                 reacted
-                                  ? "border-ink-100 bg-ink-100/10 text-ink-100"
-                                  : "border-ink-700 text-ink-400 hover:border-ink-500"
+                                  ? "border-ink-300 bg-ink-100/10 text-ink-100"
+                                  : "border-ink-700 bg-ink-800/60 text-ink-300 hover:border-ink-500"
                               }`}
                             >
                               <span>{emoji}</span>
-                              <span>{userIds.length}</span>
+                              <span className="tabular-nums">{userIds.length}</span>
                             </button>
                           );
                         })}
@@ -286,7 +293,7 @@ export function ChatPanel({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             onClick={scrollToBottom}
-            className="absolute bottom-24 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-ink-100 shadow-lg"
+            className="absolute bottom-32 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-ink-600 bg-ink-800 px-3 py-1.5 text-xs font-medium text-ink-100 shadow-lg shadow-black/50"
           >
             <ArrowDown className="h-3 w-3" />
             New messages
@@ -294,9 +301,9 @@ export function ChatPanel({
         )}
       </AnimatePresence>
 
-      <div className="flex h-4 items-center px-3">
+      <div className="flex h-5 items-center px-4">
         {typingUsers.length > 0 && (
-          <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-ink-500">
+          <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-ink-400">
             <TypingDots />
             <span className="truncate">
               {typingUsers.map((u) => u.name).join(", ")}
@@ -306,21 +313,30 @@ export function ChatPanel({
         )}
       </div>
 
-      <div className="flex gap-2 border-t border-ink-800 p-3">
-        <input
-          value={draft}
-          onChange={(e) => handleDraftChange(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Message the room…"
-          enterKeyHint="send"
-          className="min-w-0 flex-1 rounded-md border border-ink-700 bg-ink-950 px-2.5 py-2 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none md:py-1.5"
-        />
-        <button
-          onClick={handleSend}
-          className="shrink-0 rounded-md bg-ink-100 px-3 py-2 text-sm font-medium text-ink-950 transition-colors hover:bg-white active:scale-95 md:py-1.5"
-        >
-          Send
-        </button>
+      {/* Message box: one rounded field with an inline send button */}
+      <div className="border-t border-ink-800 p-3">
+        <div className="flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-950/70 py-1 pl-3.5 pr-1 transition-colors focus-within:border-ink-500">
+          <input
+            value={draft}
+            onChange={(e) => handleDraftChange(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            placeholder="Message the room…"
+            enterKeyHint="send"
+            className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-ink-100 placeholder:text-ink-500 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={!canSend}
+            aria-label="Send message"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-950 transition-all hover:bg-white active:scale-95 disabled:cursor-not-allowed disabled:bg-ink-800 disabled:text-ink-500"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mt-1.5 hidden px-1 text-[10px] text-ink-500 md:block">
+          Enter to send · wrap code in <span className="font-[family-name:var(--font-mono)] text-ink-400">`backticks`</span>
+        </p>
       </div>
     </div>
   );

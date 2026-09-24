@@ -422,14 +422,14 @@ export function CodeEditor({
           }}
         />
       </div>
-      <div className="flex h-7 shrink-0 items-center justify-between gap-3 border-t border-ink-800/60 bg-ink-950 px-3 text-[11px] text-ink-500">
+      <div className="flex h-7 shrink-0 items-center justify-between gap-3 border-t border-ink-800 bg-ink-950/60 px-3 text-[11px] text-ink-400">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-ink-600" />
-          <span className="truncate">{languageLabel}</span>
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-ink-400" />
+          <span className="truncate font-medium text-ink-300">{languageLabel}</span>
         </span>
         <div className="flex shrink-0 items-center gap-3">
           <span className="hidden items-center gap-1 lg:flex">
-            <kbd className="font-[family-name:var(--font-mono)] text-ink-400">⌘↵</kbd> run
+            <kbd className="font-[family-name:var(--font-mono)] text-ink-300">⌘↵</kbd> run
           </span>
           {onThemeChange && <EditorThemePicker value={themeId} onChange={onThemeChange} />}
           {onToggleWordWrap && (
@@ -437,7 +437,7 @@ export function CodeEditor({
               type="button"
               onClick={onToggleWordWrap}
               title={wordWrap ? "Disable word wrap" : "Enable word wrap"}
-              className="hidden rounded px-1 transition-colors hover:bg-ink-900 hover:text-ink-100 sm:inline"
+              className="hidden rounded px-1 transition-colors hover:bg-ink-800 hover:text-ink-100 sm:inline"
             >
               Wrap {wordWrap ? "on" : "off"}
             </button>
@@ -449,7 +449,7 @@ export function CodeEditor({
             {saveStatus === "saving" ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
-              <Check className="h-3 w-3 text-ink-300" />
+              <Check className="h-3 w-3 text-ink-100" />
             )}
             <span className="hidden sm:inline">{saveStatus === "saving" ? "Saving" : "Saved"}</span>
           </span>
