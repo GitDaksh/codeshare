@@ -1,174 +1,26 @@
-"use client";
-
-import Link from "next/link";
-import { motion } from "framer-motion";
-import { LiveDemoPreview } from "@/components/LiveDemoPreview";
-
-const SMALL_FEATURES = [
-  {
-    title: "Built-in chat",
-    description: "Talk through the problem without leaving the editor.",
-  },
-  {
-    title: "Multi-language",
-    description: "JavaScript, TypeScript, Python, C++, and Java, with real syntax highlighting.",
-  },
-  {
-    title: "One link to share",
-    description: "Send a room link — no downloads, no setup for the other side.",
-  },
-];
-
-const STEPS = [
-  { step: "01", title: "Create a room", description: "Name it, pick a language, and you're in." },
-  { step: "02", title: "Share the link", description: "Send it to anyone — they join in one click." },
-  { step: "03", title: "Code together", description: "Edit, chat, and see who's online, live." },
-];
+import { SmoothScroll } from "@/components/landing/SmoothScroll";
+import { Hero } from "@/components/landing/Hero";
+import { Marquee } from "@/components/landing/Marquee";
+import { Features } from "@/components/landing/Features";
+import { HowItWorks } from "@/components/landing/HowItWorks";
+import { FinalCta } from "@/components/landing/FinalCta";
+import { LandingFooter } from "@/components/landing/LandingFooter";
 
 export default function Home() {
   return (
-    <main>
-      {/* Hero */}
-      <motion.section
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="relative overflow-hidden"
-      >
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.07]"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, #fff 1px, transparent 1px), linear-gradient(to bottom, #fff 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
-            maskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, black 40%, transparent 100%)",
-            WebkitMaskImage:
-              "radial-gradient(ellipse 60% 50% at 50% 0%, black 40%, transparent 100%)",
-          }}
-        />
-        <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-12 sm:gap-12 sm:pb-24 sm:pt-20 lg:grid-cols-[1fr_1.1fr] lg:pt-28">
-          <div>
-            <h1 className="font-[family-name:var(--font-display)] text-4xl font-semibold leading-[1.05] tracking-tight text-ink-100 sm:text-6xl lg:text-7xl">
-              Code together, in real time.
-            </h1>
-            <p className="mt-5 max-w-md text-ink-400 sm:mt-6">
-              Create a room, share the link, and edit code with your team live —
-              no setup, no friction.
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link
-                href="/sign-up"
-                className="rounded-md bg-ink-100 px-5 py-3 text-center text-sm font-medium text-ink-950 transition-colors hover:bg-white sm:py-2.5"
-              >
-                Get started
-              </Link>
-              <Link
-                href="/sign-in"
-                className="rounded-md border border-ink-700 px-5 py-3 text-center text-sm font-medium text-ink-100 transition-colors hover:border-ink-500 sm:py-2.5"
-              >
-                Sign in
-              </Link>
-            </div>
-          </div>
-          <LiveDemoPreview />
-        </div>
-      </motion.section>
-
-      {/* How it works */}
-      <section className="border-t border-ink-800 px-4 py-14 sm:py-20">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink-100 sm:text-2xl">
-            How it works
-          </h2>
-          <div className="mt-8 grid gap-6 sm:mt-10 sm:grid-cols-3 sm:gap-8">
-            {STEPS.map((s) => (
-              <div key={s.step}>
-                <span className="font-[family-name:var(--font-mono)] text-sm text-ink-600">
-                  {s.step}
-                </span>
-                <h3 className="mt-2 font-medium text-ink-100">{s.title}</h3>
-                <p className="mt-1 text-sm text-ink-400">{s.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Bento feature section */}
-      <section className="border-t border-ink-800 px-4 py-14 sm:py-20">
-        <div className="mx-auto max-w-5xl">
-          <h2 className="max-w-md font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-ink-100 sm:text-2xl">
-            Everything happens together
-          </h2>
-
-          <div className="mt-8 grid gap-4 sm:mt-10 lg:grid-cols-2">
-            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-6 transition-colors hover:border-ink-500 sm:p-8">
-              <div className="flex gap-1.5">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-ink-100" />
-                <span
-                  className="h-2 w-2 animate-pulse rounded-full bg-ink-400"
-                  style={{ animationDelay: "200ms" }}
-                />
-                <span
-                  className="h-2 w-2 animate-pulse rounded-full bg-ink-600"
-                  style={{ animationDelay: "400ms" }}
-                />
-              </div>
-              <h3 className="mt-6 text-lg font-medium text-ink-100">Real-time editing</h3>
-              <p className="mt-2 text-sm text-ink-400">
-                Every keystroke syncs instantly. No refresh, no merge conflicts, no waiting.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-6 transition-colors hover:border-ink-500 sm:p-8">
-              <div className="flex -space-x-2">
-                <span className="h-7 w-7 rounded-full border-2 border-ink-900 bg-ink-100" />
-                <span className="h-7 w-7 rounded-full border-2 border-ink-900 bg-ink-400" />
-                <span className="h-7 w-7 rounded-full border-2 border-ink-900 bg-ink-600" />
-              </div>
-              <h3 className="mt-6 text-lg font-medium text-ink-100">Live presence</h3>
-              <p className="mt-2 text-sm text-ink-400">
-                See exactly who's in the room and who's typing, at all times.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            {SMALL_FEATURES.map((f) => (
-              <div
-                key={f.title}
-                className="rounded-2xl border border-ink-700 p-5 transition-colors hover:border-ink-500 sm:p-6"
-              >
-                <h3 className="text-sm font-medium text-ink-100">{f.title}</h3>
-                <p className="mt-1.5 text-sm text-ink-400">{f.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Final CTA */}
-      <section className="border-t border-ink-800 px-4 py-16 text-center sm:py-24">
-        <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-ink-100 sm:text-3xl">
-          Ready to start a room?
-        </h2>
-        <p className="mx-auto mt-3 max-w-sm text-sm text-ink-400">
-          Every room is authenticated, and access is verified on every request.
+    <main className="grain relative">
+      <SmoothScroll />
+      <Hero />
+      <section className="border-y border-ink-900 py-8">
+        <p className="mb-5 text-center font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.25em] text-ink-600">
+          Everything in one room
         </p>
-        <Link
-          href="/sign-up"
-          className="mt-8 inline-block w-full rounded-md bg-ink-100 px-6 py-3 text-sm font-medium text-ink-950 transition-colors hover:bg-white sm:w-auto sm:py-2.5"
-        >
-          Get started free
-        </Link>
+        <Marquee />
       </section>
-
-      {/* Footer */}
-      <footer className="border-t border-ink-800 px-4 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 text-xs text-ink-500 sm:flex-row">
-          <span>Built by Daksh.</span>
-          <span>CodeShare</span>
-        </div>
-      </footer>
+      <Features />
+      <HowItWorks />
+      <FinalCta />
+      <LandingFooter />
     </main>
   );
 }
