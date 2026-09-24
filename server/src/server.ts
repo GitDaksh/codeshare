@@ -14,11 +14,20 @@ import { setupSocket, flushAllPendingCodeSaves } from "./sockets";
 
 dotenv.config();
 
+// CLIENT_URL can hold several comma-separated website addresses, so the API
+// accepts requests from all of them (the custom domain, its www version, and
+// the old vercel.app address). Trailing slashes are stripped, because a
+// browser's Origin header never has one, and a mismatch silently fails CORS.
+const allowedOrigins = (process.env.CLIENT_URL ?? "")
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL,
+    origin: allowedOrigins,
     credentials: true,
   },
 });
@@ -26,7 +35,7 @@ const io = new Server(httpServer, {
 const PORT = process.env.PORT || 5001;
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
 app.use(morgan("dev"));
 app.use(clerkMiddleware());
@@ -59,6 +68,7 @@ async function start() {
   }
   httpServer.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Allowed origins: ${allowedOrigins.join(", ") || "(none set)"}`);
   });
 }
 
