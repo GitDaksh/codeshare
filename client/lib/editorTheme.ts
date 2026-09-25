@@ -28,9 +28,14 @@ export type EditorThemeOption = {
   palette: Palette;
 };
 
-// Every theme shares the room's near-black background, so switching themes
-// only recolors the code and never clashes with the rest of the interface.
-const BACKGROUND = "#0d0d0d";
+// Monaco can't read CSS variables, so the editor chrome is set here directly.
+// BACKGROUND must equal --color-ink-900 in globals.css, so the editor blends
+// seamlessly into its panel. Every theme shares it; switching themes only
+// recolors the code.
+const BACKGROUND = "#141414";
+const LINE_HIGHLIGHT = "#1a1a1a";
+const WIDGET_BACKGROUND = "#171717";
+const WIDGET_BORDER = "#2e2e2e";
 
 export const EDITOR_THEMES: EditorThemeOption[] = [
   {
@@ -196,9 +201,9 @@ function buildTheme(p: Palette): ThemeData {
       "editor.background": BACKGROUND,
       "editor.foreground": `#${p.foreground}`,
       "editorGutter.background": BACKGROUND,
-      "editorLineNumber.foreground": "#3a3a3a",
+      "editorLineNumber.foreground": "#474747",
       "editorLineNumber.activeForeground": `#${p.activeLineNumber}`,
-      "editor.lineHighlightBackground": "#151515",
+      "editor.lineHighlightBackground": LINE_HIGHLIGHT,
       "editor.lineHighlightBorder": "#00000000",
       "editor.selectionBackground": `#${p.selection}`,
       "editor.inactiveSelectionBackground": "#ffffff14",
@@ -207,22 +212,22 @@ function buildTheme(p: Palette): ThemeData {
       "editor.findMatchBackground": "#ffffff33",
       "editor.findMatchHighlightBackground": "#ffffff1a",
       "editorCursor.foreground": `#${p.cursor}`,
-      "editorWhitespace.foreground": "#2a2a2a",
-      "editorIndentGuide.background": "#1c1c1c",
-      "editorIndentGuide.activeBackground": "#3a3a3a",
-      "editorIndentGuide.background1": "#1c1c1c",
-      "editorIndentGuide.activeBackground1": "#3a3a3a",
+      "editorWhitespace.foreground": "#333333",
+      "editorIndentGuide.background": "#222222",
+      "editorIndentGuide.activeBackground": "#474747",
+      "editorIndentGuide.background1": "#222222",
+      "editorIndentGuide.activeBackground1": "#474747",
       "editorBracketMatch.background": "#ffffff14",
       "editorBracketMatch.border": "#ffffff40",
-      "editorWidget.background": "#111111",
-      "editorWidget.border": "#262626",
-      "editorSuggestWidget.background": "#111111",
-      "editorSuggestWidget.border": "#262626",
+      "editorWidget.background": WIDGET_BACKGROUND,
+      "editorWidget.border": WIDGET_BORDER,
+      "editorSuggestWidget.background": WIDGET_BACKGROUND,
+      "editorSuggestWidget.border": WIDGET_BORDER,
       "editorSuggestWidget.foreground": `#${p.foreground}`,
       "editorSuggestWidget.highlightForeground": `#${p.keyword}`,
-      "editorSuggestWidget.selectedBackground": "#1f1f1f",
-      "editorHoverWidget.background": "#111111",
-      "editorHoverWidget.border": "#262626",
+      "editorSuggestWidget.selectedBackground": "#262626",
+      "editorHoverWidget.background": WIDGET_BACKGROUND,
+      "editorHoverWidget.border": WIDGET_BORDER,
       "editorOverviewRuler.border": "#00000000",
       "scrollbar.shadow": "#00000000",
       "scrollbarSlider.background": "#ffffff14",
