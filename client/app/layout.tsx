@@ -5,6 +5,7 @@ import { dark } from "@clerk/themes";
 import { Navbar } from "@/components/Navbar";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import { MotionProvider } from "@/components/MotionProvider";
+import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ToastProvider } from "@/components/ToastProvider";
 import "./globals.css";
 
@@ -81,6 +82,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <NavigationProgress />
               <Navbar />
               {children}
+              <ShortcutsDialog />
             </ToastProvider>
           </MotionProvider>
         </ClerkProvider>

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDown, ArrowUp, MessageSquare } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, MessageSquare } from "lucide-react";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import type { ChatMessage, Reaction } from "@/types/chat";
@@ -39,7 +39,8 @@ function formatDateDivider(dateStr: string): string {
   return date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
 }
 
-function renderMessageText(text: string) {
+// Inline `code` inside normal text.
+function renderInline(text: string) {
   const parts = text.split(/(`[^`]+`)/g);
   return parts.map((part, i) => {
     if (part.startsWith("`") && part.endsWith("`") && part.length > 1) {
@@ -54,6 +55,76 @@ function renderMessageText(text: string) {
     }
     return <span key={i}>{part}</span>;
   });
+}
+
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy(e: ReactMouseEvent) {
+    // Don't also toggle the message row's reaction bar on touch screens.
+    e.stopPropagation();
+    navigator.clipboard
+      .writeText(code)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
+  }
+
+  return (
+    <div className="mt-1.5 overflow-hidden rounded-lg border border-ink-700 bg-ink-950">
+      <div className="flex items-center justify-between border-b border-ink-800 px-2.5 py-1">
+        <span className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-wide text-ink-400">
+          {language || "code"}
+        </span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center gap-1 rounded px-1 text-[10px] text-ink-400 transition-colors hover:text-ink-100"
+        >
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className="max-h-60 overflow-auto px-2.5 py-2 font-[family-name:var(--font-mono)] text-[11px] leading-[1.6] text-ink-100">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+// Message text with ```fenced code blocks``` rendered as code cards, and
+// everything else rendered as text (with inline `code` support).
+function renderMessageBody(text: string): ReactNode[] {
+  const fencePattern = /```([\w+#-]*)\n([\s\S]*?)\n?```/g;
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = fencePattern.exec(text)) !== null) {
+    const before = text.slice(lastIndex, match.index).replace(/\n+$/, "");
+    if (before.trim()) {
+      nodes.push(
+        <span key={`text-${lastIndex}`} className="whitespace-pre-wrap">
+          {renderInline(before)}
+        </span>
+      );
+    }
+    nodes.push(<CodeBlock key={`code-${match.index}`} language={match[1]} code={match[2]} />);
+    lastIndex = match.index + match[0].length;
+  }
+
+  const rest = text.slice(lastIndex).replace(/^\n+/, "");
+  if (rest.trim() || nodes.length === 0) {
+    nodes.push(
+      <span key={`text-${lastIndex}`} className="whitespace-pre-wrap">
+        {renderInline(rest)}
+      </span>
+    );
+  }
+
+  return nodes;
 }
 
 function groupReactions(reactions: Reaction[]) {
@@ -256,7 +327,7 @@ export function ChatPanel({
                         <span className="shrink-0 text-[10px] text-ink-500">{formatTime(msg.createdAt)}</span>
                       </div>
                     )}
-                    <p className="break-words text-sm leading-5 text-ink-300">{renderMessageText(msg.text)}</p>
+                    <div className="break-words text-sm leading-5 text-ink-300">{renderMessageBody(msg.text)}</div>
                     {reactionGroups.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {reactionGroups.map(({ emoji, userIds }) => {
