@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 import { Navbar } from "@/components/Navbar";
+import { NavigationProgress } from "@/components/NavigationProgress";
 import { ToastProvider } from "@/components/ToastProvider";
 import "./globals.css";
 
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         >
           <ToastProvider>
+            <NavigationProgress />
             <Navbar />
             {children}
           </ToastProvider>

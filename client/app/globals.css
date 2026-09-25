@@ -53,6 +53,50 @@ a {
   }
 }
 
+/* ---------- Page transitions ---------- */
+
+/*
+  app/template.tsx re-mounts on every navigation, so this entrance replays
+  each time a new page opens: a quick fade out of a soft blur, plus a slightly
+  longer rise that settles gently. Keyframes only define the starting state,
+  so they animate to the element's normal styles.
+
+  "backwards" fill applies the first frame immediately but leaves nothing
+  behind once finished. That matters: a lingering transform or filter on this
+  wrapper would make position: fixed children (modals, the command palette,
+  editor pop-ups) position themselves against it instead of the viewport.
+*/
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+  }
+}
+
+@keyframes page-rise {
+  from {
+    transform: translate3d(0, 10px, 0);
+  }
+}
+
+@keyframes page-fade-only {
+  from {
+    opacity: 0;
+  }
+}
+
+.page-enter {
+  animation:
+    page-fade-in 340ms cubic-bezier(0.25, 0.1, 0.25, 1) backwards,
+    page-rise 560ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: page-fade-only 180ms ease-out backwards;
+  }
+}
+
 /* ---------- Remote cursors ---------- */
 
 .remote-cursor-flag {
