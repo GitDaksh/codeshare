@@ -12,12 +12,34 @@ const inter = Inter({ subsets: ["latin"] });
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-display" });
 
+const SITE_URL = "https://codeshare.tech";
+const SITE_TITLE = "CodeShare — Code together in real time";
+const SITE_DESCRIPTION =
+  "Real-time collaborative coding rooms: a shared editor with live cursors, built-in chat, and code that runs right in the browser. Create a room, share the link, code together.";
+
 export const metadata: Metadata = {
+  // Makes generated image URLs (like the link preview) absolute on the real domain.
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "CodeShare",
+    default: SITE_TITLE,
     template: "%s — CodeShare",
   },
-  description: "Real-time collaborative coding rooms",
+  description: SITE_DESCRIPTION,
+  applicationName: "CodeShare",
+  // The preview image comes from app/opengraph-image.tsx and is added automatically.
+  openGraph: {
+    type: "website",
+    siteName: "CodeShare",
+    url: "/",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 // Matches --color-ink-950 so the phone browser's toolbar blends with the app.
