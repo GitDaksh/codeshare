@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 import { Navbar } from "@/components/Navbar";
 import { NavigationProgress } from "@/components/NavigationProgress";
+import { MotionProvider } from "@/components/MotionProvider";
 import { ToastProvider } from "@/components/ToastProvider";
 import "./globals.css";
 
@@ -46,11 +47,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             },
           }}
         >
-          <ToastProvider>
-            <NavigationProgress />
-            <Navbar />
-            {children}
-          </ToastProvider>
+          <MotionProvider>
+            <ToastProvider>
+              {/* Hidden until a keyboard user presses Tab; jumps past the navbar */}
+              <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-3 focus:z-[80] focus:rounded-full focus:bg-ink-100 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink-950"
+              >
+                Skip to content
+              </a>
+              <NavigationProgress />
+              <Navbar />
+              {children}
+            </ToastProvider>
+          </MotionProvider>
         </ClerkProvider>
       </body>
     </html>

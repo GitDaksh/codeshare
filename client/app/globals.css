@@ -26,6 +26,12 @@
   --color-ink-400: #a3a3a3;
   --color-ink-300: #d4d4d4;
   --color-ink-100: #f5f5f5;
+
+  /* Motion: one shared timing for every Tailwind transition that doesn't set
+     its own duration or curve, so hovers across the app share one rhythm. */
+  --default-transition-duration: 180ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 body {
@@ -42,6 +48,11 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
+::selection {
+  background: rgba(255, 255, 255, 0.22);
+  color: inherit;
+}
+
 /* iOS Safari zooms the whole page into any focused form field whose text is
    smaller than 16px. On phone-sized screens, bump text fields to 16px.
    Monaco's hidden input textarea (.inputarea) is deliberately excluded. */
@@ -50,6 +61,55 @@ a {
   select,
   textarea:not(.inputarea) {
     font-size: 16px;
+  }
+}
+
+/* ---------- Interaction system ----------
+   Shared states every interactive element inherits. These live in the base
+   layer, so any component that styles a state itself (with Tailwind classes)
+   still wins. Monaco's own UI is excluded; it manages its own states. */
+
+@layer base {
+  /* Tailwind v4 gives buttons the default arrow cursor. Restore the pointer
+     on everything clickable, and show "not allowed" when disabled. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  select:not(:disabled),
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  /* One keyboard focus ring for the whole app. :focus-visible means it shows
+     for keyboard navigation, never for mouse clicks. Text fields keep their
+     own border-based focus style (they set outline: none themselves). */
+  :where(
+      a,
+      button,
+      summary,
+      [role="button"],
+      [role="tab"],
+      [role="option"],
+      [role="radio"],
+      [tabindex]:not([tabindex="-1"])
+    ):not(.monaco-editor *):focus-visible {
+    outline: 2px solid var(--color-ink-100);
+    outline-offset: 2px;
+  }
+
+  /* Pressed feedback: a subtle press-in on every button and button-styled
+     link while held. The standalone `scale` property never conflicts with an
+     element's own translate/transform, and components with their own
+     active:scale-* classes keep theirs. */
+  :where(button, [role="button"], a[class*="rounded"]):not(:disabled):not([aria-disabled="true"]):not(
+      .monaco-editor *
+    ):active {
+    scale: 0.98;
   }
 }
 
@@ -94,6 +154,12 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .page-enter {
     animation: page-fade-only 180ms ease-out backwards;
+  }
+
+  /* Decorative pulses (like the "Live" status dot) stop. Loading spinners
+     keep spinning, since they communicate that something is happening. */
+  .animate-ping {
+    animation: none;
   }
 }
 
