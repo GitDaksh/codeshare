@@ -18,8 +18,9 @@ export const metadata: Metadata = {
   description: "Real-time collaborative coding rooms",
 };
 
+// Matches --color-ink-950 so the phone browser's toolbar blends with the app.
 export const viewport: Viewport = {
-  themeColor: "#000000",
+  themeColor: "#0a0a0a",
   colorScheme: "dark",
 };
 
@@ -31,15 +32,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           appearance={{
             theme: dark,
             // Matches Clerk's sign-in/up cards and the account settings modal
-            // to the app's monochrome design. Plain hex values are used for the
-            // widest browser support (Clerk derives hover shades from these).
+            // to the app's ink scale (surface = ink-900, input = ink-950).
             variables: {
               colorPrimary: "#f5f5f5",
-              colorPrimaryForeground: "#000000",
-              colorBackground: "#0d0d0d",
+              colorPrimaryForeground: "#0a0a0a",
+              colorBackground: "#141414",
               colorForeground: "#f5f5f5",
-              colorMutedForeground: "#999999",
-              colorInput: "#000000",
+              colorMutedForeground: "#a3a3a3",
+              colorInput: "#0a0a0a",
               colorInputForeground: "#f5f5f5",
               borderRadius: "0.75rem",
             },
