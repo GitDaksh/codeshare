@@ -34,6 +34,9 @@ import {
   Ellipsis,
   WrapText,
   Copy,
+  ClipboardCopy,
+  Download,
+  Keyboard,
   Search,
   Palette,
   type LucideIcon,
@@ -53,6 +56,7 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { PresenceStack } from "@/components/PresenceStack";
 import { RoomSettingsModal } from "@/components/RoomSettingsModal";
+import { openShortcutsDialog } from "@/components/ShortcutsDialog";
 import { getStarterCode, LANGUAGES } from "@/lib/languages";
 import { formatCode, isFormattable } from "@/lib/format";
 import { executeCode, isRunnable, IDLE_RUN_STATE, type RunState } from "@/lib/execution";
@@ -68,6 +72,24 @@ const TYPING_EXPIRY_MS = 4000;
 const REMOTE_RUN_TIMEOUT_MS = 30000;
 const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 24;
+// Matches the server's chat message limit (the Message model's maxlength).
+const CHAT_MESSAGE_LIMIT = 2000;
+
+const FILE_EXTENSIONS: Record<string, string> = {
+  javascript: "js",
+  typescript: "ts",
+  python: "py",
+  cpp: "cpp",
+  java: "java",
+};
+
+const FENCE_LANGUAGES: Record<string, string> = {
+  javascript: "js",
+  typescript: "ts",
+  python: "python",
+  cpp: "cpp",
+  java: "java",
+};
 
 type MobilePanel = "code" | "chat" | "online";
 
@@ -93,6 +115,14 @@ const TOOL_BUTTON =
 
 function languageLabel(value: string): string {
   return LANGUAGES.find((l) => l.value === value)?.label ?? value;
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 export default function RoomPage({
@@ -143,6 +173,11 @@ export default function RoomPage({
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursorEvent[]>([]);
+
+  // Who was in the room at the last presence update (userId → name).
+  // Starts empty and is set once we first appear in the list ourselves, so
+  // people already here when we arrive aren't announced as "joined".
+  const presenceBaselineRef = useRef<Map<string, string> | null>(null);
 
   const chatVisible = activeTab === "chat" && (isDesktop ? !zenMode : mobilePanel === "chat");
   const chatVisibleRef = useRef(chatVisible);
@@ -303,6 +338,25 @@ export default function RoomPage({
     setTypingUsers((prev) => prev.filter((u) => onlineIds.has(u.userId)));
   }, [onlineUsers]);
 
+  // "Sam joined / left the room" notices. Compared by user (not by tab), so
+  // someone with the room open in two tabs only ever counts once.
+  useEffect(() => {
+    if (!currentUserId) return;
+    const current = new Map(onlineUsers.map((u) => [u.userId, u.name] as const));
+    if (!current.has(currentUserId)) return;
+
+    const previous = presenceBaselineRef.current;
+    presenceBaselineRef.current = current;
+    if (!previous) return;
+
+    for (const [userId, name] of current) {
+      if (userId !== currentUserId && !previous.has(userId)) toast(`${name} joined the room`, "info");
+    }
+    for (const [userId, name] of previous) {
+      if (userId !== currentUserId && !current.has(userId)) toast(`${name} left the room`, "info");
+    }
+  }, [onlineUsers, currentUserId, toast]);
+
   useEffect(() => {
     function handleMouseMove(e: MouseEvent) {
       if (!isDraggingRef.current) return;
@@ -362,6 +416,60 @@ export default function RoomPage({
     if (!room) return;
     navigator.clipboard.writeText(room._id);
     toast("Room ID copied");
+  }
+
+  function handleCopyCode() {
+    const code = codeEditorRef.current?.getValue() ?? "";
+    navigator.clipboard.writeText(code);
+    toast("Code copied to clipboard");
+  }
+
+  function handleDownloadCode() {
+    if (!room) return;
+    const code = codeEditorRef.current?.getValue() ?? "";
+    const extension = FILE_EXTENSIONS[language] ?? "txt";
+    // Java requires the file name to match the public class name.
+    const baseName =
+      language === "java" && /public\s+class\s+Main\b/.test(code) ? "Main" : slugify(room.name) || "code";
+    const fileName = `${baseName}.${extension}`;
+
+    const url = URL.createObjectURL(new Blob([code], { type: "text/plain;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    toast(`Downloaded ${fileName}`);
+  }
+
+  function handleSendSelectionToChat() {
+    const selection = codeEditorRef.current?.getSelection();
+    if (!selection || !selection.text.trim()) {
+      toast("Select some code first, then send it to chat.", "info");
+      return;
+    }
+
+    const code = selection.text.replace(/\s+$/, "");
+    const range =
+      selection.startLine === selection.endLine
+        ? `Line ${selection.startLine}`
+        : `Lines ${selection.startLine}–${selection.endLine}`;
+    const message = `${range}\n\`\`\`${FENCE_LANGUAGES[language] ?? ""}\n${code}\n\`\`\``;
+
+    if (message.length > CHAT_MESSAGE_LIMIT) {
+      toast("That selection is too long for chat. Try a smaller piece (about 2,000 characters max).", "error");
+      return;
+    }
+
+    sendMessage(message);
+    if (isDesktop && !zenMode) {
+      setActiveTab("chat");
+      setUnreadCount(0);
+    }
+    toast("Code sent to chat");
   }
 
   function handleSend() {
@@ -507,11 +615,29 @@ export default function RoomPage({
       },
     },
     {
+      id: "send-to-chat",
+      label: "Send selection to chat",
+      icon: MessageSquare,
+      action: handleSendSelectionToChat,
+    },
+    {
       id: "format",
       label: "Format code",
       icon: AlignLeft,
       action: handleFormat,
       disabled: !isFormattable(language),
+    },
+    {
+      id: "copy-code",
+      label: "Copy all code",
+      icon: ClipboardCopy,
+      action: handleCopyCode,
+    },
+    {
+      id: "download",
+      label: "Download code",
+      icon: Download,
+      action: handleDownloadCode,
     },
     {
       id: "word-wrap",
@@ -545,6 +671,12 @@ export default function RoomPage({
       icon: Settings,
       action: () => setSettingsOpen(true),
       disabled: !isOwner,
+    },
+    {
+      id: "shortcuts",
+      label: "Keyboard shortcuts",
+      icon: Keyboard,
+      action: openShortcutsDialog,
     },
     {
       id: "dashboard",
@@ -684,6 +816,9 @@ export default function RoomPage({
             >
               <AlignLeft className="h-4 w-4" />
             </button>
+            <button onClick={handleDownloadCode} aria-label="Download code" title="Download code" className={TOOL_BUTTON}>
+              <Download className="h-4 w-4" />
+            </button>
             <button onClick={handleCopyLink} aria-label="Copy room link" title="Copy room link" className={TOOL_BUTTON}>
               <LinkIcon className="h-4 w-4" />
             </button>
@@ -721,6 +856,7 @@ export default function RoomPage({
               onChange={handleCodeChange}
               onCursorMove={sendCursorMove}
               onRunShortcut={handleRun}
+              onSendSelection={handleSendSelectionToChat}
               remoteCursors={editorCursors}
               saveStatus={saveStatus}
               minimapEnabled={minimapEnabled}

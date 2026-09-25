@@ -25,9 +25,16 @@ export type RemoteCodeUpdate = {
   nonce: number;
 };
 
+export type EditorSelection = {
+  text: string;
+  startLine: number;
+  endLine: number;
+};
+
 export type CodeEditorHandle = {
   getValue: () => string;
   setValue: (value: string) => void;
+  getSelection: () => EditorSelection | null;
 };
 
 type MonacoEditorInstance = Parameters<OnMount>[0];
@@ -39,6 +46,7 @@ type CodeEditorProps = {
   onChange: (value: string, line: number, column: number) => void;
   onCursorMove: (line: number, column: number) => void;
   onRunShortcut?: () => void;
+  onSendSelection?: () => void;
   remoteCursors: RemoteCursor[];
   saveStatus: "saved" | "saving";
   minimapEnabled: boolean;
@@ -195,6 +203,7 @@ export function CodeEditor({
   onChange,
   onCursorMove,
   onRunShortcut,
+  onSendSelection,
   remoteCursors,
   saveStatus,
   minimapEnabled,
@@ -212,10 +221,12 @@ export function CodeEditor({
   const lastEmitRef = useRef(0);
   const isApplyingRemoteRef = useRef(false);
   const onRunShortcutRef = useRef(onRunShortcut);
+  const onSendSelectionRef = useRef(onSendSelection);
   const isNarrow = useMediaQuery("(max-width: 639px)");
 
   useEffect(() => {
     onRunShortcutRef.current = onRunShortcut;
+    onSendSelectionRef.current = onSendSelection;
   });
 
   useEffect(() => {
@@ -228,6 +239,25 @@ export function CodeEditor({
         const model = editor?.getModel();
         if (!editor || !model) return;
         editor.executeEdits("format", [{ range: model.getFullModelRange(), text: value }]);
+      },
+      getSelection: () => {
+        const editor = editorRef.current;
+        const model = editor?.getModel();
+        const selection = editor?.getSelection();
+        if (!editor || !model || !selection || selection.isEmpty()) return null;
+
+        // A selection that ends at the very start of a line (e.g. after
+        // selecting whole lines) doesn't really include that last line.
+        const endLine =
+          selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber
+            ? selection.endLineNumber - 1
+            : selection.endLineNumber;
+
+        return {
+          text: model.getValueInRange(selection),
+          startLine: selection.startLineNumber,
+          endLine,
+        };
       },
     };
 
@@ -266,6 +296,18 @@ export function CodeEditor({
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       onRunShortcutRef.current?.();
+    });
+
+    // Right-click menu entry, shown only when there's a selection.
+    editor.addAction({
+      id: "codeshare.send-selection-to-chat",
+      label: "Send selection to chat",
+      contextMenuGroupId: "navigation",
+      contextMenuOrder: 0,
+      precondition: "editorHasSelection",
+      run: () => {
+        onSendSelectionRef.current?.();
+      },
     });
 
     editor.onDidChangeCursorPosition((e) => {
