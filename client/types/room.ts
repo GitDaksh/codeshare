@@ -4,6 +4,8 @@ export type Room = {
   ownerId: string;
   language: string;
   code: string;
+  // Set when the room was started from a Practice problem.
+  problemSlug?: string | null;
   createdAt: string;
   updatedAt: string;
 };

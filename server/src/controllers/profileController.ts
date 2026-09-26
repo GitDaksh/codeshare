@@ -5,6 +5,8 @@ import { Room } from "../models/Room";
 
 const DEFAULT_AVATAR_ID = "codeshare";
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
+const PROBLEM_SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
+const TESTABLE_LANGUAGES = new Set(["javascript", "typescript", "python"]);
 
 export async function getProfile(req: Request, res: Response, next: NextFunction) {
   try {
@@ -106,9 +108,12 @@ export async function getRecentRooms(req: Request, res: Response, next: NextFunc
       return res.json([]);
     }
 
+    // Practice rooms never appear here, even ones visited before they
+    // stopped being tracked.
     const rooms = await Room.find({
       _id: { $in: profile.recentRoomIds },
       ownerId: { $ne: userId },
+      problemSlug: null,
     });
 
     const roomMap = new Map(rooms.map((r) => [r._id.toString(), r]));
@@ -117,6 +122,46 @@ export async function getRecentRooms(req: Request, res: Response, next: NextFunc
       .filter((r): r is (typeof rooms)[number] => Boolean(r));
 
     res.json(ordered);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Records a Practice problem as solved (the first time only). The update is a
+// single atomic operation, so two quick requests can never add it twice.
+export async function markProblemSolved(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { userId } = getAuth(req);
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { slug, language } = req.body;
+
+    if (typeof slug !== "string" || !PROBLEM_SLUG_PATTERN.test(slug)) {
+      return res.status(400).json({ error: "Invalid problem" });
+    }
+    if (typeof language !== "string" || !TESTABLE_LANGUAGES.has(language)) {
+      return res.status(400).json({ error: "Invalid language" });
+    }
+
+    const updated = await Profile.findOneAndUpdate(
+      { clerkUserId: userId, "solvedProblems.slug": { $ne: slug } },
+      { $push: { solvedProblems: { slug, language, solvedAt: new Date() } } },
+      { new: true }
+    );
+
+    if (updated) {
+      return res.json(updated);
+    }
+
+    // Already solved before (or the profile doesn't exist yet).
+    const profile = await Profile.findOne({ clerkUserId: userId });
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
+    res.json(profile);
   } catch (err) {
     next(err);
   }
