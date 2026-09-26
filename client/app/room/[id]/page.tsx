@@ -39,6 +39,8 @@ import {
   Keyboard,
   Search,
   Palette,
+  BookOpen,
+  FlaskConical,
   type LucideIcon,
 } from "lucide-react";
 import { useApi } from "@/lib/api";
@@ -57,9 +59,24 @@ import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { PresenceStack } from "@/components/PresenceStack";
 import { RoomSettingsModal } from "@/components/RoomSettingsModal";
 import { openShortcutsDialog } from "@/components/ShortcutsDialog";
+import { ProblemPanel } from "@/components/ProblemPanel";
 import { getStarterCode, LANGUAGES } from "@/lib/languages";
 import { formatCode, isFormattable } from "@/lib/format";
-import { executeCode, isRunnable, IDLE_RUN_STATE, type RunState } from "@/lib/execution";
+import {
+  executeCode,
+  isRunnable,
+  runTests,
+  IDLE_RUN_STATE,
+  type RunState,
+  type TestRunReport,
+} from "@/lib/execution";
+import {
+  functionNameFor,
+  getProblem,
+  getProblemStarterCode,
+  isTestableLanguage,
+  type Problem,
+} from "@/lib/problems";
 import { EDITOR_THEMES } from "@/lib/editorTheme";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import type { Room } from "@/types/room";
@@ -91,10 +108,19 @@ const FENCE_LANGUAGES: Record<string, string> = {
   java: "java",
 };
 
-type MobilePanel = "code" | "chat" | "online";
+type SidebarTab = "problem" | "chat" | "online";
+type MobilePanel = "code" | SidebarTab;
 
+const SIDEBAR_TAB_LABELS: Record<SidebarTab, string> = {
+  problem: "Problem",
+  chat: "Chat",
+  online: "People",
+};
+
+// The Problem tab only shows up in rooms started from a Practice problem.
 const MOBILE_TABS: { id: MobilePanel; label: string; icon: LucideIcon }[] = [
   { id: "code", label: "Code", icon: Code2 },
+  { id: "problem", label: "Problem", icon: BookOpen },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "online", label: "People", icon: Users },
 ];
@@ -135,7 +161,7 @@ export default function RoomPage({
   const api = useApi();
   const router = useRouter();
   const { toast } = useToast();
-  const { checking } = useOnboardingGate();
+  const { checking, profile } = useOnboardingGate();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const [editorTheme, setEditorTheme] = useEditorTheme();
 
@@ -167,12 +193,19 @@ export default function RoomPage({
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
-  const [activeTab, setActiveTab] = useState<"chat" | "online">("chat");
+  const [activeTab, setActiveTab] = useState<SidebarTab>("chat");
   const [unreadCount, setUnreadCount] = useState(0);
   const [typingUsers, setTypingUsers] = useState<TypingEvent[]>([]);
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursorEvent[]>([]);
+
+  // Practice: the problem this room was started from (if any) and test state.
+  const problem = useMemo(() => (room?.problemSlug ? getProblem(room.problemSlug) : null), [room?.problemSlug]);
+  const [testReport, setTestReport] = useState<TestRunReport | null>(null);
+  const [testsRunning, setTestsRunning] = useState(false);
+  const testsRunningRef = useRef(false);
+  const [solvedSlugs, setSolvedSlugs] = useState<Set<string>>(() => new Set());
 
   // Who was in the room at the last presence update (userId → name).
   // Starts empty and is set once we first appear in the list ourselves, so
@@ -234,6 +267,7 @@ export default function RoomPage({
     (event: LanguageUpdateEvent) => {
       setLanguage(event.language);
       setRoom((prev) => (prev ? { ...prev, language: event.language } : prev));
+      setTestReport(null);
       toast(`${event.name} switched the room to ${languageLabel(event.language)}`, "info");
     },
     [toast]
@@ -316,9 +350,16 @@ export default function RoomPage({
     api
       .get<Room>(`/api/rooms/${id}`)
       .then((res) => {
+        const loadedProblem = res.data.problemSlug ? getProblem(res.data.problemSlug) : null;
         setRoom(res.data);
         setLanguage(res.data.language);
-        setInitialCode(res.data.code || getStarterCode(res.data.language));
+        setInitialCode(
+          res.data.code ||
+            (loadedProblem ? getProblemStarterCode(loadedProblem, res.data.language) : null) ||
+            getStarterCode(res.data.language)
+        );
+        // Practice rooms open on the Problem tab.
+        if (loadedProblem) setActiveTab("problem");
         document.title = `${res.data.name} — CodeShare`;
       })
       .catch(() => setNotFound(true))
@@ -331,6 +372,16 @@ export default function RoomPage({
       .then((res) => setMessages(res.data))
       .catch(() => toast("Could not load chat history.", "error"));
   }, [api, id]);
+
+  useEffect(() => {
+    const solved = profile?.solvedProblems;
+    if (!solved) return;
+    setSolvedSlugs((prev) => {
+      const next = new Set(prev);
+      for (const entry of solved) next.add(entry.slug);
+      return next;
+    });
+  }, [profile]);
 
   useEffect(() => {
     const onlineIds = new Set(onlineUsers.map((u) => u.userId));
@@ -478,7 +529,7 @@ export default function RoomPage({
     setDraft("");
   }
 
-  function handleTabClick(tab: "chat" | "online") {
+  function handleTabClick(tab: SidebarTab) {
     setActiveTab(tab);
     if (tab === "chat") setUnreadCount(0);
   }
@@ -533,10 +584,73 @@ export default function RoomPage({
     setRoom((prev) => (prev ? { ...prev, language: next } : prev));
     sendLanguageChange(next);
 
+    // Swap in the new language's starter code, but only if the editor still
+    // holds the untouched starter for the previous language.
     const current = codeEditorRef.current?.getValue() ?? "";
-    const nextStarter = getStarterCode(next);
-    if (current === getStarterCode(previous) && current !== nextStarter) {
+    const nextStarter = starterFor(next);
+    if (current === starterFor(previous) && current !== nextStarter) {
       codeEditorRef.current?.setValue(nextStarter);
+    }
+    setTestReport(null);
+  }
+
+  function starterFor(lang: string): string {
+    return (problem ? getProblemStarterCode(problem, lang) : null) ?? getStarterCode(lang);
+  }
+
+  async function recordSolved(solvedProblem: Problem, solvedLanguage: string) {
+    if (solvedSlugs.has(solvedProblem.slug)) {
+      toast("All tests passed!");
+      return;
+    }
+    try {
+      await api.post("/api/profile/solved", { slug: solvedProblem.slug, language: solvedLanguage });
+      setSolvedSlugs((prev) => new Set(prev).add(solvedProblem.slug));
+      toast(`All tests passed. ${solvedProblem.title} is marked as solved!`);
+    } catch {
+      toast("All tests passed, but your progress couldn't be saved. Try running them again.", "error");
+    }
+  }
+
+  async function handleRunTests() {
+    if (!problem || testsRunningRef.current) return;
+    if (!isTestableLanguage(language)) {
+      toast("Tests run in JavaScript, TypeScript, and Python. Switch the language to test your solution.", "info");
+      return;
+    }
+
+    testsRunningRef.current = true;
+    setTestsRunning(true);
+
+    // Bring the results into view.
+    if (isDesktop) {
+      setZenMode(false);
+      setActiveTab("problem");
+    } else {
+      handleMobilePanel("problem");
+    }
+
+    const runLanguage = language;
+    const testedProblem = problem;
+    sendRunStart(runLanguage);
+
+    try {
+      const code = codeEditorRef.current?.getValue() ?? "";
+      const report = await runTests(code, runLanguage, {
+        fnName: functionNameFor(testedProblem, runLanguage),
+        tests: testedProblem.tests,
+        compare: testedProblem.compare ?? "exact",
+      });
+      setTestReport(report);
+      // Everyone else in the room sees a plain-text summary in their output panel.
+      sendRunResult(runLanguage, { output: report.summary, error: null, durationMs: report.durationMs });
+
+      if (report.outcome === "completed" && report.passed === report.total) {
+        await recordSolved(testedProblem, runLanguage);
+      }
+    } finally {
+      testsRunningRef.current = false;
+      setTestsRunning(false);
     }
   }
 
@@ -598,6 +712,33 @@ export default function RoomPage({
     action: () => setEditorTheme(theme.id),
   }));
 
+  const problemCommands: Command[] = problem
+    ? [
+        {
+          id: "run-tests",
+          label: "Run tests",
+          icon: FlaskConical,
+          action: handleRunTests,
+          disabled: !isTestableLanguage(language) || testsRunning,
+        },
+        {
+          id: "show-problem",
+          label: "Show problem",
+          icon: BookOpen,
+          action: () => {
+            if (isDesktop) {
+              setZenMode(false);
+              setActiveTab("problem");
+            } else {
+              handleMobilePanel("problem");
+            }
+          },
+        },
+      ]
+    : [];
+
+  const sidebarTabs: SidebarTab[] = problem ? ["problem", "chat", "online"] : ["chat", "online"];
+
   const commands: Command[] = [
     {
       id: "run",
@@ -605,6 +746,7 @@ export default function RoomPage({
       icon: Play,
       action: handleRun,
     },
+    ...problemCommands,
     {
       id: "output",
       label: runPanelOpen ? "Hide output panel" : "Show output panel",
@@ -734,6 +876,17 @@ export default function RoomPage({
               </button>
             )}
           </div>
+
+          {problem && (
+            <Link
+              href={`/practice/${problem.slug}`}
+              title={`${problem.difficulty} practice problem`}
+              className="hidden shrink-0 items-center gap-1 rounded-full border border-ink-700 bg-ink-900 px-2 py-0.5 text-[11px] font-medium text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100 lg:inline-flex"
+            >
+              <BookOpen className="h-3 w-3" />
+              Practice
+            </Link>
+          )}
 
           <span
             title={statusMeta.label}
@@ -894,7 +1047,7 @@ export default function RoomPage({
             >
               <div className="hidden p-2 md:block">
                 <div className="relative flex rounded-lg border border-ink-800 bg-ink-950/60 p-1">
-                  {(["chat", "online"] as const).map((tab) => {
+                  {sidebarTabs.map((tab) => {
                     const active = activeTab === tab;
                     return (
                       <button
@@ -914,7 +1067,7 @@ export default function RoomPage({
                             active ? "text-ink-100" : "text-ink-400 hover:text-ink-100"
                           }`}
                         >
-                          {tab === "chat" ? "Chat" : "People"}
+                          {SIDEBAR_TAB_LABELS[tab]}
                           {tab === "online" && (
                             <span className="rounded border border-ink-700 bg-ink-900 px-1 text-[10px] tabular-nums text-ink-300">
                               {onlineUsers.length}
@@ -932,7 +1085,16 @@ export default function RoomPage({
                 </div>
               </div>
 
-              {activeTab === "online" ? (
+              {activeTab === "problem" && problem ? (
+                <ProblemPanel
+                  problem={problem}
+                  language={language}
+                  report={testReport}
+                  running={testsRunning}
+                  solved={solvedSlugs.has(problem.slug)}
+                  onRunTests={handleRunTests}
+                />
+              ) : activeTab === "online" ? (
                 <div className="flex min-h-0 flex-1 flex-col">
                   <p className="px-4 pb-1.5 pt-3 text-[11px] font-medium uppercase tracking-wider text-ink-400 md:pt-1">
                     In this room · {onlineUsers.length}
@@ -996,7 +1158,7 @@ export default function RoomPage({
 
       {/* ---------- Phones: bottom tab bar ---------- */}
       <nav className="flex shrink-0 gap-1 border-t border-ink-800 bg-ink-950 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1.5 md:hidden">
-        {MOBILE_TABS.map(({ id: tabId, label, icon: Icon }) => {
+        {MOBILE_TABS.filter((tab) => tab.id !== "problem" || !!problem).map(({ id: tabId, label, icon: Icon }) => {
           const active = mobilePanel === tabId;
           return (
             <button

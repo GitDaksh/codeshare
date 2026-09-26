@@ -5,6 +5,7 @@ export interface IRoom extends Document {
   ownerId: string;
   language: string;
   code: string;
+  problemSlug: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +32,11 @@ const roomSchema = new Schema<IRoom>(
     code: {
       type: String,
       default: "",
+    },
+    // Set when the room was started from a Practice problem.
+    problemSlug: {
+      type: String,
+      default: null,
     },
   },
   { timestamps: true }
