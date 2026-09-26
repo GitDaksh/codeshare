@@ -21,6 +21,12 @@
 
 </div>
 
+<br />
+
+| **56** | **357** | **22** | **3** | **6** |
+|:---:|:---:|:---:|:---:|:---:|
+| practice problems | test cases | topics | languages you can run | editor themes |
+
 ---
 
 ## Overview
@@ -36,6 +42,14 @@ I built it one feature at a time as a portfolio project, favouring decisions I c
 3. Press <kbd>⌘</kbd> <kbd>↵</kbd> (<kbd>Ctrl</kbd> <kbd>Enter</kbd> on Windows) to run the code. Everyone in the room sees the output.
 4. Open **Practice**, pick a problem, and click **Run tests**.
 
+## Screenshots
+
+![A CodeShare room: shared editor, chat and run output](docs/screenshots/room.png)
+
+| Run tests on a practice problem | The Practice library |
+|---|---|
+| ![A practice room with the Problem tab and passing tests](docs/screenshots/tests.png) | ![The Practice library with filters and progress](docs/screenshots/practice.png) |
+
 ## Features
 
 ### Collaborate in real time
@@ -50,11 +64,18 @@ I built it one feature at a time as a portfolio project, favouring decisions I c
 - **Clear output.** Errors come with line numbers, `console.log` and `print` output is captured, and output is capped at 20,000 characters.
 
 ### Practice interview problems together
-- **56 problems** (17 Easy · 28 Medium · 11 Hard) across 22 topics, including arrays, graphs, trees, linked lists, dynamic programming and backtracking, with **357 test cases**.
+- **56 problems** across 22 topics, including arrays, graphs, trees, linked lists, dynamic programming and backtracking, with **357 test cases**.
 - **Solve in a room.** Pick a problem and a language, and CodeShare opens a room with starter code and a Problem tab.
 - **Run tests.** Your solution is checked against every test case in the sandbox, with expected vs. actual output for each one, shared with the room.
 - **Correct judging.** Linked lists and binary trees are real `ListNode` / `TreeNode` objects. In-place problems and "any order" answers are judged correctly.
 - **Progress tracking.** Solved problems, per-difficulty progress, filters by topic, difficulty and status, and "continue where you left off". Practice rooms stay off your dashboard.
+
+```mermaid
+pie showData title Practice problems by difficulty
+    "Easy" : 17
+    "Medium" : 28
+    "Hard" : 11
+```
 
 ### Chat in every room
 - **Persistent chat** with message grouping, avatars, a typing indicator, emoji reactions and an unread badge.
@@ -65,10 +86,20 @@ I built it one feature at a time as a portfolio project, favouring decisions I c
 - **Profiles.** A 3-step onboarding (username, avatar, bio) and a profile page with your favourite language, GitHub handle and stats.
 
 ### Polish
-- **Keyboard-first.** <kbd>⌘</kbd> <kbd>K</kbd> command palette, <kbd>⌘</kbd> <kbd>↵</kbd> to run, <kbd>N</kbd> for a new room, <kbd>/</kbd> to search, <kbd>?</kbd> for every shortcut.
 - **Editor comfort.** 6 editor themes, word wrap, font-size controls, one-click formatting with Prettier, download and copy, a resizable sidebar and focus mode.
 - **Works everywhere.** Responsive down to phones (tabbed room layout), with visible focus rings, a skip-to-content link and full `prefers-reduced-motion` support.
 - **Finishing touches.** Page transitions, a navigation progress bar, and a branded link-preview card when you share a URL.
+
+**Keyboard-first** (<kbd>⌘</kbd> on Mac, <kbd>Ctrl</kbd> on Windows and Linux):
+
+| Shortcut | What it does |
+|---|---|
+| <kbd>⌘</kbd> <kbd>K</kbd> | Command palette |
+| <kbd>⌘</kbd> <kbd>↵</kbd> | Run code |
+| <kbd>N</kbd> | New room |
+| <kbd>/</kbd> | Search rooms |
+| <kbd>?</kbd> | Show every shortcut |
+| Right-click | Send selected code to chat |
 
 ## How it works
 
@@ -88,18 +119,60 @@ flowchart LR
     API -.->|"verifies sessions"| Clerk
 ```
 
-### Real-time sync
-- **Rooms and presence.** Each room is a Socket.IO room. The server keeps an in-memory presence map and broadcasts `presence:update` whenever someone joins or leaves.
-- **Saving edits.** Edits are broadcast instantly, then saved to MongoDB after 1.5 s of quiet. Pending saves are flushed right away when the last person leaves, and on shutdown (`SIGINT`/`SIGTERM`), so an edit is never silently lost.
-- **Authenticated sockets.** Connections authenticate in the handshake with the same Clerk token as the REST API. Every event payload is validated, and room events are only accepted from sockets that actually joined that room.
+### What happens when you press Run
 
-### Sandboxed code execution
+```mermaid
+sequenceDiagram
+    autonumber
+    actor You
+    participant Page as Room page
+    participant Frame as Sandboxed iframe
+    participant Worker as Web Worker
+    participant Server as Socket.IO server
+    participant Team as Teammates
+
+    You->>Page: Press ⌘↵ (or Run tests)
+    Page->>Server: run:start
+    Server-->>Team: show who is running
+    Page->>Frame: code + test inputs
+    Frame->>Worker: postMessage
+    alt finishes in time
+        Worker-->>Frame: output or test results
+        Frame-->>Page: results
+        Note over Page: For tests, the judge compares results<br/>with answers that never enter the sandbox
+    else time limit reached
+        Page-xFrame: remove the iframe (kills the worker)
+    end
+    Page->>Server: run:result
+    Server-->>Team: output and test summary
+```
+
 - **Isolation.** Code runs in a hidden iframe with `sandbox="allow-scripts"` and **no** `allow-same-origin`. That gives it an opaque origin, so it can't read the app's cookies, storage, session or page.
 - **Hard time limits.** Inside the frame, code runs in a Web Worker. Limits are enforced from outside: if a run doesn't finish in time, the iframe is removed, which kills the worker. `while (true) {}` can never freeze the tab.
 - **JavaScript and TypeScript.** JavaScript gets a fresh sandbox for every run. TypeScript's type annotations are stripped in the browser with Babel first.
 - **Python.** Python runs on **Pyodide 314**, CPython 3.14 compiled to WebAssembly. It's downloaded on first use and kept warm between runs.
 - **A subtle bug.** Pyodide only runs in *module* workers, and Chrome won't start a module worker from a `blob:` URL inside an opaque-origin frame. The Python worker is therefore started from a `data:` URL, which also gets its own separate origin.
 - **Fallback.** If a browser can't create workers, the runner falls back to running inside the sandboxed frame itself.
+
+### How live sync works
+
+```mermaid
+sequenceDiagram
+    participant You
+    participant Server as Socket.IO server
+    participant Mate as Teammate
+    participant DB as MongoDB
+
+    You->>Server: code:change (whole file + cursor)
+    Server-->>Mate: code:change
+    Note over Server: waits for 1.5 s without new edits
+    Server->>DB: save the latest code
+    Note over Server,DB: also saved at once when the room empties or the server shuts down
+```
+
+- **Rooms and presence.** Each room is a Socket.IO room. The server keeps an in-memory presence map and broadcasts `presence:update` whenever someone joins or leaves.
+- **Saving edits.** Edits are broadcast instantly, then saved to MongoDB after 1.5 s of quiet. Pending saves are flushed right away when the last person leaves, and on shutdown (`SIGINT`/`SIGTERM`), so an edit is never silently lost.
+- **Authenticated sockets.** Connections authenticate in the handshake with the same Clerk token as the REST API. Every event payload is validated, and room events are only accepted from sockets that actually joined that room.
 
 ### The Practice judge
 - **Problems are data.** Each one declares typed parameters (like `int[]`, `list` or `tree`), a return type and test cases. Starter code for all three languages is generated from those types, including `ListNode` / `TreeNode` classes where needed.
@@ -120,6 +193,12 @@ flowchart LR
 
 ## Tech stack
 
+<p align="center">
+  <a href="https://skillicons.dev">
+    <img src="https://skillicons.dev/icons?i=nextjs,react,ts,tailwind,nodejs,express,mongodb,py,babel,vercel&theme=dark" alt="Next.js, React, TypeScript, Tailwind CSS, Node.js, Express, MongoDB, Python, Babel, Vercel" />
+  </a>
+</p>
+
 | Layer | Technologies |
 |---|---|
 | Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Framer Motion, Lenis, Lucide |
@@ -132,6 +211,9 @@ flowchart LR
 | Hosting | Vercel (frontend), Render (API), MongoDB Atlas (database), UptimeRobot (keep-alive) |
 
 ## Project structure
+
+<details>
+<summary><b>Show the folder tree</b></summary>
 
 ```text
 codeshare/
@@ -169,9 +251,14 @@ codeshare/
 └── package.json                   # `npm run dev` starts both apps
 ```
 
+</details>
+
 ## API reference
 
 Every route except the health check requires a signed-in user (`Authorization: Bearer <Clerk token>`).
+
+<details>
+<summary><b>REST: rooms and profiles</b></summary>
 
 **Rooms**
 
@@ -196,7 +283,10 @@ Every route except the health check requires a signed-in user (`Authorization: B
 | `GET` | `/api/profile/recent-rooms` | Rooms you recently joined |
 | `POST` | `/api/profile/solved` | Record a solved practice problem |
 
-**Socket events**
+</details>
+
+<details>
+<summary><b>Socket.IO events</b></summary>
 
 Sockets authenticate at handshake time with the same Clerk token, verified with `@clerk/backend`.
 
@@ -211,6 +301,8 @@ Sockets authenticate at handshake time with the same Clerk token, verified with 
 | `reaction:toggle` → `reaction:update` | client → room | Emoji reactions |
 | `typing` | client → room | Typing indicator |
 | `run:start` / `run:result` | client → room | Share code runs and test results |
+
+</details>
 
 ## Run it locally
 
@@ -293,4 +385,4 @@ A deliberately monochrome system: near-black surfaces, white and greys, with a s
 
 ## Author
 
-Built by **Daksh**: [@GitDaksh](https://github.com/GitDaksh)
+Built by **Daksh**: [@GitDaksh](https://github.com/GitDaksh). If you found this interesting, a ⭐ on the repo is appreciated!
