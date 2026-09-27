@@ -41,6 +41,7 @@ import {
   Palette,
   BookOpen,
   FlaskConical,
+  ScanEye,
   type LucideIcon,
 } from "lucide-react";
 import { useApi } from "@/lib/api";
@@ -60,10 +61,12 @@ import { PresenceStack } from "@/components/PresenceStack";
 import { RoomSettingsModal } from "@/components/RoomSettingsModal";
 import { openShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ProblemPanel } from "@/components/ProblemPanel";
+import { RoomLens } from "@/components/lens/RoomLens";
 import { getStarterCode, LANGUAGES } from "@/lib/languages";
 import { formatCode, isFormattable } from "@/lib/format";
 import {
   executeCode,
+  isLensLanguage,
   isRunnable,
   runTests,
   IDLE_RUN_STATE,
@@ -78,6 +81,8 @@ import {
   type Problem,
 } from "@/lib/problems";
 import { EDITOR_THEMES } from "@/lib/editorTheme";
+import { buildTestProgram } from "@/lib/lensPractice";
+import { useRoomLens } from "@/lib/useRoomLens";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
@@ -324,6 +329,10 @@ export default function RoomPage({
     sendLanguageChange,
     sendRunStart,
     sendRunResult,
+    sendLensStart,
+    sendLensStep,
+    sendLensDrive,
+    sendLensStop,
   } = useSocket(id, {
     onChatMessage: handleIncomingMessage,
     onCodeChange: handleIncomingCodeChange,
@@ -333,6 +342,21 @@ export default function RoomPage({
     onLanguageUpdate: handleLanguageUpdate,
     onRunStart: handleRemoteRunStart,
     onRunResult: handleRemoteRunResult,
+    onLensSession: (event) => void lens.receiveSession(event),
+    onLensStep: (event) => lens.receiveStep(event),
+    onLensDriver: (event) => lens.receiveDriver(event),
+    onLensStop: (event) => lens.receiveStop(event),
+  });
+
+  // Lens: shared step-by-step visualizations of the room's code.
+  const lensMe = useMemo(() => {
+    const me = onlineUsers.find((user) => user.userId === currentUserId);
+    return me ? { userId: me.userId, name: me.name, avatarId: me.avatarId } : null;
+  }, [onlineUsers, currentUserId]);
+  const lens = useRoomLens({
+    me: lensMe,
+    send: { start: sendLensStart, step: sendLensStep, drive: sendLensDrive, stop: sendLensStop },
+    notify: toast,
   });
 
   const editorCursors = useMemo<RemoteCursor[]>(
@@ -682,10 +706,28 @@ export default function RoomPage({
     }
   }
 
+  function handleVisualize() {
+    setMobilePanel("code");
+    if (!isLensLanguage(language)) {
+      toast("Lens visualizes Python, JavaScript and TypeScript. Switch the room's language to try it.", "info");
+      return;
+    }
+    void lens.visualize({ code: codeEditorRef.current?.getValue() ?? "", language, title: "" });
+  }
+
+  function handleVisualizeTest(index: number) {
+    if (!problem) return;
+    const program = buildTestProgram(problem, codeEditorRef.current?.getValue() ?? "", index, language);
+    if (!program) return;
+    setMobilePanel("code");
+    void lens.visualize(program);
+  }
+
   const isOwner = room?.ownerId === currentUserId;
   const isSelfRunning = runState.status === "running" && !!runState.runner?.isSelf;
   const showSidebar = !zenMode || !isDesktop;
   const runnable = isRunnable(language);
+  const lensReady = isLensLanguage(language);
   const statusMeta = STATUS_META[status] ?? STATUS_META.connecting;
 
   const desktopOnlyCommands: Command[] = isDesktop
@@ -745,6 +787,13 @@ export default function RoomPage({
       label: "Run code",
       icon: Play,
       action: handleRun,
+    },
+    {
+      id: "lens",
+      label: "Visualize with Lens",
+      icon: ScanEye,
+      action: handleVisualize,
+      disabled: !lensReady,
     },
     ...problemCommands,
     {
@@ -950,6 +999,25 @@ export default function RoomPage({
             )}
           </button>
 
+          <button
+            onClick={handleVisualize}
+            disabled={lens.recording}
+            aria-label="Visualize with Lens"
+            title={
+              lensReady
+                ? "Visualize with Lens: watch the code run, step by step"
+                : "Lens visualizes Python, JavaScript and TypeScript"
+            }
+            className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors disabled:cursor-wait disabled:opacity-60 ${
+              lensReady
+                ? "border-ink-700 bg-ink-900 text-ink-300 hover:border-ink-500 hover:text-ink-100"
+                : "border-ink-800 bg-ink-900 text-ink-500 hover:border-ink-700"
+            }`}
+          >
+            {lens.recording ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanEye className="h-3.5 w-3.5" />}
+            <span className="hidden lg:inline">Visualize</span>
+          </button>
+
           {/* Grouped toolbar */}
           <div className="hidden items-center gap-0.5 rounded-lg border border-ink-800 bg-ink-900 p-0.5 sm:flex">
             <button
@@ -1000,7 +1068,7 @@ export default function RoomPage({
         <div
           className={`${mobilePanel === "code" ? "flex" : "hidden"} min-w-0 flex-1 flex-col bg-ink-900 md:flex md:overflow-hidden md:rounded-xl md:border md:border-ink-800`}
         >
-          <div className="min-h-0 flex-1">
+          <div className="relative min-h-0 flex-1">
             <CodeEditor
               handleRef={codeEditorRef}
               language={language}
@@ -1019,6 +1087,7 @@ export default function RoomPage({
               themeId={editorTheme}
               onThemeChange={setEditorTheme}
             />
+            <RoomLens lens={lens} />
           </div>
           <RunPanel
             open={runPanelOpen}
@@ -1093,6 +1162,7 @@ export default function RoomPage({
                   running={testsRunning}
                   solved={solvedSlugs.has(problem.slug)}
                   onRunTests={handleRunTests}
+                  onVisualizeTest={lensReady ? handleVisualizeTest : undefined}
                 />
               ) : activeTab === "online" ? (
                 <div className="flex min-h-0 flex-1 flex-col">

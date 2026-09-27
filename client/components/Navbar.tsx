@@ -66,6 +66,7 @@ export function Navbar() {
       ? [
           { label: "Dashboard", href: "/dashboard", kind: "route" },
           { label: "Practice", href: "/practice", kind: "route" },
+          { label: "Lens", href: "/lens", kind: "route" },
           { label: "Profile", href: "/profile", kind: "route" },
         ]
       : [
@@ -73,6 +74,7 @@ export function Navbar() {
           // handle it; from other pages it navigates home first.
           { label: "Features", href: isLanding ? "#features" : "/#features", kind: "hash" },
           { label: "Practice", href: "/practice", kind: "route" },
+          { label: "Lens", href: "/lens", kind: "route" },
           { label: "Source", href: GITHUB_URL, kind: "external" },
         ];
 

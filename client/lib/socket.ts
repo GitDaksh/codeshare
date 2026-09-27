@@ -5,7 +5,15 @@ import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import type { OnlineUser, RemoteCursorEvent, TypingEvent } from "@/types/presence";
 import type { ChatMessage, Reaction } from "@/types/chat";
-import type { LanguageUpdateEvent, RunResultEvent, RunStartEvent } from "@/types/roomEvents";
+import type {
+  LanguageUpdateEvent,
+  LensDriverEvent,
+  LensSessionEvent,
+  LensStepEvent,
+  LensStopEvent,
+  RunResultEvent,
+  RunStartEvent,
+} from "@/types/roomEvents";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -28,6 +36,10 @@ export type SocketHandlers = {
   onLanguageUpdate?: (event: LanguageUpdateEvent) => void;
   onRunStart?: (event: RunStartEvent) => void;
   onRunResult?: (event: RunResultEvent) => void;
+  onLensSession?: (event: LensSessionEvent) => void;
+  onLensStep?: (event: LensStepEvent) => void;
+  onLensDriver?: (event: LensDriverEvent) => void;
+  onLensStop?: (event: LensStopEvent) => void;
 };
 
 export function useSocket(roomId: string, handlers: SocketHandlers) {
@@ -106,6 +118,22 @@ export function useSocket(roomId: string, handlers: SocketHandlers) {
         handlersRef.current.onRunResult?.(event);
       });
 
+      socket.on("lens:session", (event: LensSessionEvent) => {
+        handlersRef.current.onLensSession?.(event);
+      });
+
+      socket.on("lens:step", (event: LensStepEvent) => {
+        handlersRef.current.onLensStep?.(event);
+      });
+
+      socket.on("lens:driver", (event: LensDriverEvent) => {
+        handlersRef.current.onLensDriver?.(event);
+      });
+
+      socket.on("lens:stop", (event: LensStopEvent) => {
+        handlersRef.current.onLensStop?.(event);
+      });
+
       socket.on("disconnect", () => setStatus("disconnected"));
       socket.on("connect_error", (err) => {
         console.error("Socket connection error:", err.message);
@@ -157,6 +185,22 @@ export function useSocket(roomId: string, handlers: SocketHandlers) {
     socketRef.current?.emit("run:result", { roomId, language, ...result });
   }
 
+  function sendLensStart(session: { id: string; title: string; code: string; trace: Uint8Array }) {
+    socketRef.current?.emit("lens:start", { roomId, ...session });
+  }
+
+  function sendLensStep(id: string, step: number) {
+    socketRef.current?.emit("lens:step", { roomId, id, step });
+  }
+
+  function sendLensDrive(id: string, step: number) {
+    socketRef.current?.emit("lens:drive", { roomId, id, step });
+  }
+
+  function sendLensStop(id: string) {
+    socketRef.current?.emit("lens:stop", { roomId, id });
+  }
+
   return {
     status,
     onlineUsers,
@@ -168,5 +212,9 @@ export function useSocket(roomId: string, handlers: SocketHandlers) {
     sendLanguageChange,
     sendRunStart,
     sendRunResult,
+    sendLensStart,
+    sendLensStep,
+    sendLensDrive,
+    sendLensStop,
   };
 }

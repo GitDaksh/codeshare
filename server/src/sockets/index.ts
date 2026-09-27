@@ -25,6 +25,61 @@ const MAX_RUN_TEXT_CHARS = 20000;
 const roomPresence = new Map<string, Map<string, PresenceUser>>();
 const pendingCodeSaves = new Map<string, PendingCodeSave>();
 
+// ---------- Lens: shared step-by-step visualizations ----------
+// The person who clicks Visualize records the run in their browser and
+// sends the recording here gzip-compressed. The server never unpacks it: it
+// relays it to the room and keeps the live session in memory so people who
+// join late can catch up. The driver's current step is shared too.
+
+type LensDriver = { userId: string; name: string; avatarId: string };
+
+type LensSession = {
+  id: string;
+  title: string;
+  code: string;
+  trace: Buffer;
+  driver: LensDriver | null;
+  step: number;
+  updatedAt: number;
+};
+
+const LENS_MAX_TRACE_BYTES = 800_000;
+const LENS_MAX_CODE_CHARS = 60_000;
+const LENS_MAX_TITLE_CHARS = 80;
+const LENS_MAX_STEP = 1000;
+const LENS_MAX_SESSIONS = 100;
+const LENS_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const LENS_ID = /^[A-Za-z0-9-]{8,64}$/;
+
+// One live session per room.
+const lensSessions = new Map<string, LensSession>();
+
+function currentLensSession(roomId: string, id?: unknown): LensSession | null {
+  const session = lensSessions.get(roomId);
+  if (!session) return null;
+  if (Date.now() - session.updatedAt > LENS_SESSION_TTL_MS) {
+    lensSessions.delete(roomId);
+    return null;
+  }
+  return id === undefined || session.id === id ? session : null;
+}
+
+function isLensStep(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= LENS_MAX_STEP;
+}
+
+function lensSessionPayload(session: LensSession, fresh: boolean) {
+  return {
+    id: session.id,
+    title: session.title,
+    code: session.code,
+    trace: session.trace,
+    driver: session.driver,
+    step: session.step,
+    fresh,
+  };
+}
+
 // Socket payloads come from clients and can be anything. Destructuring a
 // missing/non-object payload would throw inside the handler, so every handler
 // reads its payload through this and validates each field it uses.
@@ -91,6 +146,16 @@ function removeFromRoom(io: Server, socket: Socket, roomId: string) {
   if (room.size === 0) {
     roomPresence.delete(roomId);
     flushCodeSave(roomId);
+    lensSessions.delete(roomId);
+  } else {
+    // The Lens driver left (all their tabs): free the wheel for anyone.
+    const lens = lensSessions.get(roomId);
+    const userId = socket.data.userId as string;
+    const stillHere = Array.from(room.values()).some((user) => user.userId === userId);
+    if (lens && lens.driver?.userId === userId && !stillHere) {
+      lens.driver = null;
+      io.to(roomId).emit("lens:driver", { id: lens.id, driver: null, step: lens.step });
+    }
   }
 
   broadcastPresence(io, roomId);
@@ -149,6 +214,11 @@ export function setupSocket(io: Server) {
       });
 
       broadcastPresence(io, roomId);
+
+      // Catch up on a Lens session that's already running.
+      const lens = currentLensSession(roomId);
+      if (lens) socket.emit("lens:session", lensSessionPayload(lens, false));
+
       console.log(`User ${socket.data.userId} joined room ${roomId}`);
     });
 
@@ -297,6 +367,80 @@ export function setupSocket(io: Server) {
         error: typeof error === "string" ? error.slice(0, MAX_RUN_TEXT_CHARS) : null,
         durationMs: typeof durationMs === "number" && Number.isFinite(durationMs) ? durationMs : 0,
       });
+    });
+
+    socket.on("lens:start", (data: unknown) => {
+      const { roomId, id, title, code, trace } = payloadOf<{
+        roomId: string;
+        id: string;
+        title: string;
+        code: string;
+        trace: unknown;
+      }>(data);
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
+      if (typeof id !== "string" || !LENS_ID.test(id)) return;
+      if (typeof code !== "string" || code.length > LENS_MAX_CODE_CHARS) return;
+      if (!Buffer.isBuffer(trace) || trace.length === 0 || trace.length > LENS_MAX_TRACE_BYTES) return;
+
+      // Keep memory bounded: make room by dropping the oldest session.
+      if (!lensSessions.has(roomId) && lensSessions.size >= LENS_MAX_SESSIONS) {
+        let oldest: string | null = null;
+        let oldestAt = Infinity;
+        for (const [key, session] of lensSessions) {
+          if (session.updatedAt < oldestAt) {
+            oldest = key;
+            oldestAt = session.updatedAt;
+          }
+        }
+        if (oldest) lensSessions.delete(oldest);
+      }
+
+      const session: LensSession = {
+        id,
+        title: typeof title === "string" ? title.trim().slice(0, LENS_MAX_TITLE_CHARS) : "",
+        code,
+        trace,
+        driver: runnerInfo(socket),
+        step: 0,
+        updatedAt: Date.now(),
+      };
+      lensSessions.set(roomId, session);
+      socket.to(roomId).emit("lens:session", lensSessionPayload(session, true));
+    });
+
+    socket.on("lens:step", (data: unknown) => {
+      const { roomId, id, step } = payloadOf<{ roomId: string; id: string; step: number }>(data);
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !isLensStep(step)) return;
+      const session = currentLensSession(roomId, id);
+      // Only the driver moves everyone.
+      if (!session || session.driver?.userId !== socket.data.userId) return;
+
+      session.step = step;
+      session.updatedAt = Date.now();
+      socket.to(roomId).emit("lens:step", { id: session.id, step });
+    });
+
+    socket.on("lens:drive", (data: unknown) => {
+      const { roomId, id, step } = payloadOf<{ roomId: string; id: string; step: number }>(data);
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !isLensStep(step)) return;
+      const session = currentLensSession(roomId, id);
+      if (!session) return;
+
+      session.driver = runnerInfo(socket);
+      session.step = step;
+      session.updatedAt = Date.now();
+      socket.to(roomId).emit("lens:driver", { id: session.id, driver: session.driver, step });
+    });
+
+    socket.on("lens:stop", (data: unknown) => {
+      const { roomId, id } = payloadOf<{ roomId: string; id: string }>(data);
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
+      const session = currentLensSession(roomId, id);
+      // The driver ends it (or anyone, once nobody is driving).
+      if (!session || (session.driver && session.driver.userId !== socket.data.userId)) return;
+
+      lensSessions.delete(roomId);
+      socket.to(roomId).emit("lens:stop", { id: session.id });
     });
 
     socket.on("disconnect", () => {

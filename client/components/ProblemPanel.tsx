@@ -12,6 +12,7 @@ import {
   Circle,
   FlaskConical,
   Loader2,
+  ScanEye,
   XCircle,
 } from "lucide-react";
 import { DifficultyBadge } from "@/components/DifficultyBadge";
@@ -27,6 +28,8 @@ type ProblemPanelProps = {
   running: boolean;
   solved: boolean;
   onRunTests: () => void;
+  // Python rooms: open this test in Lens.
+  onVisualizeTest?: (index: number) => void;
 };
 
 type View = "description" | "tests";
@@ -53,7 +56,15 @@ function DetailRow({ label, value, tone = "normal" }: { label: string; value: st
   );
 }
 
-export function ProblemPanel({ problem, language, report, running, solved, onRunTests }: ProblemPanelProps) {
+export function ProblemPanel({
+  problem,
+  language,
+  report,
+  running,
+  solved,
+  onRunTests,
+  onVisualizeTest,
+}: ProblemPanelProps) {
   // Reopen on the results if tests already ran (e.g. after visiting Chat).
   const [view, setView] = useState<View>(() => (report ? "tests" : "description"));
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -249,6 +260,16 @@ export function ProblemPanel({ problem, language, report, running, solved, onRun
                                 value={result.actual ?? "nothing"}
                                 tone={result.status === "failed" ? "error" : "normal"}
                               />
+                            )}
+                            {onVisualizeTest && (
+                              <button
+                                type="button"
+                                onClick={() => onVisualizeTest(result.index)}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-ink-700 px-2 py-1 text-[11px] font-medium text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100"
+                              >
+                                <ScanEye className="h-3.5 w-3.5" aria-hidden="true" />
+                                Visualize this test
+                              </button>
                             )}
                           </div>
                         </motion.div>
