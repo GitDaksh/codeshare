@@ -1,4 +1,5 @@
 import { formatValue, valuesMatch, type CompareMode } from "@/lib/judge";
+import { buildTraceProgram, parseTraceOutput, type LensTrace } from "@/lib/lens";
 import { PROBLEMS } from "@/lib/problems";
 import { JS_RUNNER_SOURCE, PYTHON_RUNNER_SOURCE, buildSandboxDocument } from "@/lib/sandboxRunners";
 
@@ -81,9 +82,17 @@ const LIMITS = {
   // allowance; the run clock only starts once Python is ready.
   pyProgram: { loadMs: 90000, runMs: 10000 },
   pyTests: { loadMs: 90000, runMs: 15000 },
+  // Recording a trace is slower than a plain run.
+  pyTrace: { loadMs: 90000, runMs: 20000 },
+  jsTrace: { loadMs: 10000, runMs: 15000 },
 };
 
 export function isRunnable(language: string): boolean {
+  return RUNNABLE_LANGUAGES.has(language);
+}
+
+// Lens can record Python, JavaScript and TypeScript.
+export function isLensLanguage(language: string): boolean {
   return RUNNABLE_LANGUAGES.has(language);
 }
 
@@ -462,4 +471,61 @@ export async function runTests(code: string, language: string, spec: TestSpec): 
     spec,
     language
   );
+}
+
+// ============================================================================
+// Tracing (Lens)
+// ============================================================================
+
+export type TraceResult = { ok: true; trace: LensTrace } | { ok: false; error: string };
+
+// Both tracers print their recording (after a marker) as program output.
+function traceFromOutcome(outcome: SandboxOutcome, language: string): TraceResult {
+  if (outcome.kind === "timeout") {
+    return {
+      ok: false,
+      error:
+        outcome.phase === "load"
+          ? language === "python"
+            ? "The Python runtime took too long to load. Check your connection and try again."
+            : "The code runner took too long to start. Try again."
+          : `Stopped after ${seconds(outcome.limitMs)}: the program was still running.`,
+    };
+  }
+  if (outcome.kind === "fatal") return { ok: false, error: outcome.message };
+
+  const output = typeof outcome.data.output === "string" ? outcome.data.output : "";
+  const trace = parseTraceOutput(output);
+  if (trace) return { ok: true, trace };
+
+  const error = typeof outcome.data.error === "string" && outcome.data.error ? outcome.data.error : null;
+  return { ok: false, error: error ?? "Lens couldn't record this run. Try again." };
+}
+
+// Runs the program under the Lens tracer in the same Python sandbox, and
+// returns the step-by-step recording. "setup" is helper code that runs first
+// without being recorded (see lensPractice.ts).
+export async function tracePython(code: string, options: { setup?: string } = {}): Promise<TraceResult> {
+  const program = buildTraceProgram(code, options.setup ?? "");
+  return traceFromOutcome(await runPython({ mode: "program", code: program }, LIMITS.pyTrace), "python");
+}
+
+// JavaScript and TypeScript: the code is instrumented to record itself (see
+// lensJs.ts), then runs in the regular JavaScript sandbox.
+export async function traceJavaScript(
+  code: string,
+  options: { setup?: string; typescript?: boolean } = {},
+): Promise<TraceResult> {
+  const { buildJsTraceProgram } = await import("@/lib/lensJs");
+  const built = await buildJsTraceProgram(code, options);
+  if ("error" in built) {
+    // Code that can't be read comes back like Python's: no steps, one error.
+    return { ok: true, trace: { steps: [], stdout: "", error: built.error, truncated: false, outputClipped: false } };
+  }
+  return traceFromOutcome(await runJavaScript({ mode: "program", code: built.program }, LIMITS.jsTrace), "javascript");
+}
+
+export function traceCode(language: string, code: string, options: { setup?: string } = {}): Promise<TraceResult> {
+  if (language === "python") return tracePython(code, options);
+  return traceJavaScript(code, { ...options, typescript: language === "typescript" });
 }

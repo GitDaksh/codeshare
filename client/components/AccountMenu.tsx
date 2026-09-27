@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, LayoutDashboard, LogOut, Settings, Target, User, type LucideIcon } from "lucide-react";
+import { ChevronDown, LayoutDashboard, LogOut, ScanEye, Settings, Target, User, type LucideIcon } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
@@ -147,6 +147,7 @@ export function AccountMenu() {
 
             <MenuLink href="/dashboard" icon={LayoutDashboard} label="Dashboard" onSelect={close} />
             <MenuLink href="/practice" icon={Target} label="Practice" onSelect={close} />
+            <MenuLink href="/lens" icon={ScanEye} label="Lens" onSelect={close} />
             <MenuLink href="/profile" icon={User} label="Profile" onSelect={close} />
             <MenuButton
               icon={Settings}

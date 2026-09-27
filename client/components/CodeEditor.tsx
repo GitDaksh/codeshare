@@ -291,6 +291,11 @@ export function CodeEditor({
   }, []);
 
   const handleMount: OnMount = (editor, monaco) => {
+    // Bracket colors are drawn by the text model, which ignores the editor's
+    // bracketPairColorization option, so turn them off on the model itself.
+    editor.getModel()?.updateOptions({
+      bracketColorizationOptions: { enabled: false, independentColorPoolPerBracketType: false },
+    });
     editorRef.current = editor;
     monacoRef.current = monaco;
 
