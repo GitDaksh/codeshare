@@ -296,25 +296,20 @@ function outputExpression(type: ValueType | "void" | undefined, name: string, h:
 
 export type LensTestProgram = { code: string; setup: string; title: string; language: string };
 
-export function buildTestProgram(
-  problem: Problem,
-  code: string,
-  testIndex: number,
-  language = "python",
-): LensTestProgram | null {
-  if (language === "javascript" || language === "typescript") {
-    return buildJsTestProgram(problem, code, testIndex, language);
-  }
-  const test = problem.tests[testIndex];
-  if (!test) return null;
+// What a Practice room visualizes: one of the problem's tests, the user's own
+// input, or just their code as it is.
+export type LensChoice = { kind: "test"; index: number } | { kind: "custom"; args: unknown[] } | { kind: "code" };
 
+type ProgramSpec = { args: unknown[]; expected?: { value: unknown }; heading: string; title: string };
+
+function pythonProgram(problem: Problem, code: string, spec: ProgramSpec): LensTestProgram {
   const fn = problem.functionName.py;
   const args = problem.params.map((param) => param.name).join(", ");
-  const expected = `  # expected: ${pyLiteral(test.expected)}`;
-  const lines = [`# ── Test ${testIndex + 1}, added by Lens ──`];
+  const expected = spec.expected ? `  # expected: ${pyLiteral(spec.expected.value)}` : "";
+  const lines = [`# ── ${spec.heading} ──`];
 
   problem.params.forEach((param, index) => {
-    lines.push(`${param.name} = ${inputExpression(param.type, test.args[index])}`);
+    lines.push(`${param.name} = ${inputExpression(param.type, spec.args[index])}`);
   });
 
   if (problem.returns === "void") {
@@ -332,25 +327,22 @@ export function buildTestProgram(
   return {
     code: `${base}\n\n\n${lines.join("\n")}\n`,
     setup: LENS_TEST_SETUP_PY,
-    title: `Test ${testIndex + 1}`,
+    title: spec.title,
     language: "python",
   };
 }
 
 // JavaScript / TypeScript: the test runs in its own block, so its names
 // can't clash with anything the user declared.
-function buildJsTestProgram(problem: Problem, code: string, testIndex: number, language: string): LensTestProgram | null {
-  const test = problem.tests[testIndex];
-  if (!test) return null;
-
+function scriptProgram(problem: Problem, code: string, spec: ProgramSpec, language: string): LensTestProgram {
   const h = HELPERS.javascript;
   const fn = problem.functionName.js;
   const args = problem.params.map((param) => param.name).join(", ");
-  const expected = ` // expected: ${jsLiteral(test.expected)}`;
-  const lines = [`// ── Test ${testIndex + 1}, added by Lens ──`, "{"];
+  const expected = spec.expected ? ` // expected: ${jsLiteral(spec.expected.value)}` : "";
+  const lines = [`// ── ${spec.heading} ──`, "{"];
 
   problem.params.forEach((param, index) => {
-    lines.push(`  const ${param.name} = ${inputExpression(param.type, test.args[index], h)};`);
+    lines.push(`  const ${param.name} = ${inputExpression(param.type, spec.args[index], h)};`);
   });
 
   if (problem.returns === "void") {
@@ -367,7 +359,179 @@ function buildJsTestProgram(problem: Problem, code: string, testIndex: number, l
   return {
     code: `${base}\n\n\n${lines.join("\n")}\n`,
     setup: LENS_TEST_SETUP_JS,
-    title: `Test ${testIndex + 1}`,
+    title: spec.title,
     language,
   };
+}
+
+function buildProgram(problem: Problem, code: string, language: string, spec: ProgramSpec): LensTestProgram {
+  return language === "javascript" || language === "typescript"
+    ? scriptProgram(problem, code, spec, language)
+    : pythonProgram(problem, code, spec);
+}
+
+export function buildTestProgram(
+  problem: Problem,
+  code: string,
+  testIndex: number,
+  language = "python",
+): LensTestProgram | null {
+  const test = problem.tests[testIndex];
+  if (!test) return null;
+  return buildProgram(problem, code, language, {
+    args: test.args,
+    expected: { value: test.expected },
+    heading: `Test ${testIndex + 1}, added by Lens`,
+    title: `Test ${testIndex + 1}`,
+  });
+}
+
+// The user's own input (already checked by parseCustomArgs).
+export function buildCustomProgram(problem: Problem, code: string, args: unknown[], language = "python"): LensTestProgram {
+  return buildProgram(problem, code, language, { args, heading: "Custom input, added by Lens", title: "Custom input" });
+}
+
+export function buildChoiceProgram(
+  problem: Problem,
+  code: string,
+  choice: LensChoice,
+  language = "python",
+): LensTestProgram | null {
+  if (choice.kind === "test") return buildTestProgram(problem, code, choice.index, language);
+  if (choice.kind === "custom") return buildCustomProgram(problem, code, choice.args, language);
+  return { code, setup: "", title: "", language };
+}
+
+// The test to show by default: the first one that failed in the last test
+// run (that's the one worth debugging), otherwise Test 1.
+export function defaultChoice(report: { results: { status: string }[] } | null): { kind: "test"; index: number } {
+  const failing = report ? report.results.findIndex((r) => r.status === "failed" || r.status === "error") : -1;
+  return { kind: "test", index: failing >= 0 ? failing : 0 };
+}
+
+// A session's title says what it shows ("Test 2", "Custom input", "" for
+// just the code, or the call the user typed).
+export function choiceLabel(title: string): { label: string; index: number | null } {
+  const test = /^Test (\d+)$/.exec(title);
+  if (test) return { label: title, index: Number(test[1]) - 1 };
+  if (title === "Custom input") return { label: title, index: null };
+  if (title === "") return { label: "Just my code", index: null };
+  return { label: "Your call", index: null };
+}
+
+// ---------- Custom input ----------
+
+const MAX_ARG_CHARS = 5000;
+
+const TYPE_HINTS: Record<ValueType, { words: string; example: string }> = {
+  int: { words: "a whole number", example: "5" },
+  float: { words: "a number", example: "2.5" },
+  str: { words: "text in quotes", example: '"hello"' },
+  bool: { words: "true or false", example: "true" },
+  "int[]": { words: "a list of whole numbers", example: "[1, 2, 3]" },
+  "int[][]": { words: "a list of lists of whole numbers", example: "[[1, 2], [3, 4]]" },
+  "str[]": { words: "a list of strings", example: '["a", "b"]' },
+  "str[][]": { words: "a list of lists of strings", example: '[["a", "b"], ["c"]]' },
+  list: { words: "a linked list, written as a list", example: "[1, 2, 3]" },
+  "list[]": { words: "a list of linked lists", example: "[[1, 4], [2, 3]]" },
+  tree: { words: "a tree in level order (null for a missing child)", example: "[1, 2, 3, null, 4]" },
+};
+
+const isInt = (v: unknown) => typeof v === "number" && Number.isInteger(v);
+const isStr = (v: unknown) => typeof v === "string";
+const listOf = (v: unknown, check: (item: unknown) => boolean) => Array.isArray(v) && v.every(check);
+
+function fitsType(value: unknown, type: ValueType): boolean {
+  switch (type) {
+    case "int":
+      return isInt(value);
+    case "float":
+      return typeof value === "number" && Number.isFinite(value);
+    case "str":
+      return isStr(value);
+    case "bool":
+      return typeof value === "boolean";
+    case "int[]":
+    case "list":
+      return listOf(value, isInt);
+    case "int[][]":
+    case "list[]":
+      return listOf(value, (row) => listOf(row, isInt));
+    case "str[]":
+      return listOf(value, isStr);
+    case "str[][]":
+      return listOf(value, (row) => listOf(row, isStr));
+    case "tree":
+      return listOf(value, (item) => item === null || isInt(item));
+  }
+}
+
+// JSON, plus Python spellings (None, True, False, 'single quotes'), so the
+// same box works in every language.
+function readLiteral(text: string): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch {
+    // Fall through to the Python spellings.
+  }
+  let out = "";
+  let quote: string | null = null;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) {
+      if (ch === "\\") {
+        // JSON has no \' escape: inside single quotes it's just a quote.
+        const next = text[i + 1] ?? "";
+        out += next === "'" ? "'" : ch + next;
+        i++;
+      } else if (ch === quote) {
+        out += '"';
+        quote = null;
+      } else {
+        out += ch === '"' ? '\\"' : ch;
+      }
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      out += '"';
+      continue;
+    }
+    const word = /^(None|True|False)\b/.exec(text.slice(i));
+    if (word && !/[\w$]/.test(text[i - 1] ?? "")) {
+      out += word[1] === "None" ? "null" : word[1] === "True" ? "true" : "false";
+      i += word[1].length - 1;
+      continue;
+    }
+    out += ch;
+  }
+  try {
+    return { ok: true, value: JSON.parse(out) };
+  } catch {
+    return { ok: false };
+  }
+}
+
+// Each argument as text for the custom-input boxes, e.g. "[1, 2, 3]".
+export function formatArgs(args: unknown[]): string[] {
+  return args.map((arg) => jsLiteral(arg));
+}
+
+export function parseCustomArgs(
+  problem: Problem,
+  texts: string[],
+): { ok: true; args: unknown[] } | { ok: false; errors: (string | null)[] } {
+  const args: unknown[] = [];
+  const errors = problem.params.map((param, index) => {
+    const text = (texts[index] ?? "").trim();
+    const hint = TYPE_HINTS[param.type];
+    if (!text) return "Enter a value.";
+    if (text.length > MAX_ARG_CHARS) return `That's too long for Lens (${MAX_ARG_CHARS.toLocaleString()} characters max).`;
+    const read = readLiteral(text);
+    if (!read.ok) return `Lens couldn't read that. Write it like ${hint.example}.`;
+    if (!fitsType(read.value, param.type)) return `${param.name} should be ${hint.words}, like ${hint.example}.`;
+    args[index] = read.value;
+    return null;
+  });
+  return errors.some((error) => error !== null) ? { ok: false, errors } : { ok: true, args };
 }

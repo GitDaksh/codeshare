@@ -2,7 +2,9 @@
 
 import { Crosshair, EyeOff, Hand, Loader2, Square } from "lucide-react";
 import { AvatarIcon } from "@/components/AvatarIcon";
+import { LensCallCard } from "@/components/lens/LensCallCard";
 import { LensPlayer } from "@/components/lens/LensPlayer";
+import { LensTestPicker } from "@/components/lens/LensTestPicker";
 import type { RoomLensState } from "@/lib/useRoomLens";
 
 const ACTION =
@@ -22,10 +24,14 @@ function SessionActions({ lens }: { lens: RoomLensState }) {
 
   return (
     <div className="flex shrink-0 items-center gap-1.5">
-      {session.title && (
-        <span className="hidden rounded-md border border-ink-800 px-1.5 py-0.5 font-mono text-[10px] text-ink-400 xl:inline">
-          {session.title}
-        </span>
+      {lens.practice ? (
+        <LensTestPicker practice={lens.practice} title={session.title} truncated={session.trace.truncated} />
+      ) : (
+        session.title && (
+          <span className="hidden max-w-[16rem] truncate rounded-md border border-ink-800 px-1.5 py-0.5 font-mono text-[10px] text-ink-400 xl:inline">
+            {session.title}
+          </span>
+        )
       )}
       <span className="hidden items-center gap-1.5 pr-1 text-[11px] text-ink-400 md:flex" aria-live="polite">
         {session.shared && driver && <AvatarIcon avatarId={driver.avatarId} className="h-4 w-4" />}
@@ -62,8 +68,8 @@ function SessionActions({ lens }: { lens: RoomLensState }) {
   );
 }
 
-// Sits over the editor: the recording veil, the shared player, or (when
-// the player is hidden) a small live banner to jump back in.
+// Sits over the editor: the recording veil, the "nothing ran" card, the
+// shared player, or (when the player is hidden) a small banner to jump back in.
 export function RoomLens({ lens }: { lens: RoomLensState }) {
   const { session } = lens;
 
@@ -72,11 +78,33 @@ export function RoomLens({ lens }: { lens: RoomLensState }) {
       <div className="absolute inset-0 z-20 grid place-items-center bg-ink-950/85 backdrop-blur-sm">
         <div className="flex flex-col items-center gap-3 px-6 text-center" role="status">
           <Loader2 className="h-5 w-5 animate-spin text-ink-300" aria-hidden="true" />
-          <p className="text-sm font-medium text-ink-100">Recording your run…</p>
+          <p className="max-w-xs truncate text-sm font-medium text-ink-100">
+            Recording {lens.recordingTitle || "your run"}…
+          </p>
           {lens.recordingLanguage === "python" && (
             <p className="max-w-xs text-xs text-ink-500">The first time, Python takes a few seconds to download.</p>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (lens.idle) {
+    const idle = lens.idle;
+    const practice = lens.practice;
+    return (
+      <div className="absolute inset-0 z-20 grid grid-cols-1 place-items-center overflow-y-auto bg-ink-950/90 p-4 backdrop-blur-sm">
+        <LensCallCard
+          key={idle.defaultCall}
+          language={idle.language}
+          callables={idle.callables}
+          defaultCall={idle.defaultCall}
+          onSubmit={(call) => void lens.submitCall(call)}
+          onShowAnyway={() => void lens.showIdleAnyway()}
+          onCancel={lens.dismissIdle}
+          testLabel={practice ? `Test ${practice.defaultTest + 1}` : undefined}
+          onUseTest={practice ? () => practice.choose({ kind: "test", index: practice.defaultTest }) : undefined}
+        />
       </div>
     );
   }
