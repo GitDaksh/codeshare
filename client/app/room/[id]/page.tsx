@@ -56,6 +56,7 @@ import { CodeEditor, type RemoteCursor, type RemoteCodeUpdate, type CodeEditorHa
 import { LanguageDropdown } from "@/components/LanguageDropdown";
 import { RunPanel } from "@/components/RunPanel";
 import { ChatPanel } from "@/components/ChatPanel";
+import { ComplexityMeter } from "@/components/ComplexityMeter";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { PresenceStack } from "@/components/PresenceStack";
 import { RoomSettingsModal } from "@/components/RoomSettingsModal";
@@ -81,6 +82,7 @@ import {
   type Problem,
 } from "@/lib/problems";
 import { EDITOR_THEMES } from "@/lib/editorTheme";
+import { useComplexity } from "@/lib/useComplexity";
 import { useRoomLens } from "@/lib/useRoomLens";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import type { Room } from "@/types/room";
@@ -203,6 +205,8 @@ export default function RoomPage({
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const [remoteCursors, setRemoteCursors] = useState<RemoteCursorEvent[]>([]);
+  // Tells the Big-O meter the code changed (set once the meter exists).
+  const meterChangedRef = useRef<() => void>(() => {});
 
   // Practice: the problem this room was started from (if any) and test state.
   const problem = useMemo(() => (room?.problemSlug ? getProblem(room.problemSlug) : null), [room?.problemSlug]);
@@ -239,6 +243,7 @@ export default function RoomPage({
   const handleIncomingCodeChange = useCallback(
     (incomingCode: string, cursor: RemoteCursorEvent | null) => {
       setRemoteUpdate((prev) => ({ code: incomingCode, nonce: (prev?.nonce ?? 0) + 1 }));
+      meterChangedRef.current();
       if (cursor) {
         setRemoteCursors((prev) => [...prev.filter((c) => c.userId !== cursor.userId), cursor]);
       }
@@ -361,6 +366,13 @@ export default function RoomPage({
     context: { language, getCode: getLensCode, problem, report: testReport },
   });
 
+  // The Big-O meter: measures the room's code a moment after it stops
+  // changing (by itself on desktop; with a tap on phones).
+  const meter = useComplexity({ language, getCode: getLensCode, problem, auto: isDesktop });
+  useEffect(() => {
+    meterChangedRef.current = meter.notifyChange;
+  });
+
   const editorCursors = useMemo<RemoteCursor[]>(
     () =>
       remoteCursors
@@ -478,6 +490,7 @@ export default function RoomPage({
 
   function handleCodeChange(newCode: string, line: number, column: number) {
     sendCodeChange(newCode, line, column);
+    meterChangedRef.current();
 
     setSaveStatus("saving");
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -1089,6 +1102,7 @@ export default function RoomPage({
               themeId={editorTheme}
               onThemeChange={setEditorTheme}
             />
+            <ComplexityMeter meter={meter} />
             <RoomLens lens={lens} />
           </div>
           <RunPanel

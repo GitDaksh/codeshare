@@ -1,6 +1,14 @@
+import { meterInputs, planMeter, summarize, type MeterResult, type MeterTarget } from "@/lib/complexity";
+import {
+  jsSpaceProgram,
+  jsTimeProgram,
+  meterNames,
+  parseMeterOutput,
+  pythonMeterProgram,
+} from "@/lib/complexityDrivers";
 import { formatValue, valuesMatch, type CompareMode } from "@/lib/judge";
 import { buildTraceProgram, parseTraceOutput, type LensTrace } from "@/lib/lens";
-import { PROBLEMS } from "@/lib/problems";
+import { PROBLEMS, type Problem } from "@/lib/problems";
 import { JS_RUNNER_SOURCE, PYTHON_RUNNER_SOURCE, buildSandboxDocument } from "@/lib/sandboxRunners";
 
 // ============================================================================
@@ -85,6 +93,9 @@ const LIMITS = {
   // Recording a trace is slower than a plain run.
   pyTrace: { loadMs: 90000, runMs: 20000 },
   jsTrace: { loadMs: 10000, runMs: 15000 },
+  // The complexity meter runs a function many times on growing inputs.
+  jsMeter: { loadMs: 10000, runMs: 15000 },
+  pyMeter: { loadMs: 90000, runMs: 25000 },
 };
 
 export function isRunnable(language: string): boolean {
@@ -234,25 +245,33 @@ async function runJavaScript(request: Record<string, unknown>, limits: { loadMs:
   }
 }
 
-// Python keeps one sandbox alive between runs so the runtime stays loaded.
+// Python keeps a sandbox alive between runs so the runtime stays loaded.
 // It's only torn down (and rebuilt on the next run) after a timeout or crash.
-let pythonSandbox: Sandbox | null = null;
-let pythonQueue: Promise<unknown> = Promise.resolve();
-
-function runPython(request: Record<string, unknown>, limits: { loadMs: number; runMs: number }) {
-  const job = pythonQueue.then(async () => {
-    // Pyodide only runs in a module worker (see sandboxRunners.ts).
-    if (!pythonSandbox) pythonSandbox = new Sandbox(PYTHON_RUNNER_SOURCE, { moduleWorker: true });
-    const outcome = await runInSandbox(pythonSandbox, request, limits);
-    if (outcome.kind !== "done") {
-      pythonSandbox.destroy();
-      pythonSandbox = null;
-    }
-    return outcome;
-  });
-  pythonQueue = job.catch(() => {});
-  return job;
+// Runs take turns, one at a time per sandbox.
+function pythonRunner() {
+  let sandbox: Sandbox | null = null;
+  let queue: Promise<unknown> = Promise.resolve();
+  return (request: Record<string, unknown>, limits: { loadMs: number; runMs: number }) => {
+    const job = queue.then(async () => {
+      // Pyodide only runs in a module worker (see sandboxRunners.ts).
+      const current = sandbox ?? new Sandbox(PYTHON_RUNNER_SOURCE, { moduleWorker: true });
+      sandbox = current;
+      const outcome = await runInSandbox(current, request, limits);
+      if (outcome.kind !== "done") {
+        current.destroy();
+        sandbox = null;
+      }
+      return outcome;
+    });
+    queue = job.catch(() => {});
+    return job;
+  };
 }
+
+const runPython = pythonRunner();
+// The complexity meter measures in the background in its own sandbox, so it
+// never makes the Run button wait.
+const runPythonMeter = pythonRunner();
 
 // ============================================================================
 // TypeScript → JavaScript (types are stripped, not checked)
@@ -528,4 +547,96 @@ export async function traceJavaScript(
 export function traceCode(language: string, code: string, options: { setup?: string } = {}): Promise<TraceResult> {
   if (language === "python") return tracePython(code, options);
   return traceJavaScript(code, { ...options, typescript: language === "typescript" });
+}
+
+// ============================================================================
+// Complexity (the Big-O meter, see complexity.ts)
+// ============================================================================
+
+const lastLine = (text: string) =>
+  text
+    .trim()
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .pop() ?? text;
+
+function meterResult(
+  time: SandboxOutcome,
+  space: SandboxOutcome | null,
+  target: MeterTarget,
+  language: string,
+  code: string,
+): MeterResult {
+  if (time.kind === "timeout") {
+    return {
+      status: "error",
+      message:
+        time.phase === "load"
+          ? language === "python"
+            ? "The Python runtime took too long to load. Try again."
+            : "The code runner took too long to start. Try again."
+          : "Your code took too long, even on small inputs. Check for an infinite loop.",
+    };
+  }
+  if (time.kind === "fatal") return { status: "error", message: time.message };
+  const raw = parseMeterOutput(typeof time.data.output === "string" ? time.data.output : "");
+  if (!raw) {
+    const error = typeof time.data.error === "string" && time.data.error ? time.data.error : null;
+    return {
+      status: "error",
+      message: error ? `Your code crashed: ${lastLine(error)}` : "Lens couldn't measure this code.",
+    };
+  }
+  // JavaScript measures memory in a second, instrumented run.
+  if (space) {
+    const measured = space.kind === "done" ? parseMeterOutput(String(space.data.output ?? "")) : null;
+    raw.space = measured?.space ?? [];
+    if (!raw.error && measured?.error) raw.error = measured.error;
+  }
+  return summarize(raw, target, language, code);
+}
+
+// Runs the room's main function on growing inputs and judges how its time
+// and memory grow. "problem" (Practice rooms) says what the inputs are;
+// otherwise they're worked out from the parameter names.
+export async function measureComplexity(language: string, code: string, problem: Problem | null): Promise<MeterResult> {
+  if (!isLensLanguage(language)) {
+    return { status: "unavailable", message: "Big-O is measured for Python, JavaScript and TypeScript." };
+  }
+  const plan = planMeter(code, language, problem);
+  if (!plan.ok) return { status: "unavailable", message: plan.reason };
+  const { target } = plan;
+  const spec = JSON.stringify({ shapes: target.shapes, inputs: meterInputs(target) });
+
+  if (language === "python") {
+    const outcome = await runPythonMeter(
+      { mode: "program", code: pythonMeterProgram(code, target, spec) },
+      LIMITS.pyMeter,
+    );
+    return meterResult(outcome, null, target, language, code);
+  }
+
+  let plain = code;
+  if (language === "typescript") {
+    const compiled = await transpileTypeScript(code);
+    if ("error" in compiled) return { status: "error", message: `Your code has an error: ${lastLine(compiled.error)}` };
+    plain = compiled.code;
+  }
+  const time = await runJavaScript({ mode: "program", code: jsTimeProgram(plain, target, spec) }, LIMITS.jsMeter);
+  if (time.kind !== "done" || !parseMeterOutput(String(time.data.output ?? ""))) {
+    return meterResult(time, null, target, language, code);
+  }
+  let instrumented: string | null = null;
+  try {
+    const Babel = await import("@babel/standalone");
+    const { instrumentJsWith } = await import("@/lib/lensJs");
+    instrumented = instrumentJsWith(Babel, code, { typescript: language === "typescript", resolve: meterNames(target) });
+  } catch {
+    instrumented = null;
+  }
+  const space = instrumented
+    ? await runJavaScript({ mode: "program", code: jsSpaceProgram(instrumented, target, spec) }, LIMITS.jsMeter)
+    : null;
+  return meterResult(time, space, target, language, code);
 }

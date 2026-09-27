@@ -445,7 +445,7 @@ const LOOPS = new Set(["ForStatement", "WhileStatement", "DoWhileStatement", "Fo
 
 type Visible = { name: string; pos: number };
 
-function lensPlugin(options: { findsUserClasses: boolean }) {
+function lensPlugin(options: { resolve: string[] }) {
   return (api: BabelApi): PluginObj => {
     const t = api.types;
     // Nodes this plugin created or already handled.
@@ -765,13 +765,15 @@ function lensPlugin(options: { findsUserClasses: boolean }) {
             path.pushContainer("body", end).forEach((inserted) => inserted.skip());
 
             const prologue = [statement("const __lf = __lens.g();")];
-            if (options.findsUserClasses) {
-              // Lets the test helpers use the user's own node classes.
+            if (options.resolve.length) {
+              // Lets code outside the user's program (the test helpers, the
+              // complexity meter) reach the user's own functions and classes.
               prologue.push(
                 statement(
                   "__lens.u = function (name) { " +
-                    'try { if (name === "ListNode") return ListNode; } catch (e) {} ' +
-                    'try { if (name === "TreeNode") return TreeNode; } catch (e) {} ' +
+                    options.resolve
+                      .map((name) => `try { if (name === ${JSON.stringify(name)}) return ${name}; } catch (e) {} `)
+                      .join("") +
                     "};",
                 ),
               );
@@ -789,13 +791,38 @@ function lensPlugin(options: { findsUserClasses: boolean }) {
 export type LensJsProgram = { program: string } | { error: { line: number | null; message: string } };
 
 const PARSER_OPTS = { allowReturnOutsideFunction: true, allowAwaitOutsideFunction: true };
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
-function syntaxError(err: unknown): { line: number | null; message: string } {
+export function syntaxError(err: unknown): { line: number | null; message: string } {
   const e = err as { loc?: { line?: unknown }; message?: unknown } | null;
   const line = typeof e?.loc?.line === "number" ? e.loc.line : null;
   const first = String(e?.message ?? "This code couldn't be read.").split("\n")[0];
   const message = first.replace(/^[^:]*main\.(?:ts|js):\s*/, "").replace(/\s*\(\d+:\d+\)\s*$/, "");
   return { line, message: message.startsWith("SyntaxError") ? message : `SyntaxError: ${message}` };
+}
+
+// The user's code, instrumented to call a Lens runtime (__lens). "resolve"
+// lists names that code outside the program can look up with __lens.u(name).
+// One pass: TypeScript's types are stripped while the code is instrumented,
+// so every step keeps its original line, and code the TypeScript transform
+// generates (enums, parameter properties) has no line of its own and isn't
+// stepped through. Throws on code that can't be read.
+export function instrumentJsWith(
+  Babel: BabelStandalone,
+  code: string,
+  options: { typescript?: boolean; resolve?: string[] } = {},
+): string {
+  return (
+    Babel.transform(code, {
+      filename: options.typescript ? "main.ts" : "main.js",
+      presets: options.typescript ? [["typescript", { allExtensions: true }]] : [],
+      plugins: [lensPlugin({ resolve: (options.resolve ?? []).filter((name) => IDENTIFIER.test(name)) })],
+      babelrc: false,
+      configFile: false,
+      sourceType: "script",
+      parserOpts: PARSER_OPTS,
+    }).code ?? ""
+  );
 }
 
 // Synchronous core (Babel passed in), so it can be tested outside the browser.
@@ -805,20 +832,11 @@ export function buildJsTraceProgramWith(
   options: { typescript?: boolean; setup?: string } = {},
 ): LensJsProgram {
   try {
-    // One pass: TypeScript's types are stripped while the code is
-    // instrumented, so every step keeps its original line, and code the
-    // TypeScript transform generates (enums, parameter properties) has no
-    // line of its own and isn't stepped through.
-    const instrumented =
-      Babel.transform(code, {
-        filename: options.typescript ? "main.ts" : "main.js",
-        presets: options.typescript ? [["typescript", { allExtensions: true }]] : [],
-        plugins: [lensPlugin({ findsUserClasses: !!options.setup })],
-        babelrc: false,
-        configFile: false,
-        sourceType: "script",
-        parserOpts: PARSER_OPTS,
-      }).code ?? "";
+    const instrumented = instrumentJsWith(Babel, code, {
+      typescript: options.typescript,
+      // Test helpers build inputs with the user's own node classes.
+      resolve: options.setup ? ["ListNode", "TreeNode"] : [],
+    });
 
     const program = [
       LENS_JS_RUNTIME,
