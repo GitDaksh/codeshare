@@ -1,9 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { traceCode } from "@/lib/execution";
+import { traceCode, type TestRunReport } from "@/lib/execution";
 import type { LensTrace } from "@/lib/lens";
+import {
+  buildCallProgram,
+  defaultCallable,
+  findCallables,
+  isIdleTrace,
+  lensErrorHint,
+  type LensCallable,
+} from "@/lib/lensCall";
+import { buildChoiceProgram, defaultChoice, formatArgs, parseCustomArgs, type LensChoice } from "@/lib/lensPractice";
 import { LENS_SHARE_MAX_CODE, packTrace, unpackTrace } from "@/lib/lensShare";
+import { functionNameFor, type Problem } from "@/lib/problems";
 import type { LensDriver, LensDriverEvent, LensSessionEvent, LensStepEvent, LensStopEvent } from "@/types/roomEvents";
 
 // A room's Lens session. Whoever clicks Visualize records the run in their
@@ -29,8 +39,37 @@ export type LensSenders = {
   stop: (id: string) => void;
 };
 
+// What the room is working on, read when Visualize is pressed.
+export type RoomLensContext = {
+  language: string;
+  getCode: () => string;
+  // Practice rooms: the problem, and the last test run (if any).
+  problem: Problem | null;
+  report: TestRunReport | null;
+};
+
+// A recording in which nothing ran (the code only defines things). It isn't
+// shared; the person who recorded it gets a box to add a call instead.
+export type RoomLensIdle = {
+  code: string;
+  language: string;
+  trace: LensTrace;
+  callables: LensCallable[];
+  defaultCall: string;
+};
+
 type Notify = (message: string, tone?: "error" | "info") => void;
 type Position = { id: string; step: number };
+type VisualizeInput = {
+  code: string;
+  language?: string;
+  title?: string;
+  setup?: string;
+  // Plain code: if nothing runs, offer the call box instead of sharing.
+  checkIdle?: boolean;
+  // Practice: the function the tests call, for a clearer error if it's renamed.
+  fnName?: string;
+};
 
 // At most one step update per this many milliseconds while scrubbing.
 const STEP_SEND_MS = 60;
@@ -52,7 +91,24 @@ function validDriver(driver: unknown): LensDriver | null {
     : null;
 }
 
-export function useRoomLens({ me, send, notify }: { me: LensDriver | null; send: LensSenders; notify: Notify }) {
+function choiceText(choice: LensChoice, report: TestRunReport | null): string {
+  if (choice.kind === "custom") return "your custom input";
+  if (choice.kind === "code") return "just your code";
+  const status = report?.results[choice.index]?.status;
+  return `Test ${choice.index + 1}${status === "failed" || status === "error" ? " (failing)" : ""}`;
+}
+
+export function useRoomLens({
+  me,
+  send,
+  notify,
+  context,
+}: {
+  me: LensDriver | null;
+  send: LensSenders;
+  notify: Notify;
+  context?: RoomLensContext;
+}) {
   const [session, setSession] = useState<RoomLensSession | null>(null);
   // Where the driver is. Everyone following shows this step.
   const [position, setPosition] = useState<Position | null>(null);
@@ -62,9 +118,16 @@ export function useRoomLens({ me, send, notify }: { me: LensDriver | null; send:
   const [open, setOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordingLanguage, setRecordingLanguage] = useState<string | null>(null);
+  const [recordingTitle, setRecordingTitle] = useState("");
+  const [idle, setIdle] = useState<RoomLensIdle | null>(null);
+  // Practice: what you last picked. It only counts until the next test run,
+  // after which Visualize goes back to the first failing test.
+  const [picked, setPicked] = useState<{ choice: LensChoice; report: TestRunReport | null } | null>(null);
+  const [customTexts, setCustomTexts] = useState<string[] | null>(null);
 
   const sessionRef = useRef<RoomLensSession | null>(null);
   const sendRef = useRef(send);
+  const contextRef = useRef(context);
   const recordingRef = useRef(false);
   // The newest session id, so a slow unpack can't overwrite a newer session.
   const latestIdRef = useRef<string | null>(null);
@@ -80,6 +143,7 @@ export function useRoomLens({ me, send, notify }: { me: LensDriver | null; send:
 
   useEffect(() => {
     sendRef.current = send;
+    contextRef.current = context;
   });
 
   useEffect(
@@ -111,57 +175,141 @@ export function useRoomLens({ me, send, notify }: { me: LensDriver | null; send:
 
   // ---------- Actions ----------
 
+  const startSession = useCallback(
+    async ({ code, title, trace }: { code: string; title: string; trace: LensTrace }) => {
+      const id = newSessionId();
+      let shared = false;
+      if (me && code.length <= LENS_SHARE_MAX_CODE) {
+        const packed = await packTrace(trace);
+        if (packed) {
+          sendRef.current.start({ id, title, code, trace: packed });
+          shared = true;
+        }
+      }
+
+      latestIdRef.current = id;
+      setSession({ id, title, code, trace, driver: me, shared });
+      setPosition({ id, step: 0 });
+      setOwnStep(0);
+      setFollowing(true);
+      setOpen(true);
+      if (!shared) notify("This recording couldn't be shared with the room, so only you can see it.", "info");
+    },
+    [me, notify],
+  );
+
+  // Records a program and shares it. Returns true when a session started.
   const visualize = useCallback(
-    async (input: { code: string; language?: string; title?: string; setup?: string }) => {
-      if (recordingRef.current) return;
+    async (input: VisualizeInput): Promise<boolean> => {
+      if (recordingRef.current) return false;
       const language = input.language ?? "python";
       recordingRef.current = true;
       setRecording(true);
       setRecordingLanguage(language);
+      setRecordingTitle(input.title ?? "");
       try {
         const result = await traceCode(language, input.code, { setup: input.setup });
         if (!result.ok) {
           notify(result.error, "error");
-          return;
+          return false;
         }
         const trace = result.trace;
         if (trace.steps.length === 0) {
           const problem = trace.error;
+          const hint = problem ? lensErrorHint(problem.message, language, input.fnName) : null;
           notify(
             problem
-              ? `${problem.message}${problem.line ? ` (line ${problem.line})` : ""}`
+              ? `${problem.message}${problem.line ? ` (line ${problem.line})` : ""}${hint ? ` ${hint}` : ""}`
               : "There's nothing to visualize yet.",
             "error",
           );
-          return;
+          return false;
         }
 
-        const id = newSessionId();
-        const title = input.title ?? "";
-        let shared = false;
-        if (me && input.code.length <= LENS_SHARE_MAX_CODE) {
-          const packed = await packTrace(trace);
-          if (packed) {
-            sendRef.current.start({ id, title, code: input.code, trace: packed });
-            shared = true;
-          }
+        if (input.checkIdle && isIdleTrace(trace)) {
+          const callables = findCallables(trace, input.code, language);
+          setIdle({
+            code: input.code,
+            language,
+            trace,
+            callables,
+            defaultCall: defaultCallable(callables)?.template ?? "",
+          });
+          return false;
         }
 
-        latestIdRef.current = id;
-        setSession({ id, title, code: input.code, trace, driver: me, shared });
-        setPosition({ id, step: 0 });
-        setOwnStep(0);
-        setFollowing(true);
-        setOpen(true);
-        if (!shared) notify("This recording couldn't be shared with the room, so only you can see it.", "info");
+        const hint = trace.error ? lensErrorHint(trace.error.message, language, input.fnName) : null;
+        if (hint) notify(hint, "info");
+        setIdle(null);
+        await startSession({ code: input.code, title: input.title ?? "", trace });
+        return true;
       } finally {
         recordingRef.current = false;
         setRecording(false);
         setRecordingLanguage(null);
+        setRecordingTitle("");
       }
     },
-    [me, notify],
+    [notify, startSession],
   );
+
+  // The Visualize button. In a Practice room it runs a test (the one you
+  // picked, else the first failing one, else Test 1); elsewhere it runs the
+  // code as it is.
+  const run = useCallback(
+    async (choice?: LensChoice) => {
+      const ctx = contextRef.current;
+      if (!ctx) return;
+      const code = ctx.getCode();
+      if (!ctx.problem) {
+        await visualize({ code, language: ctx.language, title: "", checkIdle: true });
+        return;
+      }
+      if (choice) setPicked({ choice, report: ctx.report });
+      const active =
+        choice ?? (picked && picked.report === ctx.report ? picked.choice : null) ?? defaultChoice(ctx.report);
+      const program = buildChoiceProgram(ctx.problem, code, active, ctx.language);
+      if (!program) return;
+      await visualize({
+        ...program,
+        checkIdle: active.kind === "code",
+        fnName: functionNameFor(ctx.problem, ctx.language),
+      });
+    },
+    [picked, visualize],
+  );
+
+  // Practice: the custom-input boxes. Returns the problems with the input,
+  // or null once it's recording.
+  const submitCustom = useCallback(
+    (texts: string[]): (string | null)[] | null => {
+      const problem = contextRef.current?.problem;
+      if (!problem) return null;
+      const parsed = parseCustomArgs(problem, texts);
+      if (!parsed.ok) return parsed.errors;
+      setCustomTexts(texts);
+      void run({ kind: "custom", args: parsed.args });
+      return null;
+    },
+    [run],
+  );
+
+  // The call box, when nothing ran.
+  const submitCall = useCallback(
+    async (call: string) => {
+      if (!idle || !call.trim()) return;
+      await visualize(buildCallProgram(idle.code, idle.language, call));
+    },
+    [idle, visualize],
+  );
+
+  const showIdleAnyway = useCallback(async () => {
+    if (!idle) return;
+    setIdle(null);
+    await startSession({ code: idle.code, title: "", trace: idle.trace });
+  }, [idle, startSession]);
+
+  const dismissIdle = () => setIdle(null);
 
   const changeStep = (next: number) => {
     if (!session) return;
@@ -202,6 +350,32 @@ export function useRoomLens({ me, send, notify }: { me: LensDriver | null; send:
     setOpen(true);
     setFollowing(true);
   };
+
+  // ---------- Practice: what the test picker shows ----------
+
+  const problem = context?.problem ?? null;
+  const report = context?.report ?? null;
+  const nextChoice = problem
+    ? ((picked && picked.report === report ? picked.choice : null) ?? defaultChoice(report))
+    : null;
+  const defaultTest = defaultChoice(report).index;
+  const practice =
+    problem && nextChoice
+      ? {
+          tests: problem.tests.map((_, index) => {
+            const status = report?.results[index]?.status;
+            return { index, status: status && status !== "not-run" ? status : null };
+          }),
+          params: problem.params,
+          // What Visualize will show next, e.g. "Test 2 (failing)".
+          next: choiceText(nextChoice, report),
+          defaultTest,
+          customTexts:
+            customTexts ?? formatArgs(problem.tests[nextChoice.kind === "test" ? nextChoice.index : defaultTest].args),
+          choose: (choice: LensChoice) => void run(choice),
+          submitCustom,
+        }
+      : null;
 
   // ---------- Events from the room ----------
 
@@ -262,10 +436,17 @@ export function useRoomLens({ me, send, notify }: { me: LensDriver | null; send:
     open,
     recording,
     recordingLanguage,
+    recordingTitle,
     following,
     isDriver,
     step,
+    idle,
+    practice,
     visualize,
+    run,
+    submitCall,
+    showIdleAnyway,
+    dismissIdle,
     changeStep,
     follow,
     takeControl,
@@ -280,3 +461,4 @@ export function useRoomLens({ me, send, notify }: { me: LensDriver | null; send:
 }
 
 export type RoomLensState = ReturnType<typeof useRoomLens>;
+export type RoomLensPractice = NonNullable<RoomLensState["practice"]>;

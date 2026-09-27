@@ -81,7 +81,6 @@ import {
   type Problem,
 } from "@/lib/problems";
 import { EDITOR_THEMES } from "@/lib/editorTheme";
-import { buildTestProgram } from "@/lib/lensPractice";
 import { useRoomLens } from "@/lib/useRoomLens";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import type { Room } from "@/types/room";
@@ -353,10 +352,13 @@ export default function RoomPage({
     const me = onlineUsers.find((user) => user.userId === currentUserId);
     return me ? { userId: me.userId, name: me.name, avatarId: me.avatarId } : null;
   }, [onlineUsers, currentUserId]);
+  const getLensCode = useCallback(() => codeEditorRef.current?.getValue() ?? "", []);
   const lens = useRoomLens({
     me: lensMe,
     send: { start: sendLensStart, step: sendLensStep, drive: sendLensDrive, stop: sendLensStop },
     notify: toast,
+    // Practice rooms visualize a test (see useRoomLens).
+    context: { language, getCode: getLensCode, problem, report: testReport },
   });
 
   const editorCursors = useMemo<RemoteCursor[]>(
@@ -712,15 +714,13 @@ export default function RoomPage({
       toast("Lens visualizes Python, JavaScript and TypeScript. Switch the room's language to try it.", "info");
       return;
     }
-    void lens.visualize({ code: codeEditorRef.current?.getValue() ?? "", language, title: "" });
+    void lens.run();
   }
 
   function handleVisualizeTest(index: number) {
     if (!problem) return;
-    const program = buildTestProgram(problem, codeEditorRef.current?.getValue() ?? "", index, language);
-    if (!program) return;
     setMobilePanel("code");
-    void lens.visualize(program);
+    void lens.run({ kind: "test", index });
   }
 
   const isOwner = room?.ownerId === currentUserId;
@@ -1004,9 +1004,11 @@ export default function RoomPage({
             disabled={lens.recording}
             aria-label="Visualize with Lens"
             title={
-              lensReady
-                ? "Visualize with Lens: watch the code run, step by step"
-                : "Lens visualizes Python, JavaScript and TypeScript"
+              !lensReady
+                ? "Lens visualizes Python, JavaScript and TypeScript"
+                : lens.practice
+                  ? `Visualize ${lens.practice.next} with Lens`
+                  : "Visualize with Lens: watch the code run, step by step"
             }
             className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors disabled:cursor-wait disabled:opacity-60 ${
               lensReady

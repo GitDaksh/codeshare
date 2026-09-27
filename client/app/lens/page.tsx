@@ -4,10 +4,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
 import { motion } from "framer-motion";
 import { Loader2, Play } from "lucide-react";
+import { LensCallCard } from "@/components/lens/LensCallCard";
 import { LensPlayer } from "@/components/lens/LensPlayer";
 import { defineEditorThemes } from "@/lib/editorTheme";
 import { traceCode } from "@/lib/execution";
 import { LENS_MAX_STEPS, type LensTrace } from "@/lib/lens";
+import {
+  buildCallProgram,
+  defaultCallable,
+  findCallables,
+  isIdleTrace,
+  lensErrorHint,
+  type LensCallable,
+} from "@/lib/lensCall";
 import { useEditorTheme } from "@/lib/useEditorTheme";
 
 type Example = { id: string; label: string; code: string };
@@ -437,12 +446,17 @@ export default function LensPage() {
   const [language, setLanguage] = useState<Language>("python");
   const [exampleId, setExampleId] = useState(PYTHON_EXAMPLES[0].id);
   const [code, setCode] = useState(PYTHON_EXAMPLES[0].code);
-  const [mode, setMode] = useState<"edit" | "play">("edit");
+  const [mode, setMode] = useState<"edit" | "play" | "idle">("edit");
   const [running, setRunning] = useState(false);
   const [pythonReady, setPythonReady] = useState(false);
   const [trace, setTrace] = useState<LensTrace | null>(null);
   const [tracedCode, setTracedCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // A friendlier explanation for some errors (input(), packages, …).
+  const [hint, setHint] = useState<string | null>(null);
+  // Nothing ran (the code only defines functions): the call box.
+  const [idle, setIdle] = useState<{ trace: LensTrace; callables: LensCallable[]; defaultCall: string } | null>(null);
+  const [callError, setCallError] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = "Lens — CodeShare";
@@ -452,6 +466,7 @@ export default function LensPage() {
     if (running) return;
     setRunning(true);
     setError(null);
+    setHint(null);
     const result = await traceCode(language, code);
     setRunning(false);
     if (language === "python") setPythonReady(true);
@@ -467,12 +482,47 @@ export default function LensPage() {
           ? `${problem.message}${problem.line ? ` (line ${problem.line})` : ""}`
           : "There's nothing to show yet. Write some code first.",
       );
+      setHint(problem ? lensErrorHint(problem.message, language) : null);
       return;
     }
+    if (isIdleTrace(result.trace)) {
+      const callables = findCallables(result.trace, code, language);
+      setIdle({ trace: result.trace, callables, defaultCall: defaultCallable(callables)?.template ?? "" });
+      setCallError(null);
+      setMode("idle");
+      return;
+    }
+    setHint(result.trace.error ? lensErrorHint(result.trace.error.message, language) : null);
     setTrace(result.trace);
     setTracedCode(code);
     setMode("play");
   }, [code, language, running]);
+
+  // The call box: the code plus one call at the end, for this run only.
+  const visualizeCall = async (call: string) => {
+    if (running) return;
+    const program = buildCallProgram(code, language, call);
+    setRunning(true);
+    setCallError(null);
+    const result = await traceCode(language, program.code, { setup: program.setup });
+    setRunning(false);
+    if (language === "python") setPythonReady(true);
+
+    if (!result.ok) {
+      setCallError(result.error);
+      return;
+    }
+    if (result.trace.steps.length === 0) {
+      const problem = result.trace.error;
+      setCallError(problem ? `${problem.message}${problem.line ? ` (line ${problem.line})` : ""}` : "Nothing ran.");
+      return;
+    }
+    setHint(result.trace.error ? lensErrorHint(result.trace.error.message, language) : null);
+    setTrace(result.trace);
+    setTracedCode(program.code);
+    setIdle(null);
+    setMode("play");
+  };
 
   // The editor's keyboard shortcut always calls the latest version.
   const visualizeRef = useRef(visualize);
@@ -495,6 +545,8 @@ export default function LensPage() {
     setExampleId(example.id);
     setCode(example.code);
     setError(null);
+    setHint(null);
+    setIdle(null);
     setMode("edit");
   };
 
@@ -552,6 +604,28 @@ export default function LensPage() {
         >
           {mode === "play" && trace ? (
             <LensPlayer code={tracedCode} trace={trace} onEdit={() => setMode("edit")} />
+          ) : mode === "idle" && idle ? (
+            <div className="grid min-h-[480px] grid-cols-1 place-items-center rounded-2xl border border-ink-800 bg-ink-950 p-4">
+              <LensCallCard
+                key={idle.defaultCall}
+                language={language}
+                callables={idle.callables}
+                defaultCall={idle.defaultCall}
+                busy={running}
+                error={callError}
+                onSubmit={(call) => void visualizeCall(call)}
+                onShowAnyway={() => {
+                  setTrace(idle.trace);
+                  setTracedCode(code);
+                  setIdle(null);
+                  setMode("play");
+                }}
+                onCancel={() => {
+                  setIdle(null);
+                  setMode("edit");
+                }}
+              />
+            </div>
           ) : (
             <div className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-950">
               <div className="flex items-center justify-between gap-3 border-b border-ink-800 px-4 py-2.5">
@@ -636,6 +710,8 @@ export default function LensPage() {
             </div>
           )}
         </motion.div>
+
+        {hint && (mode === "play" || error) && <p className="mt-3 text-xs text-ink-400">Tip: {hint}</p>}
 
         <p className="mt-3 text-xs text-ink-600">
           Lens records up to {LENS_MAX_STEPS.toLocaleString()} steps.
