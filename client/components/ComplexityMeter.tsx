@@ -11,6 +11,9 @@ const FIT: Record<Verdict["confidence"], string> = {
   low: "Rough estimate",
 };
 
+// Rough estimates are marked "≈".
+const shown = (verdict: Verdict) => (verdict.confidence === "low" ? `≈${verdict.label}` : verdict.label);
+
 // A small growth chart: the measured points, and the fitted curve drawn
 // smoothly across the whole range.
 function Growth({ verdict, label }: { verdict: Verdict; label: string }) {
@@ -64,7 +67,7 @@ function Row({
           {title}
         </p>
         <p className="mt-1 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-ink-100">
-          {verdict ? verdict.label : "–"}
+          {verdict ? shown(verdict) : "–"}
         </p>
         <p className="mt-0.5 text-[11px] text-ink-500">{verdict ? detail : "Couldn't be measured"}</p>
       </div>
@@ -210,12 +213,12 @@ export function ComplexityMeter({ meter }: { meter: ComplexityState }) {
         {ok ? (
           <>
             <Timer className="h-3.5 w-3.5 text-ink-500" aria-hidden="true" />
-            <span className={`text-ink-100 ${dim}`}>{ok.time.label}</span>
+            <span className={`text-ink-100 ${dim}`}>{shown(ok.time)}</span>
             <span className="text-ink-700" aria-hidden="true">
               ·
             </span>
             <MemoryStick className="h-3.5 w-3.5 text-ink-500" aria-hidden="true" />
-            <span className={`text-ink-100 ${dim}`}>{ok.space ? ok.space.label : "–"}</span>
+            <span className={`text-ink-100 ${dim}`}>{ok.space ? shown(ok.space) : "–"}</span>
             {measuring && <Loader2 className="h-3 w-3 animate-spin text-ink-500" aria-hidden="true" />}
           </>
         ) : measuring ? (
@@ -226,7 +229,7 @@ export function ComplexityMeter({ meter }: { meter: ComplexityState }) {
         ) : failure ? (
           <>
             <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
-            Big-O
+            {failure.status === "too-slow" ? "Too slow" : "Big-O"}
             {failure.status === "error" && <span className="h-1.5 w-1.5 rounded-full bg-red-500" aria-hidden="true" />}
           </>
         ) : (

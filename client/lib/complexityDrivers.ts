@@ -123,13 +123,21 @@ const JS_TIME = String.raw`
     if (typeof fn !== "function") throw new Error("__missing__");
     __BUILDERS__
     const now = () => performance.now();
-    const began = now();
-    const last = __cxSpec.inputs[__cxSpec.inputs.length - 1][0];
-    let prev = 0;
-    for (const [n, raw] of __cxSpec.inputs) {
-      __cxN = n;
+    // Milliseconds per call at one size.
+    const timeSize = (n, raw) => {
       const first = build(raw);
+      const t0 = now();
       fn(...first);
+      const once = now() - t0;
+      // A call that already takes a while needs no repeats: the faster of
+      // two runs (one, when it's clearly slow).
+      if (once >= 200) return once;
+      if (once >= 20) {
+        const again = build(raw);
+        const t1 = now();
+        fn(...again);
+        return Math.min(once, now() - t1);
+      }
       // Inputs the function doesn't change are reused for every call;
       // otherwise each call gets a fresh copy (built outside the timing).
       const reuse = JSON.stringify(first.map((arg, i) => plain(__cxSpec.shapes[i], arg))) === JSON.stringify(raw);
@@ -151,13 +159,39 @@ const JS_TIME = String.raw`
           reps = Math.min(most, reps * (spent < 0.5 ? 16 : 4));
         }
       }
+      return per;
+    };
+    // Small sizes first, so how fast the time grows is known before n
+    // doubles. Before each bigger size, its time is predicted from that
+    // growth; work that explodes (steeper than n⁴) never gets doubled.
+    const usual = __cxSpec.inputs[0][0];
+    const sizes = [...__cxSpec.small, ...__cxSpec.inputs];
+    const began = now();
+    let prev = 0;
+    let prevN = 0;
+    for (let at = 0; at < sizes.length; at++) {
+      const [n, raw] = sizes[at];
+      __cxN = n;
+      let per;
+      try {
+        per = timeSize(n, raw);
+      } catch (err) {
+        // Tiny inputs can be edge cases the code doesn't handle.
+        if (n < usual) continue;
+        throw err;
+      }
       __cxOut.time.push([n, per]);
-      const slow = per > 40 || now() - began > __BUDGET__ || (prev > 0 && (per / prev > 20 || (per * per) / prev > 250));
-      if (slow) {
-        if (n !== last) __cxOut.stopped = "slow";
+      if (at + 1 === sizes.length) break;
+      const next = sizes[at + 1][0];
+      const slope = prevN ? Math.log(Math.max(per, 1e-6) / Math.max(prev, 1e-6)) / Math.log(n / prevN) : 1;
+      const predicted = per * Math.pow(next / n, Math.max(slope, 1));
+      const explodes = slope > 4.5 && per > 0.05 && next >= 2 * n;
+      if (per > 40 || now() - began > __BUDGET__ || predicted > 250 || explodes) {
+        __cxOut.stopped = "slow";
         break;
       }
       prev = per;
+      prevN = n;
     }
   } catch (err) {
     __cxOut.error = { n: __cxN, message: err instanceof Error ? err.name + ": " + err.message : String(err) };
@@ -345,12 +379,18 @@ __CODE__
     if (typeof fn !== "function") throw new Error("__missing__");
     __BUILDERS__
     const began = Date.now();
-    for (const [n, raw] of __cxSpec.inputs) {
+    const usual = __cxSpec.inputs[0][0];
+    const sizes = [...(__cxSpec.small || []), ...__cxSpec.inputs].filter(
+      ([n]) => !__cxSpec.only || __cxSpec.only.includes(n),
+    );
+    for (const [n, raw] of sizes) {
       if (n > __MAXN__) break;
       __cxN = n;
       const args = build(raw);
       const m = __lens.measure(() => fn(...args), args, __STEPS__);
       if (m.error) {
+        // Tiny inputs can be edge cases the code doesn't handle.
+        if (n < usual) continue;
         __cxOut.error = { n, message: m.error };
         break;
       }
@@ -415,6 +455,7 @@ export function jsSpaceProgram(instrumented: string, target: MeterTarget, specJs
 const PY_METER = String.raw`
 import copy as _cx_copy
 import json as _cx_json
+import math as _cx_math
 import sys as _cx_sys
 import time as _cx_time
 import tracemalloc as _cx_tm
@@ -534,47 +575,71 @@ def _cx_meter():
     _cx_sys.stdout = Quiet()
     measured = []
     try:
-        # Time: milliseconds per call, each measurement lasting at least 8 ms.
+        # Time: milliseconds per call at one size.
+        def time_size(n, raw):
+            first = build(raw)
+            start = clock()
+            fn(*first)
+            once = (clock() - start) * 1000
+            # A call that already takes a while needs no repeats: the faster
+            # of two runs (one, when it's clearly slow).
+            if once >= 200:
+                return once
+            if once >= 20:
+                again = build(raw)
+                start = clock()
+                fn(*again)
+                return min(once, (clock() - start) * 1000)
+            # Inputs the function doesn't change are reused for every call;
+            # otherwise each call gets a fresh copy (built outside the timing).
+            reuse = _cx_json.dumps([plain(s, a) for s, a in zip(shapes, first)]) == _cx_json.dumps(raw)
+            most = 1048576 if reuse else max(1, 2000000 // (n + 1))
+            reps, per = 1, float("inf")
+            for _ in range(2):
+                while True:
+                    batch = None if reuse else [build(raw) for _ in range(reps)]
+                    start = clock()
+                    if reuse:
+                        for _ in range(reps):
+                            fn(*first)
+                    else:
+                        for args in batch:
+                            fn(*args)
+                    spent = (clock() - start) * 1000
+                    if spent >= 8 or reps >= most:
+                        per = min(per, spent / reps)
+                        break
+                    reps = min(most, reps * (16 if spent < 0.5 else 4))
+            return per
+
+        # Small sizes first, so how fast the time grows is known before n
+        # doubles. Before each bigger size, its time is predicted from that
+        # growth; work that explodes (steeper than n⁴) never gets doubled.
+        usual = spec["inputs"][0][0]
+        sizes = spec.get("small", []) + spec["inputs"]
         began = clock()
-        last = spec["inputs"][-1][0]
-        prev = 0.0
-        for n, raw in spec["inputs"]:
+        prev, prev_n = 0.0, 0
+        for at, (n, raw) in enumerate(sizes):
             try:
-                first = build(raw)
-                fn(*first)
-                # Inputs the function doesn't change are reused for every call;
-                # otherwise each call gets a fresh copy (built outside the timing).
-                reuse = _cx_json.dumps([plain(s, a) for s, a in zip(shapes, first)]) == _cx_json.dumps(raw)
-                most = 1048576 if reuse else max(1, 2000000 // (n + 1))
-                reps, per = 1, float("inf")
-                for _ in range(2):
-                    while True:
-                        batch = None if reuse else [build(raw) for _ in range(reps)]
-                        start = clock()
-                        if reuse:
-                            for _ in range(reps):
-                                fn(*first)
-                        else:
-                            for args in batch:
-                                fn(*args)
-                        spent = (clock() - start) * 1000
-                        if spent >= 8 or reps >= most:
-                            per = min(per, spent / reps)
-                            break
-                        reps = min(most, reps * (16 if spent < 0.5 else 4))
+                per = time_size(n, raw)
             except BaseException as err:
+                # Tiny inputs can be edge cases the code doesn't handle.
+                if n < usual:
+                    continue
                 out["error"] = {"n": n, "message": type(err).__name__ + ": " + str(err)}
                 break
             out["time"].append([n, per])
             measured.append(n)
-            slow = per > 40 or (clock() - began) * 1000 > __BUDGET__
-            if prev > 0 and (per / prev > 20 or per * per / prev > 250):
-                slow = True
-            if slow:
-                if n != last:
-                    out["stopped"] = "slow"
+            if at + 1 == len(sizes):
                 break
-            prev = per
+            nxt = sizes[at + 1][0]
+            slope = _cx_math.log(max(per, 1e-6) / max(prev, 1e-6)) / _cx_math.log(n / prev_n) if prev_n else 1.0
+            predicted = per * (nxt / n) ** min(max(slope, 1.0), 200.0)
+            explodes = slope > 4.5 and per > 0.05 and nxt >= 2 * n
+            if per > 40 or (clock() - began) * 1000 > __BUDGET__ or predicted > 250 or explodes:
+                out["stopped"] = "slow"
+                break
+            prev, prev_n = per, n
 
         # Space: the most extra memory a call holds at once, its deepest
         # recursion, and how many lines it runs (exact, unlike time).
@@ -603,24 +668,32 @@ def _cx_meter():
             _cx_sys.settrace(calls)
             try:
                 fn(*args)
-                return True
+                return "ok"
+            except Stop:
+                return "limit"
             except BaseException:
-                return False
+                return "error"
             finally:
                 _cx_sys.settrace(None)
                 state.append(_cx_tm.get_traced_memory()[1])
                 _cx_tm.stop()
 
+        usual = spec["inputs"][0][0]
+        sizes = sorted(spec.get("small", []) + spec["inputs"], key=lambda pair: pair[0])
+        sizes = [pair for pair in sizes if pair[0] in measured and pair[0] <= __MAXN__]
         # A first traced call pays one-time costs; it isn't counted.
-        if measured:
-            traced(build(spec["inputs"][0][1]), [0, 0, 0])
+        if sizes:
+            traced(build(sizes[0][1]), [0, 0, 0])
         began = clock()
-        for n, raw in spec["inputs"]:
-            if n not in measured or n > __MAXN__:
-                break
+        for n, raw in sizes:
             state = [0, 0, 0]
-
-            if not traced(build(raw), state):
+            result = traced(build(raw), state)
+            if result == "limit":
+                break
+            if result == "error":
+                # Tiny inputs can be edge cases the code doesn't handle.
+                if n < usual:
+                    continue
                 break
             out["space"].append([n, state[3], state[1], state[2]])
             if (clock() - began) * 1000 > __SPACE_BUDGET__:
