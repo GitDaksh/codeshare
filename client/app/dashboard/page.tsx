@@ -25,7 +25,7 @@ import { AvatarIcon } from "@/components/AvatarIcon";
 import { Skeleton } from "@/components/Skeleton";
 import { RoomCard } from "@/components/RoomCard";
 import { DashboardSkeleton, RoomCardSkeleton } from "@/components/DashboardSkeleton";
-import { LANGUAGES } from "@/lib/languages";
+import { getStarterCode, LANGUAGES } from "@/lib/languages";
 import type { Room } from "@/types/room";
 
 type SortMode = "updated" | "name";
@@ -145,7 +145,8 @@ export default function DashboardPage() {
 
   async function handleCreateRoom(name: string, language: string) {
     try {
-      const res = await api.post<Room>("/api/rooms", { name, language });
+      // New rooms start with the language's starter code in the shared document.
+      const res = await api.post<Room>("/api/rooms", { name, language, code: getStarterCode(language) });
       setRooms([res.data, ...rooms]);
       toast(`"${res.data.name}" created`);
     } catch (err) {

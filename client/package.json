@@ -21,7 +21,9 @@
     "prettier": "^3.9.9",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.33"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

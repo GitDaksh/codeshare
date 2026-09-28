@@ -228,6 +228,20 @@ a {
   background: var(--color-ink-300);
 }
 
+/* Teammates' selections, in their cursor's shade. */
+.remote-selection-ink-100 {
+  background: color-mix(in srgb, var(--color-ink-100) 16%, transparent);
+}
+.remote-selection-ink-400 {
+  background: color-mix(in srgb, var(--color-ink-400) 20%, transparent);
+}
+.remote-selection-ink-600 {
+  background: color-mix(in srgb, var(--color-ink-600) 45%, transparent);
+}
+.remote-selection-ink-300 {
+  background: color-mix(in srgb, var(--color-ink-300) 18%, transparent);
+}
+
 /* ---------- Landing page ---------- */
 
 .text-gradient {

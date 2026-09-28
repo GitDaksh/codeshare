@@ -20,3 +20,8 @@ export function getAvatarShade(userId: string): string {
 export function getCursorShadeClass(userId: string): string {
   return `remote-cursor-${SHADES[hashUserId(userId)].cursor}`;
 }
+
+// Teammates' selections, in the same shade as their cursor.
+export function getSelectionShadeClass(userId: string): string {
+  return `remote-selection-${SHADES[hashUserId(userId)].cursor}`;
+}

@@ -9,6 +9,7 @@ export interface IRoom extends Document {
   problemSlug: string | null;
   inviteCode: string;
   members: string[];
+  yState?: Buffer;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -52,6 +53,13 @@ const roomSchema = new Schema<IRoom>(
     members: {
       type: [String],
       default: [],
+    },
+    // The shared document's full edit history (Yjs), so people who reconnect
+    // merge their edits instead of duplicating the text. Never sent to
+    // browsers, and only loaded when asked for.
+    yState: {
+      type: Buffer,
+      select: false,
     },
   },
   {

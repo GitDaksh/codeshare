@@ -52,7 +52,7 @@ import { useEditorTheme } from "@/lib/useEditorTheme";
 import { useToast } from "@/components/ToastProvider";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { RoomSkeleton } from "@/components/RoomSkeleton";
-import { CodeEditor, type RemoteCursor, type RemoteCodeUpdate, type CodeEditorHandle } from "@/components/CodeEditor";
+import { CodeEditor, type CodeEditorHandle } from "@/components/CodeEditor";
 import { LanguageDropdown } from "@/components/LanguageDropdown";
 import { RunPanel } from "@/components/RunPanel";
 import { ChatPanel } from "@/components/ChatPanel";
@@ -82,12 +82,13 @@ import {
   type Problem,
 } from "@/lib/problems";
 import { EDITOR_THEMES } from "@/lib/editorTheme";
+import { useCollab } from "@/lib/collab";
 import { useComplexity } from "@/lib/useComplexity";
 import { useRoomLens } from "@/lib/useRoomLens";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import type { Room } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
-import type { RemoteCursorEvent, TypingEvent } from "@/types/presence";
+import type { TypingEvent } from "@/types/presence";
 import type { LanguageUpdateEvent, RunResultEvent, RunStartEvent } from "@/types/roomEvents";
 
 const SAVE_INDICATOR_DELAY_MS = 1800;
@@ -180,7 +181,6 @@ export default function RoomPage({
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [initialCode, setInitialCode] = useState<string | null>(null);
-  const [remoteUpdate, setRemoteUpdate] = useState<RemoteCodeUpdate | null>(null);
   const [language, setLanguage] = useState("javascript");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -207,7 +207,8 @@ export default function RoomPage({
   const [typingUsers, setTypingUsers] = useState<TypingEvent[]>([]);
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  const [remoteCursors, setRemoteCursors] = useState<RemoteCursorEvent[]>([]);
+  // Follow mode: the teammate whose cursor your editor keeps in view.
+  const [following, setFollowing] = useState<string | null>(null);
   // Tells the Big-O meter the code changed (set once the meter exists).
   const meterChangedRef = useRef<() => void>(() => {});
 
@@ -241,21 +242,6 @@ export default function RoomPage({
     setMessages((prev) =>
       prev.map((m) => (m._id === update.messageId ? { ...m, reactions: update.reactions } : m))
     );
-  }, []);
-
-  const handleIncomingCodeChange = useCallback(
-    (incomingCode: string, cursor: RemoteCursorEvent | null) => {
-      setRemoteUpdate((prev) => ({ code: incomingCode, nonce: (prev?.nonce ?? 0) + 1 }));
-      meterChangedRef.current();
-      if (cursor) {
-        setRemoteCursors((prev) => [...prev.filter((c) => c.userId !== cursor.userId), cursor]);
-      }
-    },
-    []
-  );
-
-  const handleCursorMove = useCallback((cursor: RemoteCursorEvent) => {
-    setRemoteCursors((prev) => [...prev.filter((c) => c.userId !== cursor.userId), cursor]);
   }, []);
 
   const handleTyping = useCallback((event: TypingEvent) => {
@@ -328,10 +314,9 @@ export default function RoomPage({
   const {
     status,
     onlineUsers,
+    socket,
     sendMessage,
     sendReaction,
-    sendCodeChange,
-    sendCursorMove,
     sendTyping,
     sendLanguageChange,
     sendRunStart,
@@ -342,8 +327,6 @@ export default function RoomPage({
     sendLensStop,
   } = useSocket(id, {
     onChatMessage: handleIncomingMessage,
-    onCodeChange: handleIncomingCodeChange,
-    onCursorMove: handleCursorMove,
     onTyping: handleTyping,
     onReactionUpdate: handleReactionUpdate,
     onLanguageUpdate: handleLanguageUpdate,
@@ -354,6 +337,14 @@ export default function RoomPage({
     onLensDriver: (event) => lens.receiveDriver(event),
     onLensStop: (event) => lens.receiveStop(event),
   }, invite);
+
+  // Shared editing: the room's document, kept in step over the socket (Yjs).
+  const collab = useCollab(socket, id, () =>
+    toast("That edit would make the code longer than 100,000 characters, so it wasn't saved.", "error")
+  );
+
+  // Follow mode ends by itself when that person leaves.
+  const followed = following ? onlineUsers.find((u) => u.userId === following && u.userId !== currentUserId) : null;
 
   // Lens: shared step-by-step visualizations of the room's code.
   const lensMe = useMemo(() => {
@@ -376,16 +367,18 @@ export default function RoomPage({
     meterChangedRef.current = meter.notifyChange;
   });
 
-  const editorCursors = useMemo<RemoteCursor[]>(
-    () =>
-      remoteCursors
-        .filter((c) => c.userId !== currentUserId)
-        .map((c) => ({
-          ...c,
-          avatarId: onlineUsers.find((u) => u.userId === c.userId)?.avatarId ?? c.userId,
-        })),
-    [remoteCursors, onlineUsers, currentUserId]
-  );
+  // A room that's still empty (made before rooms started with starter code)
+  // gets it once, from its owner's browser only, so it's never added twice.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!collab.synced || seededRef.current || !room || room.code || room.ownerId !== currentUserId) return;
+    seededRef.current = true;
+    const { doc, text } = collab.session;
+    if (text.length > 0) return;
+    const starter =
+      (problem ? getProblemStarterCode(problem, room.language) : null) ?? getStarterCode(room.language);
+    doc.transact(() => text.insert(0, starter), "starter");
+  }, [collab.synced, collab.session, room, currentUserId, problem]);
 
   useEffect(() => {
     api
@@ -426,7 +419,6 @@ export default function RoomPage({
 
   useEffect(() => {
     const onlineIds = new Set(onlineUsers.map((u) => u.userId));
-    setRemoteCursors((prev) => prev.filter((c) => onlineIds.has(c.userId)));
     setTypingUsers((prev) => prev.filter((u) => onlineIds.has(u.userId)));
   }, [onlineUsers]);
 
@@ -491,8 +483,8 @@ export default function RoomPage({
     document.body.style.cursor = "col-resize";
   }
 
-  function handleCodeChange(newCode: string, line: number, column: number) {
-    sendCodeChange(newCode, line, column);
+  // Your own edits (they reach everyone through the shared document).
+  function handleCodeChange() {
     meterChangedRef.current();
 
     setSaveStatus("saving");
@@ -1095,12 +1087,15 @@ export default function RoomPage({
               handleRef={codeEditorRef}
               language={language}
               initialValue={initialCode}
-              remoteUpdate={remoteUpdate}
               onChange={handleCodeChange}
-              onCursorMove={sendCursorMove}
+              onRemoteChange={() => meterChangedRef.current()}
               onRunShortcut={handleRun}
               onSendSelection={handleSendSelectionToChat}
-              remoteCursors={editorCursors}
+              collab={collab.session}
+              collabReady={collab.synced}
+              collabGeneration={collab.generation}
+              followUserId={followed ? followed.userId : null}
+              onStopFollowing={() => setFollowing(null)}
               saveStatus={saveStatus}
               minimapEnabled={minimapEnabled}
               fontSize={fontSize}
@@ -1109,6 +1104,23 @@ export default function RoomPage({
               themeId={editorTheme}
               onThemeChange={setEditorTheme}
             />
+            {followed && (
+              <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
+                <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-ink-700 bg-ink-900/95 py-1 pl-1.5 pr-1 text-xs text-ink-300 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.8)] backdrop-blur">
+                  <AvatarIcon avatarId={followed.avatarId} className="h-5 w-5 rounded-full" />
+                  <span>
+                    Following <span className="font-semibold text-ink-100">{followed.name}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFollowing(null)}
+                    className="rounded-full px-2 py-0.5 font-medium text-ink-100 transition-colors hover:bg-ink-800"
+                  >
+                    Stop
+                  </button>
+                </div>
+              </div>
+            )}
             <ComplexityMeter meter={meter} />
             <RoomLens lens={lens} />
           </div>
@@ -1211,6 +1223,24 @@ export default function RoomPage({
                             <span className="shrink-0 rounded border border-ink-700 bg-ink-800 px-1.5 py-px text-[10px] font-medium text-ink-300">
                               Owner
                             </span>
+                          )}
+                          {!isYou && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFollowing(following === u.userId ? null : u.userId);
+                                if (!isDesktop) handleMobilePanel("code");
+                              }}
+                              aria-pressed={following === u.userId}
+                              title={following === u.userId ? "Stop following" : `Follow ${u.name}'s cursor`}
+                              className={`shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                                following === u.userId
+                                  ? "border-ink-100 bg-ink-100 text-ink-950"
+                                  : "border-ink-700 text-ink-300 hover:border-ink-500 hover:text-ink-100"
+                              }`}
+                            >
+                              {following === u.userId ? "Following" : "Follow"}
+                            </button>
                           )}
                         </li>
                       );

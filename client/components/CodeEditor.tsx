@@ -3,27 +3,16 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
+import * as Y from "yjs";
 import { Check, Loader2 } from "lucide-react";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { EditorThemePicker } from "@/components/EditorThemePicker";
 import { LANGUAGES } from "@/lib/languages";
-import { getCursorShadeClass } from "@/lib/colors";
+import { getCursorShadeClass, getSelectionShadeClass } from "@/lib/colors";
+import type { CollabSession } from "@/lib/collab";
 import { installSafariClipboardShim } from "@/lib/safariClipboardShim";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { defineEditorThemes } from "@/lib/editorTheme";
-
-export type RemoteCursor = {
-  userId: string;
-  name: string;
-  avatarId: string;
-  line: number;
-  column: number;
-};
-
-export type RemoteCodeUpdate = {
-  code: string;
-  nonce: number;
-};
 
 export type EditorSelection = {
   text: string;
@@ -42,12 +31,22 @@ type MonacoEditorInstance = Parameters<OnMount>[0];
 type CodeEditorProps = {
   language: string;
   initialValue: string;
-  remoteUpdate: RemoteCodeUpdate | null;
+  // Your own edits.
   onChange: (value: string, line: number, column: number) => void;
-  onCursorMove: (line: number, column: number) => void;
+  // Teammates' edits (and undo or redo).
+  onRemoteChange?: () => void;
   onRunShortcut?: () => void;
   onSendSelection?: () => void;
-  remoteCursors: RemoteCursor[];
+  // Shared editing (see lib/collab.ts): the room's document. The editor is
+  // read-only until it first syncs; after that, edits, cursors and
+  // selections are shared through it.
+  collab?: CollabSession | null;
+  collabReady?: boolean;
+  collabGeneration?: number;
+  // Follow mode: keep this teammate's cursor in view. Moving your own cursor
+  // (typing, clicking, arrow keys) ends it.
+  followUserId?: string | null;
+  onStopFollowing?: () => void;
   saveStatus: "saved" | "saving";
   minimapEnabled: boolean;
   fontSize: number;
@@ -58,8 +57,13 @@ type CodeEditorProps = {
   handleRef?: MutableRefObject<CodeEditorHandle | null>;
 };
 
+type SharedUser = { userId?: unknown; name?: unknown; avatarId?: unknown };
+type SharedCursor = { anchor?: unknown; head?: unknown };
+
 const NAME_FLASH_MS = 1600;
 const LINE_HEIGHT_RATIO = 1.6;
+// Your cursor is shared at most this often.
+const CURSOR_SHARE_MS = 50;
 
 function lineHeightFor(fontSize: number): number {
   return Math.round(fontSize * LINE_HEIGHT_RATIO);
@@ -91,20 +95,6 @@ function computeMinimalEdit(oldText: string, newText: string) {
     endOffset: oldText.length - suffixLen,
     insertedText: newText.slice(prefixLen, newText.length - suffixLen),
   };
-}
-
-function offsetToPosition(text: string, offset: number): { lineNumber: number; column: number } {
-  let line = 1;
-  let col = 1;
-  for (let i = 0; i < offset && i < text.length; i++) {
-    if (text[i] === "\n") {
-      line++;
-      col = 1;
-    } else {
-      col++;
-    }
-  }
-  return { lineNumber: line, column: col };
 }
 
 class RemoteCursorWidget {
@@ -199,12 +189,15 @@ class RemoteCursorWidget {
 export function CodeEditor({
   language,
   initialValue,
-  remoteUpdate,
   onChange,
-  onCursorMove,
+  onRemoteChange,
   onRunShortcut,
   onSendSelection,
-  remoteCursors,
+  collab = null,
+  collabReady = false,
+  collabGeneration = 0,
+  followUserId = null,
+  onStopFollowing,
   saveStatus,
   minimapEnabled,
   fontSize,
@@ -215,30 +208,60 @@ export function CodeEditor({
   handleRef,
 }: CodeEditorProps) {
   const [position, setPosition] = useState({ line: 1, column: 1 });
+  const [mounted, setMounted] = useState(false);
   const editorRef = useRef<MonacoEditorInstance | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
-  const widgetsRef = useRef<Map<string, RemoteCursorWidget>>(new Map());
-  const lastEmitRef = useRef(0);
+  const widgetsRef = useRef<Map<number, RemoteCursorWidget>>(new Map());
   const isApplyingRemoteRef = useRef(false);
+  const undoRef = useRef<Y.UndoManager | null>(null);
+  const renderCursorsRef = useRef<(() => void) | null>(null);
+  const followRef = useRef(followUserId);
+  const fontSizeRef = useRef(fontSize);
   const onRunShortcutRef = useRef(onRunShortcut);
   const onSendSelectionRef = useRef(onSendSelection);
+  const onRemoteChangeRef = useRef(onRemoteChange);
+  const onStopFollowingRef = useRef(onStopFollowing);
   const isNarrow = useMediaQuery("(max-width: 639px)");
 
   useEffect(() => {
     onRunShortcutRef.current = onRunShortcut;
     onSendSelectionRef.current = onSendSelection;
+    onRemoteChangeRef.current = onRemoteChange;
+    onStopFollowingRef.current = onStopFollowing;
+    fontSizeRef.current = fontSize;
   });
+
+  // Starting to follow someone shows where they are right away.
+  useEffect(() => {
+    followRef.current = followUserId;
+    renderCursorsRef.current?.();
+  }, [followUserId]);
+
+  // Teammates' cursors match the font size.
+  useEffect(() => {
+    renderCursorsRef.current?.();
+  }, [fontSize]);
 
   useEffect(() => {
     if (!handleRef) return;
 
     handleRef.current = {
       getValue: () => editorRef.current?.getValue() ?? "",
+      // Changes only the part that differs, so it merges well with
+      // teammates' edits (and can be undone like typing).
       setValue: (value: string) => {
         const editor = editorRef.current;
+        const monaco = monacoRef.current;
         const model = editor?.getModel();
-        if (!editor || !model) return;
-        editor.executeEdits("format", [{ range: model.getFullModelRange(), text: value }]);
+        if (!editor || !monaco || !model) return;
+        const current = model.getValue();
+        if (current === value) return;
+        const { startOffset, endOffset, insertedText } = computeMinimalEdit(current, value);
+        const start = model.getPositionAt(startOffset);
+        const end = model.getPositionAt(endOffset);
+        editor.executeEdits("codeshare", [
+          { range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column), text: insertedText },
+        ]);
       },
       getSelection: () => {
         const editor = editorRef.current;
@@ -279,16 +302,221 @@ export function CodeEditor({
     return () => window.removeEventListener("unhandledrejection", handleUnhandledRejection);
   }, []);
 
+  // Shared editing: binds the editor to the room's document.
   useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    const model = editor?.getModel();
+    if (!mounted || !editor || !monaco || !model || !collab || !collabReady) return;
+    const { doc, text, undo, local, awareness } = collab;
     const widgets = widgetsRef.current;
-    return () => {
-      widgets.forEach((widget) => {
-        editorRef.current?.removeContentWidget(widget);
-        widget.dispose();
-      });
-      widgets.clear();
+    undoRef.current = undo;
+
+    // Start from the shared text (always \n line endings, see the server).
+    isApplyingRemoteRef.current = true;
+    model.setEOL(monaco.editor.EndOfLineSequence.LF);
+    if (model.getValue() !== text.toString()) model.setValue(text.toString());
+    isApplyingRemoteRef.current = false;
+
+    // Your edits → the shared document.
+    const onModelChange = model.onDidChangeContent((event) => {
+      if (isApplyingRemoteRef.current) return;
+      doc.transact(() => {
+        // Last change first, so earlier offsets stay valid.
+        for (const change of [...event.changes].sort((a, b) => b.rangeOffset - a.rangeOffset)) {
+          if (change.rangeLength) text.delete(change.rangeOffset, change.rangeLength);
+          if (change.text) text.insert(change.rangeOffset, change.text);
+        }
+      }, local);
+      scheduleRender();
+    });
+
+    // Your cursors, remembered as positions in the shared text before any
+    // change, so they can be put back exactly after a teammate's edit.
+    let saved: { anchor: Y.RelativePosition; head: Y.RelativePosition }[] = [];
+    const rememberSelections = () => {
+      saved = (editor.getSelections() ?? []).map((selection) => ({
+        anchor: Y.createRelativePositionFromTypeIndex(
+          text,
+          model.getOffsetAt({ lineNumber: selection.selectionStartLineNumber, column: selection.selectionStartColumn }),
+        ),
+        head: Y.createRelativePositionFromTypeIndex(text, model.getOffsetAt(selection.getPosition())),
+      }));
     };
-  }, []);
+    doc.on("beforeAllTransactions", rememberSelections);
+
+    // Teammates' edits (and your undo or redo) → the editor.
+    const onTextChange = (event: Y.YTextEvent, transaction: Y.Transaction) => {
+      if (transaction.origin === local) return;
+      isApplyingRemoteRef.current = true;
+      try {
+        let index = 0;
+        for (const op of event.delta) {
+          if (op.retain !== undefined) {
+            index += op.retain;
+          } else if (op.insert !== undefined) {
+            const inserted = typeof op.insert === "string" ? op.insert : "";
+            const at = model.getPositionAt(index);
+            model.applyEdits([
+              { range: new monaco.Range(at.lineNumber, at.column, at.lineNumber, at.column), text: inserted },
+            ]);
+            index += inserted.length;
+          } else if (op.delete !== undefined) {
+            const start = model.getPositionAt(index);
+            const end = model.getPositionAt(index + op.delete);
+            model.applyEdits([
+              { range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column), text: "" },
+            ]);
+          }
+        }
+        const restored = saved.flatMap(({ anchor, head }) => {
+          const a = Y.createAbsolutePositionFromRelativePosition(anchor, doc);
+          const h = Y.createAbsolutePositionFromRelativePosition(head, doc);
+          if (!a || !h) return [];
+          const from = model.getPositionAt(a.index);
+          const to = model.getPositionAt(h.index);
+          return [new monaco.Selection(from.lineNumber, from.column, to.lineNumber, to.column)];
+        });
+        if (restored.length) editor.setSelections(restored);
+      } finally {
+        isApplyingRemoteRef.current = false;
+      }
+      onRemoteChangeRef.current?.();
+      scheduleRender();
+    };
+    text.observe(onTextChange);
+
+    // Your cursor and selection → everyone else (at most every 50 ms).
+    let lastShared = 0;
+    let shareTimer: ReturnType<typeof setTimeout> | null = null;
+    const shareCursor = () => {
+      const selection = editor.getSelection();
+      if (!selection || !awareness) return;
+      const anchor = model.getOffsetAt({
+        lineNumber: selection.selectionStartLineNumber,
+        column: selection.selectionStartColumn,
+      });
+      const head = model.getOffsetAt(selection.getPosition());
+      awareness.setLocalStateField("cursor", {
+        anchor: Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(text, anchor)),
+        head: Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(text, head)),
+      });
+    };
+    const onSelectionChange = editor.onDidChangeCursorSelection(() => {
+      const wait = CURSOR_SHARE_MS - (Date.now() - lastShared);
+      if (wait <= 0) {
+        lastShared = Date.now();
+        shareCursor();
+      } else if (!shareTimer) {
+        shareTimer = setTimeout(() => {
+          shareTimer = null;
+          lastShared = Date.now();
+          shareCursor();
+        }, wait);
+      }
+    });
+
+    // Teammates' cursors and selections, drawn in their shade.
+    const selections = editor.createDecorationsCollection();
+    const absolute = (value: unknown) => {
+      if (!value || typeof value !== "object") return null;
+      try {
+        const found = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(value), doc);
+        return found && found.type === text ? model.getPositionAt(found.index) : null;
+      } catch {
+        return null;
+      }
+    };
+    let frame = 0;
+    const render = () => {
+      frame = 0;
+      if (!awareness) return;
+      const lineHeight = lineHeightFor(fontSizeRef.current) - 2;
+      const decorations: { range: InstanceType<Monaco["Range"]>; options: { className: string } }[] = [];
+      const shown = new Set<number>();
+      let followed: { lineNumber: number; column: number } | null = null;
+
+      awareness.getStates().forEach((state, clientId) => {
+        if (clientId === doc.clientID) return;
+        const user = state.user as SharedUser | undefined;
+        const cursor = state.cursor as SharedCursor | undefined;
+        if (!user || typeof user.userId !== "string" || !cursor) return;
+        const anchor = absolute(cursor.anchor);
+        const head = absolute(cursor.head);
+        if (!anchor || !head) return;
+        shown.add(clientId);
+
+        if (anchor.lineNumber !== head.lineNumber || anchor.column !== head.column) {
+          const [from, to] =
+            anchor.lineNumber < head.lineNumber || (anchor.lineNumber === head.lineNumber && anchor.column < head.column)
+              ? [anchor, head]
+              : [head, anchor];
+          decorations.push({
+            range: new monaco.Range(from.lineNumber, from.column, to.lineNumber, to.column),
+            options: { className: getSelectionShadeClass(user.userId) },
+          });
+        }
+
+        const name = typeof user.name === "string" ? user.name : "Someone";
+        const avatarId = typeof user.avatarId === "string" ? user.avatarId : "";
+        let widget = widgets.get(clientId);
+        if (!widget) {
+          widget = new RemoteCursorWidget(
+            `cursor-${clientId}`,
+            name,
+            avatarId,
+            head,
+            monaco.editor.ContentWidgetPositionPreference.EXACT,
+            getCursorShadeClass(user.userId),
+            lineHeight,
+          );
+          widgets.set(clientId, widget);
+          editor.addContentWidget(widget);
+        } else {
+          widget.updatePosition(head);
+          widget.setAvatar(avatarId);
+          widget.setLineHeight(lineHeight);
+          editor.layoutContentWidget(widget);
+        }
+        if (user.userId === followRef.current) followed = head;
+      });
+
+      for (const [clientId, widget] of widgets) {
+        if (shown.has(clientId)) continue;
+        editor.removeContentWidget(widget);
+        widget.dispose();
+        widgets.delete(clientId);
+      }
+      selections.set(decorations);
+      if (followed) editor.revealPositionInCenterIfOutsideViewport(followed, monaco.editor.ScrollType.Smooth);
+    };
+    const scheduleRender = () => {
+      if (!frame) frame = requestAnimationFrame(render);
+    };
+    renderCursorsRef.current = scheduleRender;
+    awareness?.on("change", scheduleRender);
+
+    shareCursor();
+    render();
+
+    return () => {
+      onModelChange.dispose();
+      onSelectionChange.dispose();
+      doc.off("beforeAllTransactions", rememberSelections);
+      text.unobserve(onTextChange);
+      awareness?.off("change", scheduleRender);
+      if (frame) cancelAnimationFrame(frame);
+      if (shareTimer) clearTimeout(shareTimer);
+      selections.clear();
+      for (const widget of widgets.values()) {
+        editor.removeContentWidget(widget);
+        widget.dispose();
+      }
+      widgets.clear();
+      renderCursorsRef.current = null;
+      undoRef.current = null;
+    };
+  }, [mounted, collab, collabReady, collabGeneration]);
 
   const handleMount: OnMount = (editor, monaco) => {
     // Bracket colors are drawn by the text model, which ignores the editor's
@@ -302,6 +530,18 @@ export function CodeEditor({
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       onRunShortcutRef.current?.();
     });
+
+    // Undo and redo. In a shared room they use the shared document's history
+    // of your own edits, so a teammate's typing is never undone by your Ctrl+Z.
+    const history = (action: "undo" | "redo") => {
+      const undo = undoRef.current;
+      if (!undo) editor.trigger("keyboard", action, null);
+      else if (action === "undo") undo.undo();
+      else undo.redo();
+    };
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ, () => history("undo"));
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyZ, () => history("redo"));
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyY, () => history("redo"));
 
     // Right-click menu entry, shown only when there's a selection.
     editor.addAction({
@@ -317,110 +557,17 @@ export function CodeEditor({
 
     editor.onDidChangeCursorPosition((e) => {
       setPosition({ line: e.position.lineNumber, column: e.position.column });
-
-      const now = Date.now();
-      if (now - lastEmitRef.current > 80) {
-        lastEmitRef.current = now;
-        onCursorMove(e.position.lineNumber, e.position.column);
+      // Moving your own cursor takes back control from follow mode.
+      if (followRef.current && (e.source === "keyboard" || e.source === "mouse")) {
+        onStopFollowingRef.current?.();
       }
     });
+
+    setMounted(true);
   };
 
-  useEffect(() => {
-    const editor = editorRef.current;
-    const monaco = monacoRef.current;
-    if (!editor || !monaco || !remoteUpdate) return;
-
-    const model = editor.getModel();
-    if (!model) return;
-
-    const oldText = model.getValue();
-    if (oldText === remoteUpdate.code) return;
-
-    const { startOffset, endOffset, insertedText } = computeMinimalEdit(oldText, remoteUpdate.code);
-    const deletedLength = endOffset - startOffset;
-    const insertedLength = insertedText.length;
-
-    const localPositionBefore = editor.getPosition();
-    const localOffsetBefore = localPositionBefore ? model.getOffsetAt(localPositionBefore) : 0;
-
-    let localOffsetAfter: number;
-    if (localOffsetBefore <= startOffset) {
-      localOffsetAfter = localOffsetBefore;
-    } else if (localOffsetBefore >= endOffset) {
-      localOffsetAfter = localOffsetBefore + (insertedLength - deletedLength);
-    } else {
-      localOffsetAfter = startOffset;
-    }
-
-    const newLocalPosition = offsetToPosition(remoteUpdate.code, localOffsetAfter);
-    const startPos = model.getPositionAt(startOffset);
-    const endPos = model.getPositionAt(endOffset);
-
-    isApplyingRemoteRef.current = true;
-    editor.executeEdits(
-      "remote-sync",
-      [
-        {
-          range: new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column),
-          text: insertedText,
-        },
-      ],
-      [
-        new monaco.Selection(
-          newLocalPosition.lineNumber,
-          newLocalPosition.column,
-          newLocalPosition.lineNumber,
-          newLocalPosition.column
-        ),
-      ]
-    );
-    isApplyingRemoteRef.current = false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remoteUpdate?.nonce]);
-
-  useEffect(() => {
-    const editor = editorRef.current;
-    const monaco = monacoRef.current;
-    if (!editor || !monaco) return;
-
-    const cursorLineHeight = lineHeightFor(fontSize) - 2;
-    const activeIds = new Set(remoteCursors.map((c) => c.userId));
-
-    for (const [userId, widget] of widgetsRef.current) {
-      if (!activeIds.has(userId)) {
-        editor.removeContentWidget(widget);
-        widget.dispose();
-        widgetsRef.current.delete(userId);
-      }
-    }
-
-    for (const cursor of remoteCursors) {
-      const pos = { lineNumber: cursor.line, column: cursor.column };
-
-      let widget = widgetsRef.current.get(cursor.userId);
-      if (!widget) {
-        widget = new RemoteCursorWidget(
-          `cursor-${cursor.userId}`,
-          cursor.name,
-          cursor.avatarId,
-          pos,
-          monaco.editor.ContentWidgetPositionPreference.EXACT,
-          getCursorShadeClass(cursor.userId),
-          cursorLineHeight
-        );
-        widgetsRef.current.set(cursor.userId, widget);
-        editor.addContentWidget(widget);
-      } else {
-        widget.updatePosition(pos);
-        widget.setAvatar(cursor.avatarId);
-        widget.setLineHeight(cursorLineHeight);
-        editor.layoutContentWidget(widget);
-      }
-    }
-  }, [remoteCursors, fontSize]);
-
   const languageLabel = LANGUAGES.find((l) => l.value === language)?.label ?? language;
+  const syncing = !!collab && !collabReady;
 
   return (
     <div className="flex h-full flex-col bg-ink-900">
@@ -438,6 +585,7 @@ export function CodeEditor({
           beforeMount={handleEditorWillMount}
           onMount={handleMount}
           options={{
+            readOnly: syncing,
             fontFamily: "var(--font-mono)",
             fontSize,
             lineHeight: lineHeightFor(fontSize),
@@ -492,13 +640,16 @@ export function CodeEditor({
           <span className="tabular-nums">
             Ln {position.line}, Col {position.column}
           </span>
-          <span className="flex items-center gap-1" title={saveStatus === "saving" ? "Saving…" : "All changes saved"}>
-            {saveStatus === "saving" ? (
+          <span
+            className="flex items-center gap-1"
+            title={syncing ? "Syncing with the room…" : saveStatus === "saving" ? "Saving…" : "All changes saved"}
+          >
+            {syncing || saveStatus === "saving" ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
               <Check className="h-3 w-3 text-ink-100" />
             )}
-            <span className="hidden sm:inline">{saveStatus === "saving" ? "Saving" : "Saved"}</span>
+            <span className="hidden sm:inline">{syncing ? "Syncing" : saveStatus === "saving" ? "Saving" : "Saved"}</span>
           </span>
         </div>
       </div>
