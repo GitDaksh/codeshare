@@ -45,12 +45,14 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-function extractRoomId(input: string): string | null {
+// A room link (or a bare room id) → where to go. Invite links keep their
+// invite code, so the room opens for someone who hasn't joined it yet.
+function roomPathFrom(input: string): string | null {
   const trimmed = input.trim();
-  const match = trimmed.match(/room\/([a-f0-9]{24})/i);
-  if (match) return match[1];
-  if (/^[a-f0-9]{24}$/i.test(trimmed)) return trimmed;
-  return null;
+  const id = trimmed.match(/room\/([a-f0-9]{24})/i)?.[1] ?? (/^[a-f0-9]{24}$/i.test(trimmed) ? trimmed : null);
+  if (!id) return null;
+  const invite = trimmed.match(/[?&]invite=([A-Za-z0-9]{16})/)?.[1];
+  return invite ? `/room/${id}?invite=${invite}` : `/room/${id}`;
 }
 
 function languageLabel(value: string): string {
@@ -146,8 +148,10 @@ export default function DashboardPage() {
       const res = await api.post<Room>("/api/rooms", { name, language });
       setRooms([res.data, ...rooms]);
       toast(`"${res.data.name}" created`);
-    } catch {
-      toast("Could not create the room.", "error");
+    } catch (err) {
+      // The server's reason (for example, the 100-room limit), if it sent one.
+      const reason = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast(reason || "Could not create the room.", "error");
       throw new Error("create failed");
     }
   }
@@ -175,12 +179,12 @@ export default function DashboardPage() {
   }
 
   function handleJoinByLink() {
-    const id = extractRoomId(joinInput);
-    if (!id) {
+    const path = roomPathFrom(joinInput);
+    if (!path) {
       toast("That doesn't look like a valid room link or ID.", "error");
       return;
     }
-    router.push(`/room/${id}`);
+    router.push(path);
   }
 
   function clearFilters() {

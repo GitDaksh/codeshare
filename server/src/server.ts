@@ -11,6 +11,7 @@ import roomRoutes from "./routes/roomRoutes";
 import profileRoutes from "./routes/profileRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import { setupSocket, flushAllPendingCodeSaves } from "./sockets";
+import { prepareRooms } from "./lib/access";
 
 dotenv.config();
 
@@ -36,7 +37,8 @@ const PORT = process.env.PORT || 5001;
 
 app.use(helmet());
 app.use(cors({ origin: allowedOrigins, credentials: true }));
-app.use(express.json());
+// Room code can be up to 100,000 characters.
+app.use(express.json({ limit: "512kb" }));
 app.use(morgan("dev"));
 app.use(clerkMiddleware());
 
@@ -65,6 +67,11 @@ async function start() {
   if (!connected) {
     process.exitCode = 1;
     return;
+  }
+  try {
+    await prepareRooms();
+  } catch (err) {
+    console.error("Failed to prepare invite links for existing rooms:", err);
   }
   httpServer.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

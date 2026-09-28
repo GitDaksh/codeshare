@@ -42,7 +42,9 @@ export type SocketHandlers = {
   onLensStop?: (event: LensStopEvent) => void;
 };
 
-export function useSocket(roomId: string, handlers: SocketHandlers) {
+// "invite" is the code from an invite link (/room/<id>?invite=<code>): the
+// server only lets people join a room they own, joined before, or were invited to.
+export function useSocket(roomId: string, handlers: SocketHandlers, invite: string | null = null) {
   const { getToken } = useAuth();
   const socketRef = useRef<Socket | null>(null);
   const handlersRef = useRef(handlers);
@@ -79,7 +81,7 @@ export function useSocket(roomId: string, handlers: SocketHandlers) {
 
       socket.on("connect", () => {
         setStatus("connected");
-        socket.emit("room:join", { roomId });
+        socket.emit("room:join", { roomId, invite });
       });
 
       socket.on("presence:update", (users: OnlineUser[]) => {
@@ -148,7 +150,7 @@ export function useSocket(roomId: string, handlers: SocketHandlers) {
       socket?.emit("room:leave", roomId);
       socket?.disconnect();
     };
-  }, [roomId, getToken]);
+  }, [roomId, invite, getToken]);
 
   function sendMessage(text: string) {
     socketRef.current?.emit("chat:message", { roomId, text });

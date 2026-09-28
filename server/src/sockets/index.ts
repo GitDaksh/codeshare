@@ -3,6 +3,8 @@ import { verifyToken } from "@clerk/backend";
 import { Message } from "../models/Message";
 import { Room } from "../models/Room";
 import { Profile } from "../models/Profile";
+import { openRoom } from "../lib/access";
+import { limiter, type Limiter } from "../lib/rateLimit";
 
 type PresenceUser = {
   socketId: string;
@@ -21,6 +23,33 @@ const DEFAULT_AVATAR_ID = "codeshare";
 const ALLOWED_LANGUAGES = new Set(["javascript", "typescript", "python", "cpp", "java"]);
 const ALLOWED_REACTIONS = new Set(["👍", "❤️", "😂", "🎉", "👀", "🚀"]);
 const MAX_RUN_TEXT_CHARS = 20000;
+// The same limit as a room's starting code.
+const MAX_CODE_CHARS = 100_000;
+const MAX_MESSAGE_CHARS = 2000;
+
+// How fast each person may send each kind of event: a burst, then a steady
+// rate per second. Far above what anyone does by hand; it stops scripts from
+// flooding a room (or the database). Extra events are dropped.
+const EVENT_LIMITS: Record<string, Limiter> = {
+  "room:join": limiter(10, 1),
+  "chat:message": limiter(8, 0.7),
+  "reaction:toggle": limiter(15, 3),
+  typing: limiter(10, 2),
+  "code:change": limiter(60, 30),
+  "cursor:move": limiter(60, 30),
+  "language:change": limiter(5, 0.5),
+  "run:start": limiter(6, 1),
+  "run:result": limiter(6, 1),
+  // Someone clicking through tests records several in a row.
+  "lens:start": limiter(10, 0.5),
+  "lens:step": limiter(60, 30),
+  "lens:drive": limiter(10, 2),
+  "lens:stop": limiter(10, 2),
+};
+
+function allowed(socket: Socket, event: string): boolean {
+  return EVENT_LIMITS[event].take(socket.data.userId as string);
+}
 
 const roomPresence = new Map<string, Map<string, PresenceUser>>();
 const pendingCodeSaves = new Map<string, PendingCodeSave>();
@@ -186,8 +215,17 @@ export function setupSocket(io: Server) {
     console.log(`Socket connected: ${socket.id} (user ${socket.data.userId})`);
 
     socket.on("room:join", async (data: unknown) => {
-      const { roomId } = payloadOf<{ roomId: string }>(data);
+      if (!allowed(socket, "room:join")) return;
+      const { roomId, invite } = payloadOf<{ roomId: string; invite: string }>(data);
       if (typeof roomId !== "string") return;
+
+      // Only people who may open the room can join it: its owner, anyone who
+      // joined before, or anyone with its invite link.
+      const room = await openRoom(roomId, socket.data.userId as string, invite).catch(() => null);
+      if (!room) {
+        socket.emit("room:denied", { roomId });
+        return;
+      }
 
       socket.join(roomId);
       socket.data.roomId = roomId;
@@ -230,9 +268,10 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("chat:message", async (data: unknown) => {
+      if (!allowed(socket, "chat:message")) return;
       const { roomId, text } = payloadOf<{ roomId: string; text: string }>(data);
       if (typeof roomId !== "string" || typeof text !== "string") return;
-      if (!text.trim() || !socket.rooms.has(roomId)) return;
+      if (!text.trim() || text.trim().length > MAX_MESSAGE_CHARS || !socket.rooms.has(roomId)) return;
 
       try {
         const message = await Message.create({
@@ -250,6 +289,7 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("reaction:toggle", async (data: unknown) => {
+      if (!allowed(socket, "reaction:toggle")) return;
       const { roomId, messageId, emoji } = payloadOf<{ roomId: string; messageId: string; emoji: string }>(data);
       if (typeof roomId !== "string" || typeof messageId !== "string" || typeof emoji !== "string") return;
       if (!socket.rooms.has(roomId) || !ALLOWED_REACTIONS.has(emoji)) return;
@@ -281,6 +321,7 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("typing", (data: unknown) => {
+      if (!allowed(socket, "typing")) return;
       const { roomId, isTyping } = payloadOf<{ roomId: string; isTyping: boolean }>(data);
       if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
 
@@ -292,6 +333,7 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("code:change", (data: unknown) => {
+      if (!allowed(socket, "code:change")) return;
       const { roomId, code, line, column } = payloadOf<{
         roomId: string;
         code: string;
@@ -299,6 +341,7 @@ export function setupSocket(io: Server) {
         column: number;
       }>(data);
       if (typeof roomId !== "string" || typeof code !== "string" || !socket.rooms.has(roomId)) return;
+      if (code.length > MAX_CODE_CHARS) return;
 
       const cursor =
         typeof line === "number" && typeof column === "number"
@@ -310,6 +353,7 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("cursor:move", (data: unknown) => {
+      if (!allowed(socket, "cursor:move")) return;
       const { roomId, line, column } = payloadOf<{ roomId: string; line: number; column: number }>(data);
       if (typeof roomId !== "string" || typeof line !== "number" || typeof column !== "number") return;
       if (!socket.rooms.has(roomId)) return;
@@ -323,6 +367,7 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("language:change", async (data: unknown) => {
+      if (!allowed(socket, "language:change")) return;
       const { roomId, language } = payloadOf<{ roomId: string; language: string }>(data);
       if (typeof roomId !== "string" || typeof language !== "string") return;
       if (!socket.rooms.has(roomId) || !ALLOWED_LANGUAGES.has(language)) return;
@@ -341,6 +386,7 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("run:start", (data: unknown) => {
+      if (!allowed(socket, "run:start")) return;
       const { roomId, language } = payloadOf<{ roomId: string; language: string }>(data);
       if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
 
@@ -351,6 +397,7 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("run:result", (data: unknown) => {
+      if (!allowed(socket, "run:result")) return;
       const { roomId, language, output, error, durationMs } = payloadOf<{
         roomId: string;
         language: string;
@@ -370,6 +417,7 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("lens:start", (data: unknown) => {
+      if (!allowed(socket, "lens:start")) return;
       const { roomId, id, title, code, trace } = payloadOf<{
         roomId: string;
         id: string;
@@ -409,6 +457,7 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("lens:step", (data: unknown) => {
+      if (!allowed(socket, "lens:step")) return;
       const { roomId, id, step } = payloadOf<{ roomId: string; id: string; step: number }>(data);
       if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !isLensStep(step)) return;
       const session = currentLensSession(roomId, id);
@@ -421,6 +470,7 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("lens:drive", (data: unknown) => {
+      if (!allowed(socket, "lens:drive")) return;
       const { roomId, id, step } = payloadOf<{ roomId: string; id: string; step: number }>(data);
       if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !isLensStep(step)) return;
       const session = currentLensSession(roomId, id);
@@ -433,6 +483,7 @@ export function setupSocket(io: Server) {
     });
 
     socket.on("lens:stop", (data: unknown) => {
+      if (!allowed(socket, "lens:stop")) return;
       const { roomId, id } = payloadOf<{ roomId: string; id: string }>(data);
       if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
       const session = currentLensSession(roomId, id);
