@@ -11,7 +11,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { motion } from "framer-motion";
 import {
@@ -166,6 +166,9 @@ export default function RoomPage({
   const { userId: currentUserId } = useAuth();
   const api = useApi();
   const router = useRouter();
+  // An invite link (/room/<id>?invite=<code>) lets someone new join the room.
+  const invite = useSearchParams().get("invite");
+  const inviteQuery = invite ? `?invite=${encodeURIComponent(invite)}` : "";
   const { toast } = useToast();
   const { checking, profile } = useOnboardingGate();
   const isDesktop = useMediaQuery("(min-width: 768px)");
@@ -350,7 +353,7 @@ export default function RoomPage({
     onLensStep: (event) => lens.receiveStep(event),
     onLensDriver: (event) => lens.receiveDriver(event),
     onLensStop: (event) => lens.receiveStop(event),
-  });
+  }, invite);
 
   // Lens: shared step-by-step visualizations of the room's code.
   const lensMe = useMemo(() => {
@@ -386,7 +389,7 @@ export default function RoomPage({
 
   useEffect(() => {
     api
-      .get<Room>(`/api/rooms/${id}`)
+      .get<Room>(`/api/rooms/${id}${inviteQuery}`)
       .then((res) => {
         const loadedProblem = res.data.problemSlug ? getProblem(res.data.problemSlug) : null;
         setRoom(res.data);
@@ -402,14 +405,14 @@ export default function RoomPage({
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
-  }, [api, id]);
+  }, [api, id, inviteQuery]);
 
   useEffect(() => {
     api
-      .get<ChatMessage[]>(`/api/rooms/${id}/messages`)
+      .get<ChatMessage[]>(`/api/rooms/${id}/messages${inviteQuery}`)
       .then((res) => setMessages(res.data))
       .catch(() => toast("Could not load chat history.", "error"));
-  }, [api, id]);
+  }, [api, id, inviteQuery]);
 
   useEffect(() => {
     const solved = profile?.solvedProblems;
@@ -497,15 +500,16 @@ export default function RoomPage({
     saveTimeoutRef.current = setTimeout(() => setSaveStatus("saved"), SAVE_INDICATOR_DELAY_MS);
   }
 
-  function handleCopyLink() {
-    navigator.clipboard.writeText(window.location.href);
-    toast("Link copied to clipboard");
+  // The room's invite link: anyone who opens it can join. (The room's id
+  // alone isn't enough, so ids that leak or get guessed don't open rooms.)
+  function inviteLink(): string {
+    if (!room?.inviteCode) return window.location.href;
+    return `${window.location.origin}/room/${room._id}?invite=${room.inviteCode}`;
   }
 
-  function handleCopyRoomId() {
-    if (!room) return;
-    navigator.clipboard.writeText(room._id);
-    toast("Room ID copied");
+  function handleCopyLink() {
+    navigator.clipboard.writeText(inviteLink());
+    toast("Invite link copied. Anyone with it can join this room.");
   }
 
   function handleCopyCode() {
@@ -852,7 +856,7 @@ export default function RoomPage({
     ...themeCommands,
     {
       id: "copy-link",
-      label: "Copy room link",
+      label: "Copy invite link",
       icon: LinkIcon,
       action: handleCopyLink,
     },
@@ -901,7 +905,10 @@ export default function RoomPage({
           <Code2 className="h-5 w-5 text-ink-300" />
         </div>
         <p className="font-semibold text-ink-100">This room doesn&apos;t exist</p>
-        <p className="max-w-xs text-sm text-ink-400">It may have been deleted, or the link might be mistyped.</p>
+        <p className="max-w-xs text-sm text-ink-400">
+          It may have been deleted or the link might be mistyped. To join someone else&apos;s room, ask them for its
+          invite link.
+        </p>
         <Link
           href="/dashboard"
           className="mt-2 inline-flex h-9 items-center rounded-full border border-ink-700 bg-ink-900 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500"
@@ -964,8 +971,8 @@ export default function RoomPage({
           </span>
 
           <button
-            onClick={handleCopyRoomId}
-            title="Copy room ID"
+            onClick={handleCopyLink}
+            title="Copy invite link"
             className="hidden items-center gap-1.5 rounded-md px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 lg:flex"
           >
             {shortRoomId}
@@ -1055,7 +1062,7 @@ export default function RoomPage({
             <button onClick={handleDownloadCode} aria-label="Download code" title="Download code" className={TOOL_BUTTON}>
               <Download className="h-4 w-4" />
             </button>
-            <button onClick={handleCopyLink} aria-label="Copy room link" title="Copy room link" className={TOOL_BUTTON}>
+            <button onClick={handleCopyLink} aria-label="Copy invite link" title="Copy invite link" className={TOOL_BUTTON}>
               <LinkIcon className="h-4 w-4" />
             </button>
             <button

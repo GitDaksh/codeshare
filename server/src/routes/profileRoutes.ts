@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/requireAuth";
+import { apiRequests, limitRequests } from "../lib/rateLimit";
 import {
   getProfile,
   updateProfile,
@@ -10,7 +11,7 @@ import {
 
 const router = Router();
 
-router.use(requireAuth);
+router.use(requireAuth, limitRequests(apiRequests));
 
 router.get("/username-available", checkUsername);
 router.get("/recent-rooms", getRecentRooms);
