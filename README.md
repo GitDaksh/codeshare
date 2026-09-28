@@ -38,7 +38,7 @@ I built it one feature at a time as a portfolio project, favouring decisions I c
 ### Try it in a minute
 
 1. Open **[codeshare.tech](https://codeshare.tech)** and sign up with your email.
-2. Create a room, then open its link in a second browser window. Type in one and watch it appear in the other.
+2. Create a room, copy its invite link, and open it in a second browser window. Type in one and watch it appear in the other.
 3. Press <kbd>⌘</kbd> <kbd>↵</kbd> (<kbd>Ctrl</kbd> <kbd>Enter</kbd> on Windows) to run the code. Everyone in the room sees the output.
 4. Open **Practice**, pick a problem, and click **Run tests**.
 
@@ -56,7 +56,7 @@ I built it one feature at a time as a portfolio project, favouring decisions I c
 - **Shared editor.** Monaco (the editor behind VS Code) with live sync, named remote cursors, and syntax highlighting for JavaScript, TypeScript, Python, C++ and Java.
 - **Live presence.** See who's in the room, with join and leave notices.
 - **Shared runs.** Language changes and run results are broadcast to everyone, labelled with who ran the code.
-- **One link to join.** No invites, no setup on the other person's side.
+- **One link to join.** Share the room's invite link; there's nothing to set up on the other person's side.
 
 ### Run code in the browser
 - **Three languages.** JavaScript, TypeScript and Python (3.14, via Pyodide) run client-side in an isolated sandbox, with no server cost and no access to the app.
@@ -76,6 +76,15 @@ pie showData title Practice problems by difficulty
     "Medium" : 28
     "Hard" : 11
 ```
+
+### Watch your code run (Lens)
+- **Step through any run.** Lens records a Python, JavaScript or TypeScript program and replays it line by line, drawing every variable, list, map, linked list and tree as it changes.
+- **Together.** In a room, one person drives and everyone follows the same step live. Anyone can take control.
+- **Smart about what to show.** In Practice rooms, Visualize replays the first failing test (or any test, or your own input). A file that only defines functions gets a ready-made call instead of an empty recording.
+
+### See how your code scales (Big-O meter)
+- **Measured, not guessed.** A badge over the editor shows your function's time and space complexity, like `O(n log n) · O(n)`. It runs the function on inputs that keep growing and fits the curve, so it also catches hidden costs, like `x in list` inside a loop.
+- **Honest about its limits.** Results measured only on small inputs are marked as rough estimates (≈), and code too slow to measure says "Too slow" instead of guessing.
 
 ### Chat in every room
 - **Persistent chat** with message grouping, avatars, a typing indicator, emoji reactions and an unread badge.
@@ -186,6 +195,8 @@ sequenceDiagram
 - **The backend never trusts the frontend.** Every API route re-verifies the Clerk session from the `Authorization: Bearer` header. The app and API live on different origins, so auth uses tokens, not cookies.
 - **Server-side rules.** Owner-only actions (rename, delete) are enforced on the server. Inputs are validated: room names, code size, usernames, problem slugs and language allowlists.
 - **Locked-down API.** CORS only accepts an allowlist of site origins, and Helmet sets security headers.
+- **Invite links.** Room ids are database ids, which can be predicted (they contain a timestamp and a counter), so an id alone opens nothing. People join with the room's invite link, which carries a random 16-character code (about 95 bits), and are remembered after that.
+- **Rate limits.** Every API route and every live event has a per-person rate limit (kept in memory, with no extra service), and each person can own up to 100 rooms, so a script can't flood a room or fill the database.
 
 ### Keeping a free deployment fast
 - **No cold starts.** The API runs on Render's free tier, which sleeps after 15 idle minutes and takes about a minute to wake. An uptime monitor pings it every 5 minutes, so visitors don't hit a cold start.
@@ -235,6 +246,8 @@ codeshare/
 │   │   ├── sandboxRunners.ts      # code that runs inside the sandbox
 │   │   ├── judge.ts               # compares results (exact or order-insensitive)
 │   │   ├── problems.ts            # practice problems and starter-code generator
+│   │   ├── lens*.ts               # Lens: recording and replaying runs
+│   │   ├── complexity*.ts         # Big-O meter: measuring growth and fitting curves
 │   │   ├── socket.ts              # Socket.IO client
 │   │   └── api.ts                 # authenticated REST client
 │   ├── types/
@@ -247,6 +260,7 @@ codeshare/
 │       ├── models/                # Room, Message, Profile
 │       ├── sockets/               # presence, chat, reactions, cursors, code sync, shared runs
 │       ├── middleware/            # requireAuth, errorHandler
+│       ├── lib/                   # invite links, rate limits
 │       └── config/db.ts           # MongoDB connection
 └── package.json                   # `npm run dev` starts both apps
 ```
@@ -268,10 +282,10 @@ Every route except the health check requires a signed-in user (`Authorization: B
 | `POST` | `/api/rooms` | Create a room (optionally with starter code and a practice problem) |
 | `GET` | `/api/rooms` | Your rooms (practice rooms excluded) |
 | `GET` | `/api/rooms?problem=<slug>` | Your rooms for one practice problem |
-| `GET` | `/api/rooms/:id` | A room by ID (anyone signed in can open a shared link) |
+| `GET` | `/api/rooms/:id` | A room: for its owner, its members, or anyone with its invite (`?invite=<code>`) |
 | `PATCH` | `/api/rooms/:id` | Rename a room (owner only) |
 | `DELETE` | `/api/rooms/:id` | Delete a room (owner only) |
-| `GET` | `/api/rooms/:id/messages` | A room's chat history |
+| `GET` | `/api/rooms/:id/messages` | A room's newest 200 chat messages (same rule as the room) |
 
 **Profiles**
 
@@ -292,7 +306,7 @@ Sockets authenticate at handshake time with the same Clerk token, verified with 
 
 | Event | Direction | Purpose |
 |---|---|---|
-| `room:join` / `room:leave` | client → server | Join or leave a room |
+| `room:join` / `room:leave` | client → server | Join (owner, member, or with the `invite` code) or leave a room |
 | `presence:update` | server → room | Who's currently in the room |
 | `code:change` | client ↔ room | Live edits (with cursor); debounce-saved to MongoDB |
 | `cursor:move` | client ↔ room | Cursor positions |
@@ -301,6 +315,7 @@ Sockets authenticate at handshake time with the same Clerk token, verified with 
 | `reaction:toggle` → `reaction:update` | client → room | Emoji reactions |
 | `typing` | client → room | Typing indicator |
 | `run:start` / `run:result` | client → room | Share code runs and test results |
+| `lens:start` / `lens:step` / `lens:drive` / `lens:stop` | client → room | Share a Lens recording and follow whoever is driving |
 
 </details>
 
@@ -370,7 +385,7 @@ A deliberately monochrome system: near-black surfaces, white and greys, with a s
 
 - **Whole-document sync.** Each edit sends the full file, so if two people type at the exact same moment, one edit can overwrite the other. Moving to a CRDT (Yjs) is next on the roadmap.
 - **C++ and Java can be edited but not run.** Running them needs a server-side sandbox, which doesn't fit a zero-cost deployment.
-- **No automated test suite in the repo yet.** It's the next item on the roadmap.
+- **No automated test suite in the repo yet.** CI type-checks and builds every push and pull request; adding tests to it is next on the roadmap.
 
 ## Roadmap
 
@@ -378,10 +393,18 @@ A deliberately monochrome system: near-black surfaces, white and greys, with a s
 - [x] In-browser code execution (JavaScript, TypeScript, Python) in a sandbox
 - [x] Practice library with in-room tests and progress tracking
 - [x] Custom domain and Clerk production instance
-- [ ] Automated tests and CI on every pull request
+- [x] Lens: step-by-step visualizer for Python, JavaScript and TypeScript, shared live in rooms
+- [x] Big-O meter: measured time and space complexity
+- [x] Invite links and rate limiting
+- [x] CI: type-check and build on every push and pull request
+- [ ] Automated test suite in CI
 - [ ] Conflict-free editing with Yjs, plus live selections and follow mode
 - [ ] Interview mode: timer, interviewer notes, room permissions
 - [ ] Google and GitHub sign-in in production
+
+## License
+
+[MIT](LICENSE)
 
 ## Author
 
