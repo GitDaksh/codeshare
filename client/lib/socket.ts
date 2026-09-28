@@ -3,7 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import type { OnlineUser, RemoteCursorEvent, TypingEvent } from "@/types/presence";
+import type { OnlineUser, TypingEvent } from "@/types/presence";
 import type { ChatMessage, Reaction } from "@/types/chat";
 import type {
   LanguageUpdateEvent,
@@ -17,11 +17,6 @@ import type {
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
-type CodeChangePayload = {
-  code: string;
-  cursor: RemoteCursorEvent | null;
-};
-
 export type ReactionUpdate = {
   messageId: string;
   reactions: Reaction[];
@@ -29,8 +24,6 @@ export type ReactionUpdate = {
 
 export type SocketHandlers = {
   onChatMessage?: (message: ChatMessage) => void;
-  onCodeChange?: (code: string, cursor: RemoteCursorEvent | null) => void;
-  onCursorMove?: (cursor: RemoteCursorEvent) => void;
   onTyping?: (event: TypingEvent) => void;
   onReactionUpdate?: (update: ReactionUpdate) => void;
   onLanguageUpdate?: (event: LanguageUpdateEvent) => void;
@@ -50,6 +43,9 @@ export function useSocket(roomId: string, handlers: SocketHandlers, invite: stri
   const handlersRef = useRef(handlers);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  // The live connection, for shared editing (lib/collab.ts). Code and cursors
+  // travel over it as Yjs updates.
+  const [connection, setConnection] = useState<Socket | null>(null);
 
   // Always call the latest handlers without reconnecting the socket when
   // their identities change between renders.
@@ -78,6 +74,7 @@ export function useSocket(roomId: string, handlers: SocketHandlers, invite: stri
       });
 
       socketRef.current = socket;
+      setConnection(socket);
 
       socket.on("connect", () => {
         setStatus("connected");
@@ -94,14 +91,6 @@ export function useSocket(roomId: string, handlers: SocketHandlers, invite: stri
 
       socket.on("reaction:update", (update: ReactionUpdate) => {
         handlersRef.current.onReactionUpdate?.(update);
-      });
-
-      socket.on("code:change", (payload: CodeChangePayload) => {
-        handlersRef.current.onCodeChange?.(payload.code, payload.cursor);
-      });
-
-      socket.on("cursor:move", (cursor: RemoteCursorEvent) => {
-        handlersRef.current.onCursorMove?.(cursor);
       });
 
       socket.on("typing", (event: TypingEvent) => {
@@ -160,14 +149,6 @@ export function useSocket(roomId: string, handlers: SocketHandlers, invite: stri
     socketRef.current?.emit("reaction:toggle", { roomId, messageId, emoji });
   }
 
-  function sendCodeChange(code: string, line: number, column: number) {
-    socketRef.current?.emit("code:change", { roomId, code, line, column });
-  }
-
-  function sendCursorMove(line: number, column: number) {
-    socketRef.current?.emit("cursor:move", { roomId, line, column });
-  }
-
   function sendTyping(isTyping: boolean) {
     socketRef.current?.emit("typing", { roomId, isTyping });
   }
@@ -206,10 +187,9 @@ export function useSocket(roomId: string, handlers: SocketHandlers, invite: stri
   return {
     status,
     onlineUsers,
+    socket: connection,
     sendMessage,
     sendReaction,
-    sendCodeChange,
-    sendCursorMove,
     sendTyping,
     sendLanguageChange,
     sendRunStart,

@@ -5,6 +5,7 @@ import { Room } from "../models/Room";
 import { Profile } from "../models/Profile";
 import { openRoom } from "../lib/access";
 import { limiter, type Limiter } from "../lib/rateLimit";
+import { awarenessShared, closeShared, flushShared, helloShared, leaveShared, updateShared } from "./collab";
 
 type PresenceUser = {
   socketId: string;
@@ -13,18 +14,10 @@ type PresenceUser = {
   avatarId: string;
 };
 
-type PendingCodeSave = {
-  timer: NodeJS.Timeout;
-  code: string;
-};
-
-const CODE_SAVE_DEBOUNCE_MS = 1500;
 const DEFAULT_AVATAR_ID = "codeshare";
 const ALLOWED_LANGUAGES = new Set(["javascript", "typescript", "python", "cpp", "java"]);
 const ALLOWED_REACTIONS = new Set(["👍", "❤️", "😂", "🎉", "👀", "🚀"]);
 const MAX_RUN_TEXT_CHARS = 20000;
-// The same limit as a room's starting code.
-const MAX_CODE_CHARS = 100_000;
 const MAX_MESSAGE_CHARS = 2000;
 
 // How fast each person may send each kind of event: a burst, then a steady
@@ -35,8 +28,10 @@ const EVENT_LIMITS: Record<string, Limiter> = {
   "chat:message": limiter(8, 0.7),
   "reaction:toggle": limiter(15, 3),
   typing: limiter(10, 2),
-  "code:change": limiter(60, 30),
-  "cursor:move": limiter(60, 30),
+  // Shared editing: every keystroke is an update; cursors move constantly.
+  "collab:hello": limiter(10, 1),
+  "collab:update": limiter(100, 40),
+  "collab:awareness": limiter(60, 30),
   "language:change": limiter(5, 0.5),
   "run:start": limiter(6, 1),
   "run:result": limiter(6, 1),
@@ -52,7 +47,6 @@ function allowed(socket: Socket, event: string): boolean {
 }
 
 const roomPresence = new Map<string, Map<string, PresenceUser>>();
-const pendingCodeSaves = new Map<string, PendingCodeSave>();
 
 // ---------- Lens: shared step-by-step visualizations ----------
 // The person who clicks Visualize records the run in their browser and
@@ -130,41 +124,9 @@ function broadcastPresence(io: Server, roomId: string) {
   io.to(roomId).emit("presence:update", users);
 }
 
-async function saveRoomCode(roomId: string, code: string) {
-  try {
-    await Room.findByIdAndUpdate(roomId, { code });
-  } catch (err) {
-    console.error(`Failed to save code for room ${roomId}:`, err);
-  }
-}
-
-function scheduleCodeSave(roomId: string, code: string) {
-  const existing = pendingCodeSaves.get(roomId);
-  if (existing) clearTimeout(existing.timer);
-
-  const timer = setTimeout(() => {
-    pendingCodeSaves.delete(roomId);
-    saveRoomCode(roomId, code);
-  }, CODE_SAVE_DEBOUNCE_MS);
-
-  pendingCodeSaves.set(roomId, { timer, code });
-}
-
-function flushCodeSave(roomId: string) {
-  const pending = pendingCodeSaves.get(roomId);
-  if (!pending) return;
-  clearTimeout(pending.timer);
-  pendingCodeSaves.delete(roomId);
-  saveRoomCode(roomId, pending.code);
-}
-
+// Shutdown: save every room's unsaved edits.
 export async function flushAllPendingCodeSaves() {
-  const saves = Array.from(pendingCodeSaves.entries()).map(([roomId, pending]) => {
-    clearTimeout(pending.timer);
-    return saveRoomCode(roomId, pending.code);
-  });
-  pendingCodeSaves.clear();
-  await Promise.all(saves);
+  await flushShared();
 }
 
 function removeFromRoom(io: Server, socket: Socket, roomId: string) {
@@ -172,9 +134,10 @@ function removeFromRoom(io: Server, socket: Socket, roomId: string) {
   if (!room) return;
 
   room.delete(socket.id);
+  leaveShared(io, socket, roomId);
   if (room.size === 0) {
     roomPresence.delete(roomId);
-    flushCodeSave(roomId);
+    void closeShared(roomId);
     lensSessions.delete(roomId);
   } else {
     // The Lens driver left (all their tabs): free the wheel for anyone.
@@ -257,7 +220,37 @@ export function setupSocket(io: Server) {
       const lens = currentLensSession(roomId);
       if (lens) socket.emit("lens:session", lensSessionPayload(lens, false));
 
+      // The browser can now sync the shared document (collab:hello).
+      socket.emit("room:joined", { roomId });
       console.log(`User ${socket.data.userId} joined room ${roomId}`);
+    });
+
+    // Shared editing (see collab.ts).
+    socket.on("collab:hello", async (data: unknown) => {
+      if (!allowed(socket, "collab:hello")) return;
+      const { roomId, stateVector } = payloadOf<{ roomId: string; stateVector: unknown }>(data);
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
+      await helloShared(socket, roomId, stateVector).catch((err) => console.error("Failed to sync a room:", err));
+    });
+
+    socket.on("collab:update", async (data: unknown) => {
+      const { roomId, update } = payloadOf<{ roomId: string; update: unknown }>(data);
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
+      // A dropped edit would leave this person out of step, so they're told
+      // to sync again (their edits are sent again, nothing is lost).
+      if (!allowed(socket, "collab:update")) {
+        socket.emit("collab:rejected", { roomId, reason: "busy" });
+        return;
+      }
+      const result = await updateShared(socket, roomId, update).catch(() => "ignored" as const);
+      if (result === "rejected") socket.emit("collab:rejected", { roomId, reason: "too-long" });
+    });
+
+    socket.on("collab:awareness", async (data: unknown) => {
+      if (!allowed(socket, "collab:awareness")) return;
+      const { roomId, update } = payloadOf<{ roomId: string; update: unknown }>(data);
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
+      await awarenessShared(socket, roomId, update, runnerInfo(socket)).catch(() => {});
     });
 
     socket.on("room:leave", (roomId: unknown) => {
@@ -332,40 +325,6 @@ export function setupSocket(io: Server) {
       });
     });
 
-    socket.on("code:change", (data: unknown) => {
-      if (!allowed(socket, "code:change")) return;
-      const { roomId, code, line, column } = payloadOf<{
-        roomId: string;
-        code: string;
-        line: number;
-        column: number;
-      }>(data);
-      if (typeof roomId !== "string" || typeof code !== "string" || !socket.rooms.has(roomId)) return;
-      if (code.length > MAX_CODE_CHARS) return;
-
-      const cursor =
-        typeof line === "number" && typeof column === "number"
-          ? { userId: socket.data.userId, name: socket.data.userName || "Anonymous", line, column }
-          : null;
-
-      socket.to(roomId).emit("code:change", { code, cursor });
-      scheduleCodeSave(roomId, code);
-    });
-
-    socket.on("cursor:move", (data: unknown) => {
-      if (!allowed(socket, "cursor:move")) return;
-      const { roomId, line, column } = payloadOf<{ roomId: string; line: number; column: number }>(data);
-      if (typeof roomId !== "string" || typeof line !== "number" || typeof column !== "number") return;
-      if (!socket.rooms.has(roomId)) return;
-
-      socket.to(roomId).emit("cursor:move", {
-        userId: socket.data.userId,
-        name: socket.data.userName || "Anonymous",
-        line,
-        column,
-      });
-    });
-
     socket.on("language:change", async (data: unknown) => {
       if (!allowed(socket, "language:change")) return;
       const { roomId, language } = payloadOf<{ roomId: string; language: string }>(data);
@@ -379,7 +338,7 @@ export function setupSocket(io: Server) {
       });
 
       try {
-        await Room.findByIdAndUpdate(roomId, { language });
+        await Room.updateOne({ _id: roomId }, { language });
       } catch (err) {
         console.error(`Failed to save language for room ${roomId}:`, err);
       }

@@ -5,13 +5,6 @@ export type OnlineUser = {
   avatarId: string;
 };
 
-export type RemoteCursorEvent = {
-  userId: string;
-  name: string;
-  line: number;
-  column: number;
-};
-
 export type TypingEvent = {
   userId: string;
   name: string;
