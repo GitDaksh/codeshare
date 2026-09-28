@@ -109,8 +109,15 @@ export type MeterTarget = {
   n: string;
   shapes: Shape[];
   sizes: number[];
+  // Smaller sizes, measured first: they show how fast the work grows before
+  // n starts doubling (and are all that code whose work explodes can do).
+  small: number[];
   make: (n: number, r: Rand) => unknown[];
 };
+
+// n = 1, 2, 3 … below the first usual size (grids: 2×2 and 3×3).
+const smallSizes = (sizes: number[], grid: boolean) =>
+  (grid ? [4, 9] : [1, 2, 3, 4, 5, 6, 7]).filter((n) => n < sizes[0]);
 
 export type MeterPlan = { ok: true; target: MeterTarget } | { ok: false; reason: string };
 
@@ -455,6 +462,7 @@ export function planMeter(code: string, language: string, problem: Problem | nul
         ),
     };
     const chosen = recipe ?? fallback;
+    const sizes = chosen.sizes ?? (problem.params.some((p) => p.type === "int[][]") && !recipe ? CELLS : DOUBLING);
     return {
       ok: true,
       target: {
@@ -462,7 +470,8 @@ export function planMeter(code: string, language: string, problem: Problem | nul
         label: `${name}(${params.join(", ")})`,
         n: chosen.n,
         shapes: problem.params.map((p) => SHAPE[p.type] ?? "value"),
-        sizes: chosen.sizes ?? (problem.params.some((p) => p.type === "int[][]") && !recipe ? CELLS : DOUBLING),
+        sizes,
+        small: smallSizes(sizes, sizes === CELLS),
         make: chosen.make,
       },
     };
@@ -500,6 +509,7 @@ export function planMeter(code: string, language: string, problem: Problem | nul
       n: DESCRIBE[growKind](main.params[growAt]),
       shapes: kinds.map((kind) => SHAPE[kind!] ?? "value"),
       sizes: growKind === "grid" ? CELLS : DOUBLING,
+      small: smallSizes(growKind === "grid" ? CELLS : DOUBLING, growKind === "grid"),
       make: (n, r) => kinds.map((kind, i) => (i === growAt ? grown(kind!, n, r) : fixed(kind!, main.params[i]))),
     },
   };
@@ -520,15 +530,24 @@ export function meterInputs(target: MeterTarget, seed?: number): [number, unknow
   return target.sizes.map((n) => [n, target.make(n, r)]);
 }
 
+export function meterSmallInputs(target: MeterTarget): [number, unknown[]][] {
+  const r = makeRand(7);
+  return target.small.map((n) => [n, target.make(n, r)]);
+}
+
 // ---------- Fitting the growth ----------
 
 export type GrowthModel = { id: string; label: string; order: number; f: (n: number) => number };
 
-const FACTORIAL = (n: number) => {
-  let out = 1;
-  for (let i = 2; i <= n; i++) out *= i;
-  return out;
+// ln(n!), growing smoothly between whole numbers (so curves draw smoothly).
+const lnFactorial = (n: number) => {
+  const whole = Math.floor(n);
+  let out = 0;
+  for (let i = 2; i <= whole; i++) out += Math.log(i);
+  return out + (n - whole) * Math.log(whole + 1);
 };
+
+const FACTORIAL = (n: number) => Math.exp(lnFactorial(n));
 
 export const MODELS: GrowthModel[] = [
   { id: "1", label: "O(1)", order: 0, f: () => 1 },
@@ -601,15 +620,10 @@ function logLine(points: Point[], x: (n: number) => number, floor: number) {
   return { at: (n: number) => Math.exp(my + slope * (x(n) - mx)), error, slope };
 }
 
-const lnFactorial = (n: number) => {
-  let out = 0;
-  for (let i = 2; i <= n; i++) out += Math.log(i);
-  return out;
-};
-
 // The simplest class that explains the growth about as well as the best one.
 export function classify(points: Point[], flat: number): Verdict | null {
-  if (!points.length) return null;
+  // Growth can't be judged from fewer than three measurements.
+  if (points.length < 3) return null;
   const ys = points.map((p) => p.y);
   const maxY = Math.max(...ys);
   const floor = Math.max(maxY * 1e-4, 1e-9);
@@ -623,24 +637,32 @@ export function classify(points: Point[], flat: number): Verdict | null {
     at,
   });
   const mean = ys.reduce((a, b) => a + b, 0) / ys.length;
+  // Only small inputs (n up to 16) can't show slow growth for sure.
+  const short = points[points.length - 1].n <= 16;
   // Tiny values, or barely any change across the whole range, is O(1).
-  if (points.length < 2 || maxY <= flat || maxY - Math.min(...ys) <= flat / 2) {
-    return verdict(MODELS[0], points.length >= 4 && span >= 16 ? "high" : "medium", () => mean);
+  if (maxY <= flat || maxY - Math.min(...ys) <= flat / 2) {
+    return verdict(MODELS[0], short ? "low" : points.length >= 4 && span >= 16 ? "high" : "medium", () => mean);
   }
 
-  // Faster than any polynomial (steeper than n⁴ at the end): 2ⁿ or n!.
-  const [a, b] = points.slice(-2);
-  const slope = Math.log(Math.max(b.y, floor) / Math.max(a.y, floor)) / Math.log(b.n / a.n);
-  if (slope > 4.5 && b.y > flat * 4) {
-    const tail = points.filter((p) => p.y > maxY * 1e-3);
+  // Faster than any polynomial (steeper than n⁴ at the end, and already
+  // steep the step before, so one slow run can't fake it): 2ⁿ or n!.
+  const steepness = (i: number) =>
+    Math.log(Math.max(points[i].y, floor) / Math.max(points[i - 1].y, floor)) / Math.log(points[i].n / points[i - 1].n);
+  const last = points.length - 1;
+  if (steepness(last) > 4.5 && steepness(last - 1) > 2.5 && points[last].y > flat * 4) {
+    // Skip the smallest sizes, where the cost of the call itself hides the growth.
+    const minY = Math.min(...ys);
+    const rising = points.filter((p) => p.y > minY * 2);
+    const tail = rising.length >= 3 ? rising : points.slice(-3);
     const exp = logLine(tail, (n) => n, floor);
     const fact = logLine(tail, lnFactorial, floor);
     // n! only when it matches n! itself (a scale near 1): a scaled-down
     // log(n!) can mimic plain exponential growth over a short range.
     const factorial = tail.length >= 4 && fact.slope > 0.6 && fact.slope < 1.6 && fact.error < exp.error;
+    const error = factorial ? fact.error : exp.error;
     return verdict(
       MODELS.find((m) => m.id === (factorial ? "fact" : "2n"))!,
-      tail.length >= 4 ? "medium" : "low",
+      tail.length >= 5 && error < 0.35 ? "high" : tail.length >= 4 ? "medium" : "low",
       factorial ? fact.at : exp.at,
     );
   }
@@ -652,13 +674,44 @@ export function classify(points: Point[], flat: number): Verdict | null {
   const tail = top.length >= 4 ? top : points.slice(-4);
   const results = POLYNOMIAL.map((model) => ({ model, ...fit(tail, model.f, floor) }));
   const best = results.reduce((x, y) => (y.error < x.error ? y : x));
+  // Only small inputs (code whose work explodes): a fixed cost can hide
+  // exponential growth there, so a + b·cⁿ and a + b·n! get a chance too, and
+  // win only when they clearly fit better than every polynomial.
+  // Unit steps from the start (n = 1, 2, 3 …): there, each increase is about
+  // c times the one before for cⁿ, but shrinks toward 1× for a polynomial.
+  let run = 1;
+  while (run < points.length && points[run].n - points[run - 1].n === 1) run++;
+  const rises = points.slice(1, run).map((p, i) => p.y - points[i].y);
+  const factors = rises
+    .slice(1)
+    .map((rise, i) => rise / rises[i])
+    .slice(-3);
+  const accelerating =
+    factors.length === 3 && factors.every((f) => f > 0) && factors.reduce((x, y) => x + y, 0) / 3 >= 1.4;
+  if (nMax <= 64 && run >= 5 && accelerating) {
+    let expo: { a: number; b: number; error: number; f: (n: number) => number } | null = null;
+    for (let c = 1.25; c <= 4; c += 0.05) {
+      const f = (n: number) => c ** n;
+      const r = fit(points, f, floor);
+      if (r.b > 0 && (!expo || r.error < expo.error)) expo = { ...r, f };
+    }
+    if (expo && expo.error < best.error * 0.6) {
+      const fact = { ...fit(points, FACTORIAL, floor), f: FACTORIAL };
+      const chosen = fact.b > 0 && fact.error < expo.error ? fact : expo;
+      return verdict(
+        MODELS.find((m) => m.id === (chosen === fact ? "fact" : "2n"))!,
+        points.length >= 6 && chosen.error < 0.1 ? "medium" : "low",
+        (n) => chosen.a + chosen.b * chosen.f(n),
+      );
+    }
+  }
   const constant = results[0];
   // Hardly any growth over a wide range of n is O(1).
   if (
     constant.error < 0.25 &&
     Math.max(ys[ys.length - 1], ys[ys.length - 2] ?? 0) < 1.8 * Math.min(ys[0], ys[1] ?? ys[0])
   ) {
-    return verdict(MODELS[0], span >= 16 ? "high" : "medium", () => mean);
+    return verdict(MODELS[0], short ? "low" : span >= 16 ? "high" : "medium", () => mean);
   }
   const tailSpan = tail[tail.length - 1].n / tail[0].n;
   const pick =
@@ -667,10 +720,12 @@ export function classify(points: Point[], flat: number): Verdict | null {
       .filter((r) => r.error <= best.error * 1.5 + 0.06)
       .sort((x, y) => x.model.order - y.model.order)[0] ?? best;
   const rival = results.filter((r) => r.model.order !== pick.model.order).reduce((x, y) => (y.error < x.error ? y : x));
-  const confidence =
-    tail.length >= 4 && tailSpan >= 16 && pick.error < 0.2 && rival.error > pick.error * 1.5 + 0.02
+  const confidence = short
+    ? "low"
+    : tail.length >= 4 && tailSpan >= 16 && pick.error < 0.2 && rival.error > pick.error * 1.5 + 0.02
       ? "high"
-      : tail.length >= 3 && pick.error < 0.35
+      : // The best explanation fits well (even when a simpler one was chosen).
+        tail.length >= 3 && best.error < 0.35
         ? "medium"
         : "low";
   return verdict(pick.model, confidence, (n) => pick.a + pick.b * pick.model.f(n));
@@ -719,7 +774,11 @@ export type MeterResult =
       note: string | null;
     }
   | { status: "unavailable"; message: string }
+  // Too few quick runs to see how it grows.
+  | { status: "too-slow"; message: string }
   | { status: "error"; message: string };
+
+const duration = (ms: number) => (ms < 1000 ? `${Math.max(1, Math.round(ms))} ms` : `${(ms / 1000).toFixed(1)} s`);
 
 export function summarize(raw: RawMeasurement, target: MeterTarget, language: string, code: string): MeterResult {
   const missing = raw.error?.message.includes("__missing__");
@@ -730,6 +789,14 @@ export function summarize(raw: RawMeasurement, target: MeterTarget, language: st
     return {
       status: "error",
       message: raw.error ? `Your code crashed: ${raw.error.message}` : "Lens couldn't measure this code.",
+    };
+  }
+  // Fewer than three quick runs: say so rather than guess.
+  if (raw.time.length < 3) {
+    const [n, ms] = raw.time[0];
+    return {
+      status: "too-slow",
+      message: `Too slow to measure: even with n = ${n.toLocaleString()}, one call takes ${duration(ms)}. Lens needs a few quick runs to see how the time grows.`,
     };
   }
   const timed = classify(
@@ -778,9 +845,11 @@ export function summarize(raw: RawMeasurement, target: MeterTarget, language: st
       ? /Recursion|call stack/i.test(raw.error.message)
         ? `At n = ${raw.error.n.toLocaleString()} the recursion got too deep, so Lens stopped there.`
         : `At n = ${raw.error.n.toLocaleString()} your code crashed (${raw.error.message}), so Lens stopped there.`
-      : raw.stopped === "slow" && sizes[1] < target.sizes[target.sizes.length - 1]
-        ? `Lens stopped at n = ${sizes[1].toLocaleString()}: bigger inputs would take too long.`
-        : null;
+      : raw.stopped === "slow" && sizes[1] <= target.sizes[0] * 2
+        ? `It grows very fast, so Lens could only measure small inputs (n up to ${sizes[1].toLocaleString()}).`
+        : raw.stopped === "slow" && sizes[1] < target.sizes[target.sizes.length - 1]
+          ? `Lens stopped at n = ${sizes[1].toLocaleString()}: bigger inputs would take too long.`
+          : null;
   return {
     status: "ok",
     label: target.label,

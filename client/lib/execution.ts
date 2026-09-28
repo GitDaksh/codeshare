@@ -1,4 +1,11 @@
-import { meterInputs, planMeter, summarize, type MeterResult, type MeterTarget } from "@/lib/complexity";
+import {
+  meterInputs,
+  meterSmallInputs,
+  planMeter,
+  summarize,
+  type MeterResult,
+  type MeterTarget,
+} from "@/lib/complexity";
 import {
   jsSpaceProgram,
   jsTimeProgram,
@@ -199,7 +206,7 @@ let idCounter = 0;
 function runInSandbox(
   sandbox: Sandbox,
   request: Record<string, unknown>,
-  limits: { loadMs: number; runMs: number }
+  limits: { loadMs: number; runMs: number },
 ): Promise<SandboxOutcome> {
   const id = `run-${Date.now()}-${idCounter++}`;
 
@@ -360,7 +367,9 @@ function buildSummary(report: Omit<TestRunReport, "summary">, spec: TestSpec): s
     const label = `Test ${result.index + 1}`;
     if (result.status === "passed") lines.push(`✓ ${label}`);
     else if (result.status === "failed")
-      lines.push(`✗ ${label}: expected ${formatValue(spec.tests[result.index].expected)}, got ${result.actual ?? "nothing"}`);
+      lines.push(
+        `✗ ${label}: expected ${formatValue(spec.tests[result.index].expected)}, got ${result.actual ?? "nothing"}`,
+      );
     else if (result.status === "error") lines.push(`! ${label}: ${result.error ?? "error"}`);
   }
   return truncate(lines.join("\n"));
@@ -488,7 +497,7 @@ export async function runTests(code: string, language: string, spec: TestSpec): 
   return judgeOutcome(
     { kind: "fatal", message: "Tests can only run in JavaScript, TypeScript, or Python for now." },
     spec,
-    language
+    language,
   );
 }
 
@@ -607,7 +616,9 @@ export async function measureComplexity(language: string, code: string, problem:
   const plan = planMeter(code, language, problem);
   if (!plan.ok) return { status: "unavailable", message: plan.reason };
   const { target } = plan;
-  const spec = JSON.stringify({ shapes: target.shapes, inputs: meterInputs(target) });
+  const inputs = meterInputs(target);
+  const small = meterSmallInputs(target);
+  const spec = JSON.stringify({ shapes: target.shapes, inputs, small });
 
   if (language === "python") {
     const outcome = await runPythonMeter(
@@ -624,19 +635,23 @@ export async function measureComplexity(language: string, code: string, problem:
     plain = compiled.code;
   }
   const time = await runJavaScript({ mode: "program", code: jsTimeProgram(plain, target, spec) }, LIMITS.jsMeter);
-  if (time.kind !== "done" || !parseMeterOutput(String(time.data.output ?? ""))) {
-    return meterResult(time, null, target, language, code);
-  }
+  const timed = time.kind === "done" ? parseMeterOutput(String(time.data.output ?? "")) : null;
+  if (!timed) return meterResult(time, null, target, language, code);
   let instrumented: string | null = null;
   try {
     const Babel = await import("@babel/standalone");
     const { instrumentJsWith } = await import("@/lib/lensJs");
-    instrumented = instrumentJsWith(Babel, code, { typescript: language === "typescript", resolve: meterNames(target) });
+    instrumented = instrumentJsWith(Babel, code, {
+      typescript: language === "typescript",
+      resolve: meterNames(target),
+    });
   } catch {
     instrumented = null;
   }
+  // Memory is measured at the sizes the timing reached.
+  const spaceSpec = JSON.stringify({ shapes: target.shapes, inputs, small, only: timed.time.map(([n]) => n) });
   const space = instrumented
-    ? await runJavaScript({ mode: "program", code: jsSpaceProgram(instrumented, target, spec) }, LIMITS.jsMeter)
+    ? await runJavaScript({ mode: "program", code: jsSpaceProgram(instrumented, target, spaceSpec) }, LIMITS.jsMeter)
     : null;
   return meterResult(time, space, target, language, code);
 }
