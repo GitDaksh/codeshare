@@ -386,6 +386,9 @@ export type LensObject =
   | { id: string; k: "class"; name: string }
   | { id: string; k: "other"; text: string };
 
+// Lists, tuples and sets.
+export type LensSequence = Extract<LensObject, { k: "list" | "tuple" | "set" }>;
+
 export type LensFrame = {
   name: string;
   line: number | null;
@@ -544,6 +547,8 @@ export type LensTreeNode = { id: string; x: number; y: number };
 export type LensGroup =
   | { kind: "chain"; ids: string[] }
   | { kind: "tree"; nodes: LensTreeNode[]; columns: number; rows: number }
+  // A list of rows (a matrix, a DP table, a board), drawn as one table.
+  | { kind: "grid"; id: string; rows: string[] }
   | { kind: "single"; id: string };
 
 // Arranges the objects of one step into drawable groups: linked-list nodes
@@ -619,6 +624,43 @@ export function layoutObjects(heap: LensObject[]): LensGroup[] {
     }
   }
 
+  // Grids: a list whose items are all separate lists of plain values, each
+  // used nowhere else, is drawn as one table. A list holding the same row
+  // more than once (like [[0] * 3] * 3) keeps its arrows, which show that.
+  const references = new Map<string, number>();
+  for (const obj of heap) {
+    for (const [, value] of objectSlots(obj)) {
+      const target = refTarget(value);
+      if (target) references.set(target, (references.get(target) ?? 0) + 1);
+    }
+    if (obj.k === "dict") {
+      for (const [key] of obj.entries) {
+        const target = refTarget(key);
+        if (target) references.set(target, (references.get(target) ?? 0) + 1);
+      }
+    }
+  }
+  const isPlainRow = (id: string | null) => {
+    const row = id ? byId.get(id) : undefined;
+    return (
+      !!row &&
+      (row.k === "list" || row.k === "tuple") &&
+      row.cls !== "deque" &&
+      !placed.has(row.id) &&
+      references.get(row.id) === 1 &&
+      row.items.every((item) => item[0] !== "ref")
+    );
+  };
+  for (const obj of heap) {
+    if (placed.has(obj.id) || (obj.k !== "list" && obj.k !== "tuple") || obj.cls === "deque") continue;
+    if (obj.items.length < 2 || obj.more > 0) continue;
+    const rows = obj.items.map(refTarget);
+    if (new Set(rows).size !== rows.length || !rows.every(isPlainRow)) continue;
+    placed.add(obj.id);
+    for (const id of rows) placed.add(id!);
+    groups.push({ at: order.get(obj.id)!, group: { kind: "grid", id: obj.id, rows: rows as string[] } });
+  }
+
   for (const obj of heap) {
     if (!placed.has(obj.id))
       groups.push({
@@ -627,6 +669,138 @@ export function layoutObjects(heap: LensObject[]): LensGroup[] {
       });
   }
   return groups.sort((a, b) => a.at - b.at).map((entry) => entry.group);
+}
+
+// ---------- Index markers ----------
+
+// Loop and pointer variables are marked under the array slot they point at.
+// Only whole numbers in range count, and only from the function that's
+// running. Names like x or k are usually values or sizes, not positions, so
+// they're left out rather than risk a misleading marker.
+const INDEX_NAME =
+  /^(i|j|l|r|lo|hi|low|high|mid|left|right|start|end|slow|fast|idx|index|pos|ptr|read|write|parent|child|smallest|largest)$|(_idx|Idx|_index|Index)$/;
+// In a grid, row indices mark rows and column indices mark columns.
+const ROW_NAME = /^(i|r|row)$/;
+const COLUMN_NAME = /^(j|c|col|column)$/;
+
+// How the code uses variables as array indexes: nums[i], left[i],
+// self.items[child] (first) and dp[i][j] (second, for grid columns). Only
+// exact uses count: nums[j + 1] would put a marker one slot off.
+export type LensIndexUses = { first: Map<string, Set<string>>; second: Map<string, Set<string>> };
+
+const NAME = "[A-Za-z_$][\\w$]*";
+const FIRST_INDEX = new RegExp(`\\b(${NAME})\\s*\\[\\s*(${NAME})\\s*\\]`, "g");
+const SECOND_INDEX = new RegExp(`\\b(${NAME})\\s*\\[[^\\][]*\\]\\s*\\[\\s*(${NAME})\\s*\\]`, "g");
+
+export function indexUses(code: string): LensIndexUses {
+  const collect = (pattern: RegExp) => {
+    const uses = new Map<string, Set<string>>();
+    for (const [, array, index] of code.matchAll(pattern)) {
+      uses.set(array, (uses.get(array) ?? new Set()).add(index));
+    }
+    return uses;
+  };
+  return { first: collect(FIRST_INDEX), second: collect(SECOND_INDEX) };
+}
+
+export type LensMarks = {
+  // Array id → position → the variables pointing there.
+  cells: Map<string, Map<number, string[]>>;
+  // Grid id → row (or column) → the variables pointing there.
+  rows: Map<string, Map<number, string[]>>;
+  columns: Map<string, Map<number, string[]>>;
+};
+
+// With the code, a variable marks the arrays the code indexes with it
+// (left[i] marks left, not right); variables the code never uses as an index
+// (like lo and hi in a binary search) fall back to the name rule.
+export function indexMarks(step: LensStep, groups: LensGroup[], uses?: LensIndexUses): LensMarks {
+  const marks: LensMarks = { cells: new Map(), rows: new Map(), columns: new Map() };
+  const frame = step.frames[step.frames.length - 1];
+  if (!frame) return marks;
+  const numbers = frame.vars.flatMap(([name, value]) => {
+    const n = value[0] === "int" ? Number(value[1]) : NaN;
+    return Number.isInteger(n) && n >= 0 ? [[name, n] as const] : [];
+  });
+  if (numbers.length === 0) return marks;
+
+  const byId = new Map(step.heap.map((obj) => [obj.id, obj]));
+  const isArray = (obj: LensObject | undefined): obj is LensSequence =>
+    !!obj && (obj.k === "list" || obj.k === "tuple");
+  // The arrays a function holds, with the names it holds them by: its own
+  // variables, or one step through an object it holds (self.items).
+  const held = (vars: [string, LensValue][]) => {
+    const names = new Map<string, Set<string>>();
+    const hold = (id: string, name: string) => names.set(id, (names.get(id) ?? new Set()).add(name));
+    for (const [name, value] of vars) {
+      const target = byId.get(refTarget(value) ?? "");
+      if (isArray(target)) hold(target.id, name);
+      else if (target?.k === "obj") {
+        for (const [field, fieldValue] of target.fields) {
+          const inner = byId.get(refTarget(fieldValue) ?? "");
+          if (isArray(inner)) hold(inner.id, field);
+        }
+      }
+    }
+    return names;
+  };
+  // A function that holds no arrays works on those of the functions around
+  // it: a nested helper on its parent's board, or a recursive call on a
+  // global grid.
+  let arrays = held(frame.vars);
+  for (let index = step.frames.length - 2; arrays.size === 0 && index >= 0; index--) {
+    arrays = held(step.frames[index].vars);
+  }
+
+  const grids = new Map<string, Extract<LensGroup, { kind: "grid" }>>();
+  const gridRows = new Set<string>();
+  for (const group of groups) {
+    if (group.kind !== "grid") continue;
+    grids.set(group.id, group);
+    for (const id of group.rows) gridRows.add(id);
+  }
+  const add = (map: Map<string, Map<number, string[]>>, id: string, position: number, name: string) => {
+    const positions = map.get(id) ?? new Map<number, string[]>();
+    positions.set(position, [...(positions.get(position) ?? []), name]);
+    map.set(id, positions);
+  };
+  // Every variable the code uses as some array's index.
+  const indexes = new Set<string>();
+  for (const table of [uses?.first, uses?.second]) {
+    for (const names of table?.values() ?? []) for (const name of names) indexes.add(name);
+  }
+  // Does the code index this array (by any of its names) with this variable?
+  const indexedBy = (table: Map<string, Set<string>> | undefined, arrayNames: Set<string>, name: string) =>
+    [...arrayNames].some((arrayName) => table?.get(arrayName)?.has(name) ?? false);
+
+  for (const [id, arrayNames] of arrays) {
+    const obj = byId.get(id);
+    if (!isArray(obj) || gridRows.has(id)) continue;
+    const grid = grids.get(id);
+    if (grid) {
+      const width = Math.max(0, ...grid.rows.map((rowId) => {
+        const row = byId.get(rowId);
+        return isArray(row) ? row.items.length : 0;
+      }));
+      for (const [name, n] of numbers) {
+        const byName = !indexes.has(name);
+        if (n < grid.rows.length && (indexedBy(uses?.first, arrayNames, name) || (byName && ROW_NAME.test(name)))) {
+          add(marks.rows, id, n, name);
+        }
+        if (n < width && (indexedBy(uses?.second, arrayNames, name) || (byName && COLUMN_NAME.test(name)))) {
+          add(marks.columns, id, n, name);
+        }
+      }
+    } else {
+      for (const [name, n] of numbers) {
+        if (n >= obj.items.length) continue;
+        if (indexedBy(uses?.first, arrayNames, name) || (!indexes.has(name) && INDEX_NAME.test(name))) {
+          add(marks.cells, id, n, name);
+        }
+      }
+    }
+  }
+  return marks;
 }
 
 export type LensDiff = {

@@ -1,11 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
 import { motion } from "framer-motion";
-import { Loader2, Play } from "lucide-react";
+import { ArrowDown, ArrowRight, Loader2, Play, ScanEye, Search } from "lucide-react";
 import { LensCallCard } from "@/components/lens/LensCallCard";
 import { LensPlayer } from "@/components/lens/LensPlayer";
+import { useToast } from "@/components/ToastProvider";
+import { useApi } from "@/lib/api";
 import { defineEditorThemes } from "@/lib/editorTheme";
 import { traceCode } from "@/lib/execution";
 import { LENS_MAX_STEPS, type LensTrace } from "@/lib/lens";
@@ -17,435 +21,100 @@ import {
   lensErrorHint,
   type LensCallable,
 } from "@/lib/lensCall";
+import {
+  LENS_CATEGORIES,
+  LENS_CONCEPTS,
+  categoryLabel,
+  findConcept,
+  type LensCategoryId,
+  type LensConcept,
+  type LensLanguage,
+} from "@/lib/lensLibrary";
 import { useEditorTheme } from "@/lib/useEditorTheme";
+import type { Room } from "@/types/room";
 
-type Example = { id: string; label: string; code: string };
-type Language = "python" | "javascript" | "typescript";
-
-const LANGUAGES: { id: Language; label: string }[] = [
+const LANGUAGES: { id: LensLanguage; label: string }[] = [
   { id: "python", label: "Python" },
   { id: "javascript", label: "JavaScript" },
   { id: "typescript", label: "TypeScript" },
 ];
 
-const PYTHON_EXAMPLES: Example[] = [
-  {
-    id: "linked-list",
-    label: "Reverse a linked list",
-    code: `class ListNode:
-    def __init__(self, val, next=None):
-        self.val = val
-        self.next = next
+// One click away, above the editor.
+const POPULAR = ["binary-search", "merge-sort", "linked-list", "tree", "islands", "lcs"];
 
+const FIRST_CONCEPT = findConcept("linked-list") ?? LENS_CONCEPTS[0];
 
-def reverse(head):
-    prev = None
-    while head:
-        nxt = head.next
-        head.next = prev
-        prev = head
-        head = nxt
-    return prev
-
-
-head = ListNode(1, ListNode(2, ListNode(3, ListNode(4))))
-head = reverse(head)
-`,
-  },
-  {
-    id: "tree",
-    label: "Binary search tree",
-    code: `class TreeNode:
-    def __init__(self, val):
-        self.val = val
-        self.left = None
-        self.right = None
-
-
-def insert(root, val):
-    if root is None:
-        return TreeNode(val)
-    if val < root.val:
-        root.left = insert(root.left, val)
-    else:
-        root.right = insert(root.right, val)
-    return root
-
-
-def in_order(node, out):
-    if node:
-        in_order(node.left, out)
-        out.append(node.val)
-        in_order(node.right, out)
-    return out
-
-
-root = None
-for value in [8, 3, 10, 1, 6, 14]:
-    root = insert(root, value)
-
-print(in_order(root, []))
-`,
-  },
-  {
-    id: "recursion",
-    label: "Recursion",
-    code: `def factorial(n):
-    if n <= 1:
-        return 1
-    return n * factorial(n - 1)
-
-
-print(factorial(5))
-`,
-  },
-  {
-    id: "two-pointers",
-    label: "Two pointers",
-    code: `def two_sum_sorted(nums, target):
-    left, right = 0, len(nums) - 1
-    while left < right:
-        total = nums[left] + nums[right]
-        if total == target:
-            return [left, right]
-        if total < target:
-            left += 1
-        else:
-            right -= 1
-    return []
-
-
-print(two_sum_sorted([1, 3, 4, 6, 8, 11], 10))
-`,
-  },
-  {
-    id: "hash-map",
-    label: "Counting words",
-    code: `text = "the quick brown fox jumps over the lazy dog the end"
-counts = {}
-for word in text.split():
-    counts[word] = counts.get(word, 0) + 1
-
-top = max(counts, key=counts.get)
-print(top, counts[top])
-`,
-  },
-  {
-    id: "bfs",
-    label: "Breadth-first search",
-    code: `from collections import deque
-
-graph = {"A": ["B", "C"], "B": ["D"], "C": ["D", "E"], "D": ["F"], "E": ["F"], "F": []}
-
-
-def bfs(start):
-    seen = {start}
-    queue = deque([start])
-    order = []
-    while queue:
-        node = queue.popleft()
-        order.append(node)
-        for nxt in graph[node]:
-            if nxt not in seen:
-                seen.add(nxt)
-                queue.append(nxt)
-    return order
-
-
-print(bfs("A"))
-`,
-  },
-];
-
-const JS_EXAMPLES: Example[] = [
-  {
-    id: "linked-list",
-    label: "Reverse a linked list",
-    code: `class ListNode {
-  constructor(val, next = null) {
-    this.val = val;
-    this.next = next;
-  }
+function cx(...names: (string | false | null | undefined)[]) {
+  return names.filter(Boolean).join(" ");
 }
-
-function reverse(head) {
-  let prev = null;
-  while (head) {
-    const next = head.next;
-    head.next = prev;
-    prev = head;
-    head = next;
-  }
-  return prev;
-}
-
-let head = null;
-for (const value of [4, 3, 2, 1]) {
-  head = new ListNode(value, head);
-}
-head = reverse(head);
-`,
-  },
-  {
-    id: "tree",
-    label: "Binary search tree",
-    code: `class TreeNode {
-  constructor(val) {
-    this.val = val;
-    this.left = null;
-    this.right = null;
-  }
-}
-
-function insert(root, val) {
-  if (root === null) {
-    return new TreeNode(val);
-  }
-  if (val < root.val) {
-    root.left = insert(root.left, val);
-  } else {
-    root.right = insert(root.right, val);
-  }
-  return root;
-}
-
-let root = null;
-for (const val of [5, 3, 8, 1, 4, 9]) {
-  root = insert(root, val);
-}
-`,
-  },
-  {
-    id: "recursion",
-    label: "Recursion",
-    code: `function factorial(n) {
-  if (n <= 1) {
-    return 1;
-  }
-  return n * factorial(n - 1);
-}
-
-const result = factorial(5);
-console.log(result);
-`,
-  },
-  {
-    id: "two-pointers",
-    label: "Two pointers",
-    code: `const nums = [1, 2, 3, 4, 5];
-let left = 0;
-let right = nums.length - 1;
-
-while (left < right) {
-  [nums[left], nums[right]] = [nums[right], nums[left]];
-  left++;
-  right--;
-}
-
-console.log(nums);
-`,
-  },
-  {
-    id: "hash-map",
-    label: "Counting words",
-    code: `const text = "the cat and the hat and the bat";
-const counts = new Map();
-
-for (const word of text.split(" ")) {
-  counts.set(word, (counts.get(word) ?? 0) + 1);
-}
-
-console.log(counts);
-`,
-  },
-  {
-    id: "bfs",
-    label: "Breadth-first search",
-    code: `const graph = {
-  A: ["B", "C"],
-  B: ["D"],
-  C: ["D", "E"],
-  D: ["F"],
-  E: ["F"],
-  F: [],
-};
-
-function bfs(start) {
-  const seen = new Set([start]);
-  const queue = [start];
-  const order = [];
-  while (queue.length > 0) {
-    const node = queue.shift();
-    order.push(node);
-    for (const next of graph[node]) {
-      if (!seen.has(next)) {
-        seen.add(next);
-        queue.push(next);
-      }
-    }
-  }
-  return order;
-}
-
-console.log(bfs("A"));
-`,
-  },
-];
-
-const TS_EXAMPLES: Example[] = [
-  {
-    id: "linked-list",
-    label: "Reverse a linked list",
-    code: `class ListNode {
-  val: number;
-  next: ListNode | null;
-
-  constructor(val: number, next: ListNode | null = null) {
-    this.val = val;
-    this.next = next;
-  }
-}
-
-function reverse(head: ListNode | null): ListNode | null {
-  let prev: ListNode | null = null;
-  while (head) {
-    const next = head.next;
-    head.next = prev;
-    prev = head;
-    head = next;
-  }
-  return prev;
-}
-
-let head: ListNode | null = null;
-for (const value of [4, 3, 2, 1]) {
-  head = new ListNode(value, head);
-}
-head = reverse(head);
-`,
-  },
-  {
-    id: "tree",
-    label: "Binary search tree",
-    code: `class TreeNode {
-  left: TreeNode | null = null;
-  right: TreeNode | null = null;
-
-  constructor(public val: number) {}
-}
-
-function insert(root: TreeNode | null, val: number): TreeNode {
-  if (root === null) {
-    return new TreeNode(val);
-  }
-  if (val < root.val) {
-    root.left = insert(root.left, val);
-  } else {
-    root.right = insert(root.right, val);
-  }
-  return root;
-}
-
-let root: TreeNode | null = null;
-for (const val of [5, 3, 8, 1, 4, 9]) {
-  root = insert(root, val);
-}
-`,
-  },
-  {
-    id: "recursion",
-    label: "Recursion",
-    code: `function factorial(n: number): number {
-  if (n <= 1) {
-    return 1;
-  }
-  return n * factorial(n - 1);
-}
-
-const result: number = factorial(5);
-console.log(result);
-`,
-  },
-  {
-    id: "two-pointers",
-    label: "Two pointers",
-    code: `const nums: number[] = [1, 2, 3, 4, 5];
-let left = 0;
-let right = nums.length - 1;
-
-while (left < right) {
-  [nums[left], nums[right]] = [nums[right], nums[left]];
-  left++;
-  right--;
-}
-
-console.log(nums);
-`,
-  },
-  {
-    id: "hash-map",
-    label: "Counting words",
-    code: `const text = "the cat and the hat and the bat";
-const counts = new Map<string, number>();
-
-for (const word of text.split(" ")) {
-  counts.set(word, (counts.get(word) ?? 0) + 1);
-}
-
-console.log(counts);
-`,
-  },
-  {
-    id: "bfs",
-    label: "Breadth-first search",
-    code: `type Graph = Record<string, string[]>;
-
-const graph: Graph = {
-  A: ["B", "C"],
-  B: ["D"],
-  C: ["D", "E"],
-  D: ["F"],
-  E: ["F"],
-  F: [],
-};
-
-function bfs(start: string): string[] {
-  const seen = new Set<string>([start]);
-  const queue: string[] = [start];
-  const order: string[] = [];
-  while (queue.length > 0) {
-    const node = queue.shift()!;
-    order.push(node);
-    for (const next of graph[node]) {
-      if (!seen.has(next)) {
-        seen.add(next);
-        queue.push(next);
-      }
-    }
-  }
-  return order;
-}
-
-console.log(bfs("A"));
-`,
-  },
-];
-
-const EXAMPLES: Record<Language, Example[]> = {
-  python: PYTHON_EXAMPLES,
-  javascript: JS_EXAMPLES,
-  typescript: TS_EXAMPLES,
-};
 
 function handleEditorWillMount(monaco: Monaco) {
   defineEditorThemes(monaco);
 }
 
+function scrollBehavior(): ScrollBehavior {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+}
+
+function ConceptCard({ concept, selected, onOpen }: { concept: LensConcept; selected: boolean; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-pressed={selected}
+      className={cx(
+        "group flex h-full flex-col rounded-xl border p-4 text-left transition-colors",
+        selected
+          ? "border-ink-300 bg-ink-900"
+          : "border-ink-800 bg-ink-950 hover:border-ink-600 hover:bg-ink-900/60",
+      )}
+    >
+      <span className="text-sm font-semibold text-ink-100">{concept.title}</span>
+      <span className="mt-1.5 text-xs leading-relaxed text-ink-400">{concept.summary}</span>
+      <span className="mt-auto flex items-center justify-between gap-2 pt-3">
+        <span className="font-mono text-[10px] text-ink-500">{concept.complexity}</span>
+        <span
+          className={cx(
+            "inline-flex items-center gap-1 text-[11px] font-medium transition-colors",
+            selected ? "text-ink-100" : "text-ink-500 group-hover:text-ink-100",
+          )}
+        >
+          <Play className="h-3 w-3" aria-hidden="true" />
+          {selected ? "Showing" : "Watch"}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function ConceptGrid({
+  items,
+  selectedId,
+  onOpen,
+}: {
+  items: LensConcept[];
+  selectedId: string;
+  onOpen: (concept: LensConcept) => void;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {items.map((item) => (
+        <ConceptCard key={item.id} concept={item} selected={item.id === selectedId} onOpen={() => onOpen(item)} />
+      ))}
+    </div>
+  );
+}
+
 export default function LensPage() {
   const [themeId] = useEditorTheme();
-  const [language, setLanguage] = useState<Language>("python");
-  const [exampleId, setExampleId] = useState(PYTHON_EXAMPLES[0].id);
-  const [code, setCode] = useState(PYTHON_EXAMPLES[0].code);
+  const router = useRouter();
+  const api = useApi();
+  const { toast } = useToast();
+  const { isLoaded, isSignedIn } = useAuth();
+
+  const [language, setLanguage] = useState<LensLanguage>("python");
+  const [conceptId, setConceptId] = useState(FIRST_CONCEPT.id);
+  const [code, setCode] = useState(FIRST_CONCEPT.code.python);
   const [mode, setMode] = useState<"edit" | "play" | "idle">("edit");
   const [running, setRunning] = useState(false);
   const [pythonReady, setPythonReady] = useState(false);
@@ -457,22 +126,38 @@ export default function LensPage() {
   // Nothing ran (the code only defines functions): the call box.
   const [idle, setIdle] = useState<{ trace: LensTrace; callables: LensCallable[]; defaultCall: string } | null>(null);
   const [callError, setCallError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<LensCategoryId | "all">("all");
+  const [creating, setCreating] = useState(false);
+  // Every new recording gets a fresh player that starts at step 1 (switching
+  // language while watching records again without leaving the player).
+  const [runId, setRunId] = useState(0);
+  const busyRef = useRef(false);
+  const playgroundRef = useRef<HTMLDivElement>(null);
+  const libraryRef = useRef<HTMLElement>(null);
+
+  const concept = findConcept(conceptId) ?? FIRST_CONCEPT;
+  const edited = code !== concept.code[language];
 
   useEffect(() => {
     document.title = "Lens — CodeShare";
   }, []);
 
-  const visualize = useCallback(async () => {
-    if (running) return;
+  // Records a run of the given code and opens the player.
+  const record = useCallback(async (lang: LensLanguage, source: string) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setRunning(true);
     setError(null);
     setHint(null);
-    const result = await traceCode(language, code);
+    const result = await traceCode(lang, source);
+    busyRef.current = false;
     setRunning(false);
-    if (language === "python") setPythonReady(true);
+    if (lang === "python") setPythonReady(true);
 
     if (!result.ok) {
       setError(result.error);
+      setMode("edit");
       return;
     }
     if (result.trace.steps.length === 0) {
@@ -482,29 +167,36 @@ export default function LensPage() {
           ? `${problem.message}${problem.line ? ` (line ${problem.line})` : ""}`
           : "There's nothing to show yet. Write some code first.",
       );
-      setHint(problem ? lensErrorHint(problem.message, language) : null);
+      setHint(problem ? lensErrorHint(problem.message, lang) : null);
+      setMode("edit");
       return;
     }
     if (isIdleTrace(result.trace)) {
-      const callables = findCallables(result.trace, code, language);
+      const callables = findCallables(result.trace, source, lang);
       setIdle({ trace: result.trace, callables, defaultCall: defaultCallable(callables)?.template ?? "" });
       setCallError(null);
+      setTracedCode(source);
       setMode("idle");
       return;
     }
-    setHint(result.trace.error ? lensErrorHint(result.trace.error.message, language) : null);
+    setHint(result.trace.error ? lensErrorHint(result.trace.error.message, lang) : null);
     setTrace(result.trace);
-    setTracedCode(code);
+    setTracedCode(source);
+    setRunId((n) => n + 1);
     setMode("play");
-  }, [code, language, running]);
+  }, []);
+
+  const visualize = useCallback(() => record(language, code), [record, language, code]);
 
   // The call box: the code plus one call at the end, for this run only.
   const visualizeCall = async (call: string) => {
-    if (running) return;
+    if (busyRef.current) return;
     const program = buildCallProgram(code, language, call);
+    busyRef.current = true;
     setRunning(true);
     setCallError(null);
     const result = await traceCode(language, program.code, { setup: program.setup });
+    busyRef.current = false;
     setRunning(false);
     if (language === "python") setPythonReady(true);
 
@@ -520,6 +212,7 @@ export default function LensPage() {
     setHint(result.trace.error ? lensErrorHint(result.trace.error.message, language) : null);
     setTrace(result.trace);
     setTracedCode(program.code);
+    setRunId((n) => n + 1);
     setIdle(null);
     setMode("play");
   };
@@ -541,22 +234,72 @@ export default function LensPage() {
     });
   };
 
-  const pickExample = (example: Example) => {
-    setExampleId(example.id);
-    setCode(example.code);
+  // Opens a concept in the playground, and (from a card) starts watching it.
+  const openConcept = (next: LensConcept, watch: boolean) => {
+    if (busyRef.current) return;
+    const source = next.code[language];
+    setConceptId(next.id);
+    setCode(source);
     setError(null);
     setHint(null);
     setIdle(null);
     setMode("edit");
+    playgroundRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
+    if (watch) void record(language, source);
   };
 
-  // Switching language keeps you on the same example.
-  const pickLanguage = (next: Language) => {
-    if (next === language) return;
-    const examples = EXAMPLES[next];
+  // Switching language keeps the same concept (and keeps watching it).
+  const pickLanguage = (next: LensLanguage) => {
+    if (next === language || busyRef.current) return;
+    const source = concept.code[next];
     setLanguage(next);
-    pickExample(examples.find((example) => example.id === exampleId) ?? examples[0]);
+    setCode(source);
+    setError(null);
+    setHint(null);
+    setIdle(null);
+    if (mode === "play") {
+      void record(next, source);
+    } else {
+      setMode("edit");
+    }
   };
+
+  // Opens the playground's code in a new room, where Lens is one click away.
+  async function tryInRoom() {
+    // Until Clerk has loaded, we don't know yet whether you're signed in.
+    if (creating || !isLoaded) return;
+    if (!isSignedIn) {
+      router.push(`/sign-in?redirect_url=${encodeURIComponent("/lens")}`);
+      return;
+    }
+    setCreating(true);
+    try {
+      const res = await api.post<Room>("/api/rooms", { name: concept.title, language, code });
+      router.push(`/room/${res.data._id}`);
+    } catch (err) {
+      // The server's reason (for example, the room limit), if it sent one.
+      const reason = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast(reason || "Couldn't open a room. Please try again.", "error");
+      setCreating(false);
+    }
+  }
+
+  const words = query.trim().toLowerCase();
+  const matches = useMemo(
+    () =>
+      LENS_CONCEPTS.filter(
+        (item) =>
+          (category === "all" || item.category === category) &&
+          (!words || `${item.title} ${item.summary} ${categoryLabel(item.category)}`.toLowerCase().includes(words)),
+      ),
+    [category, words],
+  );
+  const grouped = category === "all" && !words;
+  const counts = useMemo(() => {
+    const byCategory = new Map<LensCategoryId, number>();
+    for (const item of LENS_CONCEPTS) byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + 1);
+    return byCategory;
+  }, []);
 
   return (
     <main className="relative min-h-[calc(100dvh-56px)] overflow-hidden">
@@ -572,151 +315,299 @@ export default function LensPage() {
             Watch your code run
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-ink-400 sm:text-base">
-            Step through Python, JavaScript or TypeScript one line at a time and see every variable, list, linked list
-            and tree drawn as it changes, with arrows for every pointer.
+            Step through Python, JavaScript or TypeScript one line at a time and see every variable, array, table,
+            linked list and tree drawn as it changes, with markers for every index and arrows for every pointer.
           </p>
         </div>
 
-        <div className="mt-8 flex flex-wrap gap-2" role="group" aria-label="Examples">
-          {EXAMPLES[language].map((example) => (
+        {/* ---------- Lens in rooms ---------- */}
+        <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-ink-800 bg-ink-900/60 p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-ink-700 bg-ink-800">
+              <ScanEye className="h-4 w-4 text-ink-100" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-ink-100">Lens is built into every room</p>
+              <p className="mt-1 max-w-xl text-sm leading-relaxed text-ink-400">
+                Write any code in a room and click Visualize. Everyone in the room watches it run together, step by
+                step, and anyone can take over.
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2 md:justify-end">
             <button
-              key={example.id}
               type="button"
-              onClick={() => pickExample(example)}
-              aria-pressed={exampleId === example.id}
-              className={
-                exampleId === example.id
-                  ? "rounded-full border border-ink-300 bg-ink-100 px-3 py-1 text-xs font-medium text-ink-950"
-                  : "rounded-full border border-ink-800 px-3 py-1 text-xs font-medium text-ink-400 transition-colors hover:border-ink-600 hover:text-ink-100"
-              }
+              onClick={() => void tryInRoom()}
+              disabled={creating}
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-ink-100 px-4 text-sm font-semibold text-ink-950 transition-colors hover:bg-white disabled:cursor-wait disabled:opacity-70"
             >
-              {example.label}
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+              {creating ? "Opening room…" : isLoaded && !isSignedIn ? "Sign in to try it" : "Try it in a room"}
+              {!creating && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => libraryRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "start" })}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-ink-700 px-4 text-sm font-medium text-ink-100 transition-colors hover:border-ink-500"
+            >
+              <ArrowDown className="h-4 w-4" aria-hidden="true" />
+              Browse all {LENS_CONCEPTS.length} concepts
+            </button>
+          </div>
         </div>
 
-        <motion.div
-          key={mode}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-          className="mt-4"
-        >
-          {mode === "play" && trace ? (
-            <LensPlayer code={tracedCode} trace={trace} onEdit={() => setMode("edit")} />
-          ) : mode === "idle" && idle ? (
-            <div className="grid min-h-[480px] grid-cols-1 place-items-center rounded-2xl border border-ink-800 bg-ink-950 p-4">
-              <LensCallCard
-                key={idle.defaultCall}
-                language={language}
-                callables={idle.callables}
-                defaultCall={idle.defaultCall}
-                busy={running}
-                error={callError}
-                onSubmit={(call) => void visualizeCall(call)}
-                onShowAnyway={() => {
-                  setTrace(idle.trace);
-                  setTracedCode(code);
-                  setIdle(null);
-                  setMode("play");
-                }}
-                onCancel={() => {
-                  setIdle(null);
-                  setMode("edit");
-                }}
-              />
+        {/* ---------- Popular ---------- */}
+        <div className="mt-8 flex flex-wrap items-center gap-2" role="group" aria-label="Popular concepts">
+          <span className="mr-1 text-xs text-ink-500">Popular</span>
+          {POPULAR.map((id) => findConcept(id))
+            .filter((item): item is LensConcept => !!item)
+            .map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => openConcept(item, true)}
+                aria-pressed={conceptId === item.id}
+                className={
+                  conceptId === item.id
+                    ? "rounded-full border border-ink-300 bg-ink-100 px-3 py-1 text-xs font-medium text-ink-950"
+                    : "rounded-full border border-ink-800 px-3 py-1 text-xs font-medium text-ink-400 transition-colors hover:border-ink-600 hover:text-ink-100"
+                }
+              >
+                {item.title}
+              </button>
+            ))}
+        </div>
+
+        {/* ---------- Playground ---------- */}
+        <div ref={playgroundRef} className="mt-7 scroll-mt-20">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-500">
+                {categoryLabel(concept.category)}
+                <span className="mx-1.5 text-ink-700">·</span>
+                <span className="font-mono normal-case tracking-normal">{concept.complexity}</span>
+              </p>
+              <h2 className="mt-1 font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight text-ink-100">
+                {concept.title}
+                {edited && <span className="ml-2 align-middle text-xs font-normal text-ink-500">edited</span>}
+              </h2>
+              <p className="mt-0.5 max-w-2xl text-sm text-ink-400">{concept.summary}</p>
             </div>
-          ) : (
-            <div className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-950">
-              <div className="flex items-center justify-between gap-3 border-b border-ink-800 px-4 py-2.5">
-                <div className="flex rounded-lg border border-ink-800 p-0.5" role="group" aria-label="Language">
-                  {LANGUAGES.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => pickLanguage(option.id)}
-                      aria-pressed={language === option.id}
-                      className={
-                        language === option.id
-                          ? "rounded-md bg-ink-800 px-2.5 py-1 text-xs font-medium text-ink-100"
-                          : "rounded-md px-2.5 py-1 text-xs font-medium text-ink-500 transition-colors hover:text-ink-300"
-                      }
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+            <div className="flex rounded-lg border border-ink-800 p-0.5" role="group" aria-label="Language">
+              {LANGUAGES.map((option) => (
                 <button
+                  key={option.id}
                   type="button"
-                  onClick={() => void visualize()}
-                  disabled={running}
-                  title="Visualize (⌘ or Ctrl + Enter)"
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-ink-100 px-4 text-sm font-semibold text-ink-950 transition-colors hover:bg-white disabled:cursor-wait disabled:opacity-70"
+                  onClick={() => pickLanguage(option.id)}
+                  aria-pressed={language === option.id}
+                  className={
+                    language === option.id
+                      ? "rounded-md bg-ink-800 px-2.5 py-1 text-xs font-medium text-ink-100"
+                      : "rounded-md px-2.5 py-1 text-xs font-medium text-ink-500 transition-colors hover:text-ink-300"
+                  }
                 >
-                  {running ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Play className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {running ? (language === "python" && !pythonReady ? "Loading Python…" : "Recording…") : "Visualize"}
+                  {option.label}
                 </button>
-              </div>
-              <div className="h-[440px]">
-                <Editor
-                  height="100%"
+              ))}
+            </div>
+          </div>
+
+          <motion.div
+            key={mode}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {mode === "play" && trace ? (
+              <LensPlayer key={runId} code={tracedCode} trace={trace} onEdit={() => setMode("edit")} />
+            ) : mode === "idle" && idle ? (
+              <div className="grid min-h-[480px] grid-cols-1 place-items-center rounded-2xl border border-ink-800 bg-ink-950 p-4">
+                <LensCallCard
+                  key={idle.defaultCall}
                   language={language}
-                  theme={themeId}
-                  value={code}
-                  onChange={(value) => setCode(value ?? "")}
-                  beforeMount={handleEditorWillMount}
-                  onMount={handleMount}
-                  options={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 14,
-                    lineHeight: 22,
-                    fontLigatures: true,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    padding: { top: 16, bottom: 16 },
-                    automaticLayout: true,
-                    tabSize: language === "python" ? 4 : 2,
-                    renderLineHighlight: "line",
-                    // Same as the room editor: no colored brackets (the app is strictly monochrome).
-                    bracketPairColorization: { enabled: false },
-                    guides: { indentation: true, highlightActiveIndentation: true, bracketPairs: false },
-                    smoothScrolling: true,
-                    cursorSmoothCaretAnimation: "on",
-                    cursorBlinking: "smooth",
-                    scrollbar: {
-                      verticalScrollbarSize: 10,
-                      horizontalScrollbarSize: 10,
-                      useShadows: false,
-                    },
-                    overviewRulerBorder: false,
-                    overviewRulerLanes: 0,
-                    hideCursorInOverviewRuler: true,
-                    stickyScroll: { enabled: false },
-                    fixedOverflowWidgets: true,
+                  callables={idle.callables}
+                  defaultCall={idle.defaultCall}
+                  busy={running}
+                  error={callError}
+                  onSubmit={(call) => void visualizeCall(call)}
+                  onShowAnyway={() => {
+                    setTrace(idle.trace);
+                    setTracedCode(code);
+                    setRunId((n) => n + 1);
+                    setIdle(null);
+                    setMode("play");
+                  }}
+                  onCancel={() => {
+                    setIdle(null);
+                    setMode("edit");
                   }}
                 />
               </div>
-              {error && (
-                <div className="border-t border-ink-800 px-4 py-3">
-                  <pre className="whitespace-pre-wrap break-words border-l-2 border-red-500/70 pl-3 font-mono text-xs text-red-300">
-                    {error}
-                  </pre>
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-950">
+                <div className="flex items-center justify-between gap-3 border-b border-ink-800 px-4 py-2.5">
+                  <p className="hidden text-xs text-ink-500 sm:block">
+                    Change anything you like, then press Visualize
+                    <span className="ml-1.5 font-mono text-ink-600">⌘↵</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void visualize()}
+                    disabled={running}
+                    title="Visualize (⌘ or Ctrl + Enter)"
+                    className="ml-auto inline-flex h-9 items-center gap-2 rounded-lg bg-ink-100 px-4 text-sm font-semibold text-ink-950 transition-colors hover:bg-white disabled:cursor-wait disabled:opacity-70"
+                  >
+                    {running ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Play className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {running ? (language === "python" && !pythonReady ? "Loading Python…" : "Recording…") : "Visualize"}
+                  </button>
                 </div>
-              )}
+                <div className="h-[440px]">
+                  <Editor
+                    height="100%"
+                    language={language}
+                    theme={themeId}
+                    value={code}
+                    onChange={(value) => setCode(value ?? "")}
+                    beforeMount={handleEditorWillMount}
+                    onMount={handleMount}
+                    options={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 14,
+                      lineHeight: 22,
+                      fontLigatures: true,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      padding: { top: 16, bottom: 16 },
+                      automaticLayout: true,
+                      tabSize: language === "python" ? 4 : 2,
+                      renderLineHighlight: "line",
+                      // Same as the room editor: no colored brackets (the app is strictly monochrome).
+                      bracketPairColorization: { enabled: false },
+                      guides: { indentation: true, highlightActiveIndentation: true, bracketPairs: false },
+                      smoothScrolling: true,
+                      cursorSmoothCaretAnimation: "on",
+                      cursorBlinking: "smooth",
+                      scrollbar: {
+                        verticalScrollbarSize: 10,
+                        horizontalScrollbarSize: 10,
+                        useShadows: false,
+                      },
+                      overviewRulerBorder: false,
+                      overviewRulerLanes: 0,
+                      hideCursorInOverviewRuler: true,
+                      stickyScroll: { enabled: false },
+                      fixedOverflowWidgets: true,
+                    }}
+                  />
+                </div>
+                {error && (
+                  <div className="border-t border-ink-800 px-4 py-3">
+                    <pre className="whitespace-pre-wrap break-words border-l-2 border-red-500/70 pl-3 font-mono text-xs text-red-300">
+                      {error}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.div>
+
+          {hint && (mode === "play" || error) && <p className="mt-3 text-xs text-ink-400">Tip: {hint}</p>}
+
+          <p className="mt-3 text-xs text-ink-600">
+            Lens records up to {LENS_MAX_STEPS.toLocaleString()} steps.
+            {language === "python" && " The first Python run downloads Python, which takes a few seconds."}
+          </p>
+        </div>
+
+        {/* ---------- Library ---------- */}
+        <section ref={libraryRef} id="library" aria-label="Concept library" className="mt-16 scroll-mt-20">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-ink-100">
+                Concept library
+              </h2>
+              <p className="mt-1 text-sm text-ink-400">
+                {LENS_CONCEPTS.length} classic algorithms and data structures, each ready to watch in Python, JavaScript
+                or TypeScript.
+              </p>
             </div>
-          )}
-        </motion.div>
+            <label className="relative block sm:w-72">
+              <span className="sr-only">Search concepts</span>
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search: heap, recursion, grid…"
+                className="h-9 w-full rounded-lg border border-ink-800 bg-ink-950 pl-9 pr-3 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none"
+              />
+            </label>
+          </div>
 
-        {hint && (mode === "play" || error) && <p className="mt-3 text-xs text-ink-400">Tip: {hint}</p>}
+          <div className="mt-4 flex flex-wrap gap-1.5" role="group" aria-label="Categories">
+            {[{ id: "all" as const, label: "All" }, ...LENS_CATEGORIES].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setCategory(option.id)}
+                aria-pressed={category === option.id}
+                className={cx(
+                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  category === option.id
+                    ? "border-ink-300 bg-ink-100 text-ink-950"
+                    : "border-ink-800 text-ink-400 hover:border-ink-600 hover:text-ink-100",
+                )}
+              >
+                {option.label}
+                <span className="tabular-nums text-ink-600">
+                  {option.id === "all" ? LENS_CONCEPTS.length : (counts.get(option.id) ?? 0)}
+                </span>
+              </button>
+            ))}
+          </div>
 
-        <p className="mt-3 text-xs text-ink-600">
-          Lens records up to {LENS_MAX_STEPS.toLocaleString()} steps.
-          {language === "python" && " The first Python run downloads Python, which takes a few seconds."}
-        </p>
+          <div className="mt-6">
+            {grouped ? (
+              <div className="flex flex-col gap-10">
+                {LENS_CATEGORIES.map((section) => {
+                  const items = LENS_CONCEPTS.filter((item) => item.category === section.id);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={section.id}>
+                      <h3 className="mb-3 text-xs font-medium uppercase tracking-[0.16em] text-ink-500">
+                        {section.label}
+                      </h3>
+                      <ConceptGrid items={items} selectedId={conceptId} onOpen={(item) => openConcept(item, true)} />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : matches.length > 0 ? (
+              <ConceptGrid items={matches} selectedId={conceptId} onOpen={(item) => openConcept(item, true)} />
+            ) : (
+              <div className="rounded-2xl border border-dashed border-ink-800 px-6 py-12 text-center">
+                <p className="text-sm text-ink-300">No concepts match &ldquo;{query.trim()}&rdquo;.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery("");
+                    setCategory("all");
+                  }}
+                  className="mt-3 text-sm text-ink-100 underline underline-offset-4 transition-colors hover:text-ink-300"
+                >
+                  Show all concepts
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     </main>
   );
