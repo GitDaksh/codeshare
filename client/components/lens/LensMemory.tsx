@@ -15,12 +15,16 @@ import {
 import { motion } from "framer-motion";
 import {
   fieldOf,
+  indexMarks,
+  indexUses,
   layoutObjects,
   nodeValueField,
   type LensDiff,
   type LensFrame,
   type LensGroup,
+  type LensMarks,
   type LensObject,
+  type LensSequence,
   type LensStep,
   type LensValue,
 } from "@/lib/lens";
@@ -58,6 +62,24 @@ function primitiveClass(kind: string) {
 // shown inline where they're referenced instead of as boxes with arrows:
 // arrows to them would cross the whole diagram and add nothing.
 const ObjectsContext = createContext<Map<string, LensObject>>(new Map());
+
+// Where loop and pointer variables (i, j, lo, hi, mid…) point this step.
+const MarksContext = createContext<LensMarks>({ cells: new Map(), rows: new Map(), columns: new Map() });
+
+// A variable's name under the slot it points at, with a small caret.
+function IndexMark({ names }: { names: string[] }) {
+  return (
+    <span
+      data-lens-mark={names.join(" ")}
+      className="pointer-events-none absolute left-1/2 top-full z-[1] mt-1 flex -translate-x-1/2 flex-col items-center"
+    >
+      <span className="h-0 w-0 border-x-4 border-b-4 border-x-transparent border-b-ink-100" />
+      <span className="whitespace-nowrap rounded bg-ink-100 px-1 font-mono text-[9px] font-semibold leading-[14px] text-ink-950">
+        {names.join(" ")}
+      </span>
+    </span>
+  );
+}
 
 const isDefinition = (obj: LensObject | undefined) =>
   !!obj && (obj.k === "func" || obj.k === "class" || obj.k === "other");
@@ -242,29 +264,37 @@ function SequenceBox({
   stepIndex,
 }: BoxProps & { obj: Extract<LensObject, { k: "list" | "tuple" | "set" }> }) {
   const indexed = obj.k !== "set";
+  const marks = useContext(MarksContext).cells.get(obj.id);
   return (
-    <div>
+    <div className={marks ? "pb-6" : undefined}>
       <Label>{obj.cls ?? obj.k}</Label>
       <Appear
         id={obj.id}
         className={cx("inline-flex border border-ink-700 bg-ink-900", obj.k === "set" ? "rounded-2xl" : "rounded-lg")}
       >
         {obj.items.length === 0 && <span className="px-3 py-2 font-mono text-[11px] text-ink-600">empty</span>}
-        {obj.items.map((item, position) => (
-          <div
-            key={position}
-            className="flex min-w-10 flex-col items-center justify-center gap-0.5 border-l border-ink-800 px-1.5 py-1.5 first:border-l-0"
-          >
-            {indexed && <span className="font-mono text-[9px] leading-none text-ink-600">{position}</span>}
-            <Value
-              value={item}
-              source={`${obj.id}:${position}`}
-              tone="normal"
-              changed={diff.changedSlots.has(`${obj.id}:${position}`)}
-              stepIndex={stepIndex}
-            />
-          </div>
-        ))}
+        {obj.items.map((item, position) => {
+          const names = marks?.get(position);
+          return (
+            <div
+              key={position}
+              className={cx(
+                "relative flex min-w-10 flex-col items-center justify-center gap-0.5 border-l border-ink-800 px-1.5 py-1.5 first:border-l-0",
+                names && "bg-ink-800",
+              )}
+            >
+              {indexed && <span className="font-mono text-[9px] leading-none text-ink-600">{position}</span>}
+              <Value
+                value={item}
+                source={`${obj.id}:${position}`}
+                tone="normal"
+                changed={diff.changedSlots.has(`${obj.id}:${position}`)}
+                stepIndex={stepIndex}
+              />
+              {names && <IndexMark names={names} />}
+            </div>
+          );
+        })}
         {obj.more > 0 && (
           <span className="flex items-center border-l border-ink-800 px-2 font-mono text-[10px] text-ink-500">
             +{obj.more}
@@ -422,6 +452,111 @@ function TreeNodeBox({ obj, diff, stepIndex }: BoxProps & { obj: Extract<LensObj
   );
 }
 
+// A list of rows (a matrix, a DP table, a board) as one table: row and
+// column numbers, row and column markers (i/r/row, j/c/col) and the cell where
+// they cross highlighted. Each row keeps data-lens-obj, so a variable holding
+// a row (row = grid[r]) still gets its arrow.
+function GridBox({
+  obj,
+  rows,
+  diff,
+  stepIndex,
+}: BoxProps & { obj: LensSequence; rows: string[] }) {
+  const objects = useContext(ObjectsContext);
+  const marks = useContext(MarksContext);
+  const rowMarks = marks.rows.get(obj.id);
+  const columnMarks = marks.columns.get(obj.id);
+  const rowObjects = rows.flatMap((id) => {
+    const row = objects.get(id);
+    return row && (row.k === "list" || row.k === "tuple") ? [row] : [];
+  });
+  const width = Math.max(0, ...rowObjects.map((row) => row.items.length));
+  const columns = Array.from({ length: width }, (_, column) => column);
+
+  return (
+    <div>
+      <Label>
+        {obj.cls ?? obj.k} · {rowObjects.length}×{width}
+      </Label>
+      <Appear id={obj.id} className="inline-block rounded-lg border border-ink-700 bg-ink-900 px-1.5 pb-1.5 pt-1">
+        <table className="border-separate border-spacing-0">
+          <thead>
+            <tr>
+              <th />
+              {columns.map((column) => {
+                const names = columnMarks?.get(column);
+                return (
+                  <th key={column} className="px-1 pb-1 align-bottom font-normal">
+                    {names && (
+                      <span
+                        data-lens-mark={names.join(" ")}
+                        data-lens-axis="column"
+                        className="mb-0.5 block whitespace-nowrap rounded bg-ink-100 px-1 font-mono text-[9px] font-semibold leading-[14px] text-ink-950"
+                      >
+                        {names.join(" ")}
+                      </span>
+                    )}
+                    <span className="block font-mono text-[9px] leading-none text-ink-600">{column}</span>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {rowObjects.map((row, r) => {
+              const names = rowMarks?.get(r);
+              return (
+                <tr key={row.id} data-lens-obj={row.id}>
+                  <th className="pr-1.5 text-right font-normal">
+                    <span className="inline-flex items-center gap-1">
+                      {names && (
+                        <span
+                          data-lens-mark={names.join(" ")}
+                          data-lens-axis="row"
+                          className="whitespace-nowrap rounded bg-ink-100 px-1 font-mono text-[9px] font-semibold leading-[14px] text-ink-950"
+                        >
+                          {names.join(" ")}
+                        </span>
+                      )}
+                      <span className="font-mono text-[9px] text-ink-600">{r}</span>
+                    </span>
+                  </th>
+                  {columns.map((column) => {
+                    const item = row.items[column];
+                    const crossed = !!names && !!columnMarks?.get(column);
+                    const lit = !!names || !!columnMarks?.get(column);
+                    return (
+                      <td
+                        key={column}
+                        className={cx(
+                          "h-7 min-w-9 border-l border-t border-ink-800 px-1 text-center first-of-type:border-l-0",
+                          r === 0 && "border-t-0",
+                          crossed ? "bg-ink-700" : lit && "bg-ink-800/60",
+                        )}
+                      >
+                        {item ? (
+                          <Value
+                            value={item}
+                            source={`${row.id}:${column}`}
+                            tone="normal"
+                            changed={diff.changedSlots.has(`${row.id}:${column}`)}
+                            stepIndex={stepIndex}
+                          />
+                        ) : null}
+                      </td>
+                    );
+                  })}
+                  {row.more > 0 && <td className="px-1.5 font-mono text-[10px] text-ink-500">+{row.more}</td>}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Appear>
+    </div>
+  );
+}
+
 function ObjectView({ obj, diff, stepIndex }: BoxProps & { obj: LensObject }) {
   switch (obj.k) {
     case "list":
@@ -450,6 +585,13 @@ function GroupView({
   if (group.kind === "single") {
     const obj = objects.get(group.id);
     return obj ? <ObjectView obj={obj} diff={diff} stepIndex={stepIndex} /> : null;
+  }
+
+  if (group.kind === "grid") {
+    const obj = objects.get(group.id);
+    return obj && (obj.k === "list" || obj.k === "tuple") ? (
+      <GridBox obj={obj} rows={group.rows} diff={diff} stepIndex={stepIndex} />
+    ) : null;
   }
 
   if (group.kind === "chain") {
@@ -635,18 +777,33 @@ function Heading({ children }: { children: ReactNode }) {
 function groupKey(group: LensGroup, position: number) {
   if (group.kind === "single") return group.id;
   if (group.kind === "chain") return `chain:${group.ids[0] ?? position}`;
+  if (group.kind === "grid") return `grid:${group.id}`;
   return `tree:${group.nodes.find((node) => node.y === 0)?.id ?? position}`;
 }
 
-export function LensMemory({ step, stepIndex, diff }: { step: LensStep; stepIndex: number; diff: LensDiff }) {
+export function LensMemory({
+  step,
+  stepIndex,
+  diff,
+  code,
+}: {
+  step: LensStep;
+  stepIndex: number;
+  diff: LensDiff;
+  // The program's code, so markers follow how it indexes each array.
+  code?: string;
+}) {
   const contentRef = useRef<HTMLDivElement>(null);
   const objects = useMemo(() => new Map(step.heap.map((obj) => [obj.id, obj])), [step]);
   const groups = useMemo(() => layoutObjects(step.heap), [step]);
+  const uses = useMemo(() => (code ? indexUses(code) : undefined), [code]);
+  const marks = useMemo(() => indexMarks(step, groups, uses), [step, groups, uses]);
   const dataGroups = groups.filter((group) => !(group.kind === "single" && isDefinition(objects.get(group.id))));
   const active = step.frames.length - 1;
 
   return (
     <ObjectsContext.Provider value={objects}>
+      <MarksContext.Provider value={marks}>
       <div className="h-full overflow-auto">
         <div ref={contentRef} className="relative min-h-full min-w-max p-5">
           <div className="grid grid-cols-[minmax(10rem,14rem)_auto] gap-x-14">
@@ -691,6 +848,7 @@ export function LensMemory({ step, stepIndex, diff }: { step: LensStep; stepInde
           <ArrowLayer contentRef={contentRef} version={stepIndex} />
         </div>
       </div>
+      </MarksContext.Provider>
     </ObjectsContext.Provider>
   );
 }
