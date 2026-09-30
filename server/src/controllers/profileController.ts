@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { getAuth } from "@clerk/express";
+import { Message } from "../models/Message";
 import { Profile } from "../models/Profile";
 import { Room } from "../models/Room";
 
@@ -85,7 +86,7 @@ export async function updateProfile(req: Request, res: Response, next: NextFunct
     const profile = await Profile.findOneAndUpdate(
       { clerkUserId: userId },
       update,
-      { new: true, upsert: true }
+      { returnDocument: "after", upsert: true }
     );
 
     res.json(profile);
@@ -149,7 +150,7 @@ export async function markProblemSolved(req: Request, res: Response, next: NextF
     const updated = await Profile.findOneAndUpdate(
       { clerkUserId: userId, "solvedProblems.slug": { $ne: slug } },
       { $push: { solvedProblems: { slug, language, solvedAt: new Date() } } },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (updated) {
@@ -162,6 +163,98 @@ export async function markProblemSolved(req: Request, res: Response, next: NextF
       return res.status(404).json({ error: "Profile not found" });
     }
     res.json(profile);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------- The dashboard summary ----------
+
+// The activity chart covers the last 16 weeks, today included.
+const ACTIVITY_DAYS = 16 * 7;
+// Keeps the work bounded for very chatty accounts; the chart only needs counts per day.
+const ACTIVITY_MESSAGE_LIMIT = 10000;
+const TIME_ZONE_PATTERN = /^[A-Za-z0-9_+\-/]{1,64}$/;
+
+// Formats a date as "2026-09-29" in the user's own time zone, so "today" on
+// the chart matches their calendar. Unknown time zones fall back to UTC.
+function dayFormatter(timeZone: string): Intl.DateTimeFormat {
+  const options = { year: "numeric", month: "2-digit", day: "2-digit" } as const;
+  try {
+    return new Intl.DateTimeFormat("en-CA", { ...options, timeZone });
+  } catch {
+    return new Intl.DateTimeFormat("en-CA", { ...options, timeZone: "UTC" });
+  }
+}
+
+// Everything the user has on CodeShare, summarized for the dashboard. Only
+// counts leave the server: never the ids of the people in their rooms.
+export async function getProfileStats(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { userId } = getAuth(req);
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { tz } = req.query;
+    const toDay = dayFormatter(typeof tz === "string" && TIME_ZONE_PATTERN.test(tz) ? tz : "UTC");
+    const since = new Date(Date.now() - ACTIVITY_DAYS * 24 * 60 * 60 * 1000);
+
+    const [profile, owned, shared, messages, recentMessages] = await Promise.all([
+      Profile.findOne({ clerkUserId: userId }).select("solvedProblems createdAt").lean(),
+      Room.find({ ownerId: userId }).select("members language problemSlug createdAt").lean(),
+      Room.find({ members: userId, ownerId: { $ne: userId } }).select("ownerId members language problemSlug").lean(),
+      Message.countDocuments({ senderId: userId }),
+      Message.find({ senderId: userId, createdAt: { $gte: since } })
+        .sort({ createdAt: -1 })
+        .limit(ACTIVITY_MESSAGE_LIMIT)
+        .select("createdAt")
+        .lean(),
+    ]);
+
+    // Everyone the user has coded with: people who joined their rooms, and the
+    // owners and members of the rooms they joined.
+    const partners = new Set<string>();
+    for (const room of owned) {
+      for (const member of room.members ?? []) partners.add(member);
+    }
+    for (const room of shared) {
+      partners.add(room.ownerId);
+      for (const member of room.members ?? []) partners.add(member);
+    }
+    partners.delete(userId);
+
+    const languages = new Map<string, number>();
+    for (const room of [...owned, ...shared]) {
+      languages.set(room.language, (languages.get(room.language) ?? 0) + 1);
+    }
+
+    // An active day is one with a message sent, a problem solved or a room created.
+    const activity = new Map<string, number>();
+    const countDay = (date: Date | undefined) => {
+      if (!date || date < since) return;
+      const day = toDay.format(date);
+      activity.set(day, (activity.get(day) ?? 0) + 1);
+    };
+    for (const message of recentMessages) countDay(message.createdAt);
+    for (const solved of profile?.solvedProblems ?? []) countDay(solved.solvedAt);
+    for (const room of owned) countDay(room.createdAt);
+
+    res.json({
+      rooms: owned.filter((room) => !room.problemSlug).length,
+      practiceRooms: owned.filter((room) => room.problemSlug).length,
+      sharedRooms: shared.filter((room) => !room.problemSlug).length,
+      partners: partners.size,
+      messages,
+      languages: [...languages]
+        .map(([language, rooms]) => ({ language, rooms }))
+        .sort((a, b) => b.rooms - a.rooms || a.language.localeCompare(b.language)),
+      activity: [...activity]
+        .map(([date, count]) => ({ date, count }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+      memberSince: profile?.createdAt ?? null,
+    });
   } catch (err) {
     next(err);
   }

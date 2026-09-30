@@ -4,28 +4,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Clock,
-  Languages,
-  LayoutGrid,
-  Link as LinkIcon,
-  Plus,
-  Search,
-  Star,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowRight, ArrowUpRight, Link as LinkIcon, Plus, Search } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useApi } from "@/lib/api";
 import { useOnboardingGate } from "@/lib/useOnboardingGate";
 import { useToast } from "@/components/ToastProvider";
 import { CreateRoomModal } from "@/components/CreateRoomModal";
 import { AvatarIcon } from "@/components/AvatarIcon";
-import { Skeleton } from "@/components/Skeleton";
 import { RoomCard } from "@/components/RoomCard";
 import { DashboardSkeleton, RoomCardSkeleton } from "@/components/DashboardSkeleton";
+import { DashboardSummary } from "@/components/DashboardSummary";
 import { getStarterCode, LANGUAGES } from "@/lib/languages";
+import type { ProfileStats } from "@/types/profile";
 import type { Room } from "@/types/room";
 
 type SortMode = "updated" | "name";
@@ -95,6 +85,8 @@ export default function DashboardPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [joinInput, setJoinInput] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [statsFailed, setStatsFailed] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -114,6 +106,14 @@ export default function DashboardPage() {
       .get<Room[]>("/api/profile/recent-rooms")
       .then((res) => setRecentRooms(res.data))
       .catch(() => {});
+  }, [api]);
+
+  // The summary panel. Days on its activity chart follow this browser's time zone.
+  useEffect(() => {
+    api
+      .get<ProfileStats>("/api/profile/stats", { params: { tz: Intl.DateTimeFormat().resolvedOptions().timeZone } })
+      .then((res) => setStats(res.data))
+      .catch(() => setStatsFailed(true));
   }, [api]);
 
   // Keyboard shortcuts: N opens "New room", / jumps to search.
@@ -211,25 +211,9 @@ export default function DashboardPage() {
     return result;
   }, [rooms, query, sortBy, languageFilter]);
 
-  const lastActive = useMemo(() => {
-    if (rooms.length === 0) return null;
-    return rooms.reduce((latest, r) => (r.updatedAt > latest ? r.updatedAt : latest), rooms[0].updatedAt);
-  }, [rooms]);
-
   if (checking) {
     return <DashboardSkeleton />;
   }
-
-  const stats: { label: string; value: string; icon: LucideIcon }[] = [
-    { label: "Rooms", value: String(rooms.length), icon: LayoutGrid },
-    { label: "Languages", value: String(availableLanguages.length), icon: Languages },
-    { label: "Last active", value: lastActive ? timeAgo(lastActive) : "—", icon: Clock },
-    {
-      label: "Favorite",
-      value: profile?.favoriteLanguage ? languageLabel(profile.favoriteLanguage) : "Not set",
-      icon: Star,
-    },
-  ];
 
   return (
     <main className="relative overflow-hidden">
@@ -255,7 +239,7 @@ export default function DashboardPage() {
             <div className="min-w-0">
               <p className="text-sm text-ink-400">{greetingFor(new Date())}</p>
               <h1 className="text-gradient truncate pb-0.5 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight sm:text-3xl">
-                {profile ? `@${profile.username}` : "Your rooms"}
+                {profile ? `@${profile.username}` : "Dashboard"}
               </h1>
             </div>
           </div>
@@ -279,215 +263,204 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
-        {/* ---------- Stats ---------- */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.05, ease: EASE }}
-          className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-ink-700 bg-ink-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:grid-cols-4"
-        >
-          {stats.map(({ label, value, icon: Icon }) => (
-            <div key={label} className="bg-ink-900 p-4 sm:p-5">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-ink-400">
-                <Icon className="h-3.5 w-3.5 text-ink-500" />
-                {label}
-              </div>
-              <div className="mt-2 truncate font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-ink-100 sm:text-2xl">
-                {loading && label !== "Favorite" ? <Skeleton className="h-7 w-12" /> : value}
-              </div>
-            </div>
-          ))}
-        </motion.div>
+        {/* Rooms on the left (the main work), the summary on the right. On
+            smaller screens the summary follows the rooms. */}
+        <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8">
+          <div className="min-w-0">
+            {/* ---------- Join bar ---------- */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1, ease: EASE }}
+              className="flex items-center gap-2 rounded-2xl border border-ink-700 bg-ink-900 p-1.5 pl-4 transition-colors focus-within:border-ink-500"
+            >
+              <LinkIcon className="h-4 w-4 shrink-0 text-ink-500" />
+              <input
+                value={joinInput}
+                onChange={(e) => setJoinInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleJoinByLink()}
+                placeholder="Paste a room link or ID to join"
+                enterKeyHint="go"
+                className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-ink-100 placeholder:text-ink-500 focus:outline-none"
+              />
+              <button
+                onClick={handleJoinByLink}
+                disabled={!joinInput.trim()}
+                className="inline-flex h-8 shrink-0 items-center gap-1 rounded-xl border border-ink-700 bg-ink-800 px-3 text-sm text-ink-100 transition-colors hover:border-ink-500 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Join
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </motion.div>
 
-        {/* ---------- Join bar ---------- */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1, ease: EASE }}
-          className="mt-4 flex items-center gap-2 rounded-2xl border border-ink-700 bg-ink-900 p-1.5 pl-4 transition-colors focus-within:border-ink-500"
-        >
-          <LinkIcon className="h-4 w-4 shrink-0 text-ink-500" />
-          <input
-            value={joinInput}
-            onChange={(e) => setJoinInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleJoinByLink()}
-            placeholder="Paste a room link or ID to join"
-            enterKeyHint="go"
-            className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-ink-100 placeholder:text-ink-500 focus:outline-none"
-          />
-          <button
-            onClick={handleJoinByLink}
-            disabled={!joinInput.trim()}
-            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-xl border border-ink-700 bg-ink-800 px-3 text-sm text-ink-100 transition-colors hover:border-ink-500 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Join
-            <ArrowRight className="h-3.5 w-3.5" />
-          </button>
-        </motion.div>
-
-        {/* ---------- Recently joined ---------- */}
-        {recentRooms.length > 0 && (
-          <section className="mt-12">
-            <SectionHeading title="Recently joined" count={recentRooms.length} />
-            <div className="-mx-4 mt-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">
-              {recentRooms.map((room) => (
-                <Link
-                  key={room._id}
-                  href={`/room/${room._id}`}
-                  className="group flex w-60 shrink-0 snap-start flex-col rounded-xl border border-ink-700 bg-ink-900 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-300 hover:-translate-y-0.5 hover:border-ink-500"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="truncate text-sm font-semibold text-ink-100">{room.name}</span>
-                    <ArrowUpRight className="h-4 w-4 shrink-0 text-ink-500 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-ink-100" />
-                  </div>
-                  <div className="mt-3 flex items-center gap-2 text-xs text-ink-400">
-                    <span className="rounded-md border border-ink-700 bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium text-ink-300">
-                      {languageLabel(room.language)}
-                    </span>
-                    <span className="truncate">{timeAgo(room.updatedAt)}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ---------- Your rooms ---------- */}
-        <section className="mt-12">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <SectionHeading title="Your rooms" count={rooms.length} />
-
-            {rooms.length > 0 && (
-              <div className="flex items-center gap-2">
-                <div className="relative min-w-0 flex-1 sm:w-64 sm:flex-none">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
-                  <input
-                    ref={searchRef}
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search rooms"
-                    enterKeyHint="search"
-                    className="h-9 w-full rounded-lg border border-ink-700 bg-ink-900 pl-9 pr-8 text-sm text-ink-100 placeholder:text-ink-500 transition-colors focus:border-ink-500 focus:outline-none"
-                  />
-                  <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-ink-700 px-1.5 font-[family-name:var(--font-mono)] text-[10px] text-ink-400 sm:block">
-                    /
-                  </kbd>
+            {/* ---------- Recently joined ---------- */}
+            {recentRooms.length > 0 && (
+              <section className="mt-10">
+                <SectionHeading title="Recently joined" count={recentRooms.length} />
+                <div className="-mx-4 mt-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">
+                  {recentRooms.map((room) => (
+                    <Link
+                      key={room._id}
+                      href={`/room/${room._id}`}
+                      className="group flex w-60 shrink-0 snap-start flex-col rounded-xl border border-ink-700 bg-ink-900 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-300 hover:-translate-y-0.5 hover:border-ink-500"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="truncate text-sm font-semibold text-ink-100">{room.name}</span>
+                        <ArrowUpRight className="h-4 w-4 shrink-0 text-ink-500 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-ink-100" />
+                      </div>
+                      <div className="mt-3 flex items-center gap-2 text-xs text-ink-400">
+                        <span className="rounded-md border border-ink-700 bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium text-ink-300">
+                          {languageLabel(room.language)}
+                        </span>
+                        <span className="truncate">{timeAgo(room.updatedAt)}</span>
+                      </div>
+                    </Link>
+                  ))}
                 </div>
+              </section>
+            )}
 
-                <div className="flex h-9 shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5">
-                  {(["updated", "name"] as const).map((mode) => {
-                    const active = sortBy === mode;
+            {/* ---------- Your rooms ---------- */}
+            <section className="mt-10">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <SectionHeading title="Your rooms" count={rooms.length} />
+
+                {rooms.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="relative min-w-0 flex-1 sm:w-64 sm:flex-none">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
+                      <input
+                        ref={searchRef}
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search rooms"
+                        enterKeyHint="search"
+                        className="h-9 w-full rounded-lg border border-ink-700 bg-ink-900 pl-9 pr-8 text-sm text-ink-100 placeholder:text-ink-500 transition-colors focus:border-ink-500 focus:outline-none"
+                      />
+                      <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-ink-700 px-1.5 font-[family-name:var(--font-mono)] text-[10px] text-ink-400 sm:block">
+                        /
+                      </kbd>
+                    </div>
+
+                    <div className="flex h-9 shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+                      {(["updated", "name"] as const).map((mode) => {
+                        const active = sortBy === mode;
+                        return (
+                          <button
+                            key={mode}
+                            onClick={() => setSortBy(mode)}
+                            className="relative rounded-md px-2.5 text-xs font-medium"
+                          >
+                            {active && (
+                              <motion.span
+                                layoutId="dashboard-sort-pill"
+                                className="absolute inset-0 rounded-md bg-ink-700"
+                                transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
+                              />
+                            )}
+                            <span
+                              className={`relative transition-colors ${
+                                active ? "text-ink-100" : "text-ink-400 hover:text-ink-100"
+                              }`}
+                            >
+                              {mode === "updated" ? "Recent" : "A–Z"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {availableLanguages.length > 1 && (
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  {[null, ...availableLanguages].map((lang) => {
+                    const active = languageFilter === lang;
                     return (
                       <button
-                        key={mode}
-                        onClick={() => setSortBy(mode)}
-                        className="relative rounded-md px-2.5 text-xs font-medium"
+                        key={lang ?? "all"}
+                        onClick={() => setLanguageFilter(lang)}
+                        className={`h-7 rounded-full border px-3 text-xs font-medium transition-colors ${
+                          active
+                            ? "border-ink-100 bg-ink-100 text-ink-950"
+                            : "border-ink-700 bg-ink-900 text-ink-300 hover:border-ink-500 hover:text-ink-100"
+                        }`}
                       >
-                        {active && (
-                          <motion.span
-                            layoutId="dashboard-sort-pill"
-                            className="absolute inset-0 rounded-md bg-ink-700"
-                            transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
-                          />
-                        )}
-                        <span
-                          className={`relative transition-colors ${
-                            active ? "text-ink-100" : "text-ink-400 hover:text-ink-100"
-                          }`}
-                        >
-                          {mode === "updated" ? "Recent" : "A–Z"}
-                        </span>
+                        {lang ? languageLabel(lang) : "All"}
                       </button>
                     );
                   })}
                 </div>
-              </div>
-            )}
+              )}
+
+              {loading ? (
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  {[...Array(4)].map((_, i) => (
+                    <RoomCardSkeleton key={i} />
+                  ))}
+                </div>
+              ) : rooms.length === 0 ? (
+                <div className="mt-5 flex flex-col items-center rounded-2xl border border-dashed border-ink-700 bg-ink-900/60 px-6 py-16 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-ink-700 bg-ink-800">
+                    <Plus className="h-5 w-5 text-ink-300" />
+                  </div>
+                  <h3 className="mt-4 font-semibold text-ink-100">No rooms yet</h3>
+                  <p className="mt-1 max-w-xs text-sm text-ink-400">
+                    Create a room, share the link, and start coding together.
+                  </p>
+                  <button
+                    onClick={() => setModalOpen(true)}
+                    className="mt-6 inline-flex h-9 items-center gap-2 rounded-full bg-ink-100 px-4 text-sm font-semibold text-ink-950 transition-colors hover:bg-white"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create your first room
+                  </button>
+                </div>
+              ) : filteredRooms.length === 0 ? (
+                <div className="mt-5 rounded-2xl border border-dashed border-ink-700 bg-ink-900/60 px-6 py-12 text-center">
+                  <p className="text-sm text-ink-300">No rooms match your filters.</p>
+                  <button
+                    onClick={clearFilters}
+                    className="mt-3 text-sm text-ink-100 underline underline-offset-4 transition-colors hover:text-ink-300"
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              ) : (
+                <motion.div layout className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <AnimatePresence mode="popLayout">
+                    {filteredRooms.map((room, i) => (
+                      <motion.div
+                        key={room._id}
+                        layout
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.18 } }}
+                        transition={{
+                          layout: { duration: 0.35, ease: EASE },
+                          opacity: { duration: 0.35, delay: Math.min(i, 8) * 0.04 },
+                          y: { duration: 0.35, delay: Math.min(i, 8) * 0.04, ease: EASE },
+                        }}
+                      >
+                        <RoomCard
+                          room={room}
+                          updatedLabel={`updated ${timeAgo(room.updatedAt)}`}
+                          canDelete={room.ownerId === userId}
+                          confirmingDelete={pendingDeleteId === room._id}
+                          onRequestDelete={() => requestDelete(room._id, room.name)}
+                        />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </section>
           </div>
 
-          {availableLanguages.length > 1 && (
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {[null, ...availableLanguages].map((lang) => {
-                const active = languageFilter === lang;
-                return (
-                  <button
-                    key={lang ?? "all"}
-                    onClick={() => setLanguageFilter(lang)}
-                    className={`h-7 rounded-full border px-3 text-xs font-medium transition-colors ${
-                      active
-                        ? "border-ink-100 bg-ink-100 text-ink-950"
-                        : "border-ink-700 bg-ink-900 text-ink-300 hover:border-ink-500 hover:text-ink-100"
-                    }`}
-                  >
-                    {lang ? languageLabel(lang) : "All"}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {loading ? (
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[...Array(6)].map((_, i) => (
-                <RoomCardSkeleton key={i} />
-              ))}
-            </div>
-          ) : rooms.length === 0 ? (
-            <div className="mt-5 flex flex-col items-center rounded-2xl border border-dashed border-ink-700 bg-ink-900/60 px-6 py-16 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-ink-700 bg-ink-800">
-                <Plus className="h-5 w-5 text-ink-300" />
-              </div>
-              <h3 className="mt-4 font-semibold text-ink-100">No rooms yet</h3>
-              <p className="mt-1 max-w-xs text-sm text-ink-400">
-                Create a room, share the link, and start coding together.
-              </p>
-              <button
-                onClick={() => setModalOpen(true)}
-                className="mt-6 inline-flex h-9 items-center gap-2 rounded-full bg-ink-100 px-4 text-sm font-semibold text-ink-950 transition-colors hover:bg-white"
-              >
-                <Plus className="h-4 w-4" />
-                Create your first room
-              </button>
-            </div>
-          ) : filteredRooms.length === 0 ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-ink-700 bg-ink-900/60 px-6 py-12 text-center">
-              <p className="text-sm text-ink-300">No rooms match your filters.</p>
-              <button
-                onClick={clearFilters}
-                className="mt-3 text-sm text-ink-100 underline underline-offset-4 transition-colors hover:text-ink-300"
-              >
-                Clear filters
-              </button>
-            </div>
-          ) : (
-            <motion.div layout className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <AnimatePresence mode="popLayout">
-                {filteredRooms.map((room, i) => (
-                  <motion.div
-                    key={room._id}
-                    layout
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.18 } }}
-                    transition={{
-                      layout: { duration: 0.35, ease: EASE },
-                      opacity: { duration: 0.35, delay: Math.min(i, 8) * 0.04 },
-                      y: { duration: 0.35, delay: Math.min(i, 8) * 0.04, ease: EASE },
-                    }}
-                  >
-                    <RoomCard
-                      room={room}
-                      updatedLabel={`updated ${timeAgo(room.updatedAt)}`}
-                      canDelete={room.ownerId === userId}
-                      confirmingDelete={pendingDeleteId === room._id}
-                      onRequestDelete={() => requestDelete(room._id, room.name)}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </section>
+          {/* ---------- Summary ---------- */}
+          <DashboardSummary profile={profile} stats={stats} statsFailed={statsFailed} />
+        </div>
 
         <CreateRoomModal
           open={modalOpen}
