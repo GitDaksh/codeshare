@@ -7,6 +7,7 @@ import {
   checkUsername,
   getRecentRooms,
   markProblemSolved,
+  getProfileStats,
 } from "../controllers/profileController";
 
 const router = Router();
@@ -15,6 +16,7 @@ router.use(requireAuth, limitRequests(apiRequests));
 
 router.get("/username-available", checkUsername);
 router.get("/recent-rooms", getRecentRooms);
+router.get("/stats", getProfileStats);
 router.post("/solved", markProblemSolved);
 router.get("/", getProfile);
 router.put("/", updateProfile);

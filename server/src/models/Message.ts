@@ -57,4 +57,7 @@ const messageSchema = new Schema<IMessage>(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
+// "Messages you've sent" and the activity chart on the dashboard.
+messageSchema.index({ senderId: 1, createdAt: -1 });
+
 export const Message = model<IMessage>("Message", messageSchema);

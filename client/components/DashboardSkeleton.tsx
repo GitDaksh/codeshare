@@ -31,12 +31,21 @@ export function DashboardSkeleton() {
             <Skeleton className="h-7 w-48" />
           </div>
         </div>
-        <div className="mt-8 h-[92px] w-full rounded-2xl border border-ink-700 bg-ink-900" />
-        <div className="mt-4 h-12 w-full rounded-2xl border border-ink-700 bg-ink-900" />
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[...Array(6)].map((_, i) => (
-            <RoomCardSkeleton key={i} />
-          ))}
+        <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8">
+          <div className="min-w-0">
+            <div className="h-12 w-full rounded-2xl border border-ink-700 bg-ink-900" />
+            <Skeleton className="mt-10 h-6 w-32" />
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              {[...Array(4)].map((_, i) => (
+                <RoomCardSkeleton key={i} />
+              ))}
+            </div>
+          </div>
+          <div className="grid content-start gap-3 md:grid-cols-2 lg:grid-cols-1">
+            <div className="h-[320px] rounded-2xl border border-ink-700 bg-ink-900" />
+            <div className="h-[305px] rounded-2xl border border-ink-700 bg-ink-900" />
+            <div className="h-[303px] rounded-2xl border border-ink-700 bg-ink-900 md:col-span-2 lg:col-span-1" />
+          </div>
         </div>
       </div>
     </main>
