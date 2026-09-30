@@ -12,14 +12,14 @@ import {
 
 const FEATURES: { title: string; description: string; visual: ComponentType; span: string }[] = [
   {
-    title: "Real-time editing",
-    description: "Every keystroke lands on everyone's screen as you type, and your own cursor stays exactly where you left it.",
+    title: "Conflict-free editing",
+    description: "Type at the same time as everyone else. Edits merge cleanly, your cursor stays put, and ⌘Z only undoes your own changes.",
     visual: SyncVisual,
     span: "lg:col-span-4",
   },
   {
     title: "Live presence",
-    description: "See who's in the room, and exactly where each person is working in the file.",
+    description: "See who's in the room and where they're working. Click Follow to ride along with anyone.",
     visual: PresenceVisual,
     span: "lg:col-span-2",
   },

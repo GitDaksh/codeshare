@@ -651,36 +651,44 @@ type ArrowState = { arrows: Arrow[]; width: number; height: number };
 
 function measureArrows(root: HTMLElement): ArrowState {
   const base = root.getBoundingClientRect();
+  // If something above the view scales it (a transform, or zoom), screen
+  // measurements are scaled too. Dividing by the ratio gets back to the
+  // layout's own units, which the arrows are drawn in. At normal size the
+  // ratio is 1 and nothing changes.
+  const ratio = root.offsetWidth > 0 ? base.width / root.offsetWidth : 1;
+  const k = Math.abs(ratio - 1) < 0.01 ? 1 : ratio;
   const arrows: Arrow[] = [];
   root.querySelectorAll<HTMLElement>("[data-lens-ptr]").forEach((dot) => {
     const target = root.querySelector<HTMLElement>(`[data-lens-obj="${dot.dataset.lensPtr}"]`);
     if (!target) return;
     const s = dot.getBoundingClientRect();
     const t = target.getBoundingClientRect();
-    const sx = s.left + s.width / 2 - base.left;
-    const sy = s.top + s.height / 2 - base.top;
-    const left = t.left - base.left;
-    const top = t.top - base.top;
+    const sx = (s.left + s.width / 2 - base.left) / k;
+    const sy = (s.top + s.height / 2 - base.top) / k;
+    const left = (t.left - base.left) / k;
+    const top = (t.top - base.top) / k;
+    const width = t.width / k;
+    const height = t.height / k;
     let d: string;
 
     if (dot.dataset.lensDir === "down") {
       // Tree child: leave downwards, arrive on the child's top edge.
-      const tx = left + t.width / 2;
+      const tx = left + width / 2;
       const bend = Math.max(16, (top - sy) / 2);
       d = `M ${sx} ${sy} C ${sx} ${sy + bend}, ${tx} ${top - bend}, ${tx} ${top}`;
     } else if (left >= sx + 6) {
       // Target to the right: arrive on its left edge.
-      const ty = top + Math.min(t.height / 2, 18);
+      const ty = top + Math.min(height / 2, 18);
       const bend = Math.max(22, (left - sx) / 2);
       d = `M ${sx} ${sy} C ${sx + bend} ${sy}, ${left - bend} ${ty}, ${left} ${ty}`;
     } else if (top >= sy + 6) {
       // Target below: swing right, then drop onto its top edge.
-      const tx = left + Math.min(t.width / 2, 22);
+      const tx = left + Math.min(width / 2, 22);
       d = `M ${sx} ${sy} C ${sx + 30} ${sy}, ${tx} ${top - 40}, ${tx} ${top}`;
     } else {
       // Target behind or above (a back pointer): loop around to its right edge.
-      const tx = left + t.width;
-      const ty = top + Math.min(t.height / 2, 18);
+      const tx = left + width;
+      const ty = top + Math.min(height / 2, 18);
       const loop = Math.max(34, Math.abs(sy - ty) / 2);
       d = `M ${sx} ${sy} C ${sx + loop} ${sy}, ${tx + loop} ${ty}, ${tx} ${ty}`;
     }
