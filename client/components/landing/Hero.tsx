@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRef, type MouseEvent } from "react";
 import {
   motion,
@@ -11,6 +10,7 @@ import {
   useTransform,
 } from "framer-motion";
 import { ArrowRight } from "lucide-react";
+import { AuthCta } from "@/components/landing/AuthCta";
 import { HeroMockup } from "@/components/landing/HeroMockup";
 
 const EASE: [number, number, number, number] = [0.21, 0.47, 0.32, 0.98];
@@ -51,14 +51,14 @@ export function Hero() {
 
       <div className="relative mx-auto max-w-6xl px-4 pb-10 pt-16 text-center sm:pt-24 lg:pt-32">
         <motion.a
-          href="#features"
+          href="#tour"
           initial={reduce ? false : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: EASE }}
           className="group inline-flex items-center gap-2 rounded-full border border-ink-800 bg-ink-900/60 py-1 pl-1 pr-3 text-xs text-ink-400 backdrop-blur transition-colors hover:border-ink-600 hover:text-ink-100"
         >
           <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-semibold text-ink-950">New</span>
-          Shared code runs, live for the whole room
+          Lens: watch your code run, step by step
           <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
         </motion.a>
 
@@ -90,29 +90,17 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.5, ease: EASE }}
           className="mx-auto mt-6 max-w-xl text-base text-ink-400 sm:text-lg"
         >
-          Create a room, share one link, and write code with your team live, with cursors, chat, and
-          shared runs, right in the browser.
+          Pair in one shared room, watch your code run step by step, and practice 100 interview problems
+          together, right in the browser.
         </motion.p>
 
         <motion.div
           initial={reduce ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.6, ease: EASE }}
-          className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row"
+          className="mt-9 flex justify-center"
         >
-          <Link
-            href="/sign-up"
-            className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-ink-100 px-6 py-3 text-sm font-semibold text-ink-950 shadow-[0_0_40px_-10px_rgba(255,255,255,0.6)] transition-all hover:bg-white hover:shadow-[0_0_60px_-6px_rgba(255,255,255,0.8)] sm:w-auto"
-          >
-            Start coding free
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-          </Link>
-          <Link
-            href="/sign-in"
-            className="inline-flex w-full items-center justify-center rounded-full border border-ink-700 bg-ink-950/50 px-6 py-3 text-sm font-medium text-ink-100 backdrop-blur transition-colors hover:border-ink-500 sm:w-auto"
-          >
-            Sign in
-          </Link>
+          <AuthCta />
         </motion.div>
 
         <motion.p
@@ -121,7 +109,7 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.75 }}
           className="mt-5 text-xs text-ink-600"
         >
-          No install · One link to share · Runs in your browser
+          Free · No install · Python, JavaScript and TypeScript
         </motion.p>
       </div>
 

@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { AuthCta } from "@/components/landing/AuthCta";
 import { Reveal } from "@/components/landing/Reveal";
 
 export function FinalCta() {
@@ -16,20 +15,8 @@ export function FinalCta() {
           <p className="mx-auto mt-4 max-w-md text-ink-400">
             Free, in the browser, and ready in about ten seconds.
           </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link
-              href="/sign-up"
-              className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-ink-100 px-6 py-3 text-sm font-semibold text-ink-950 shadow-[0_0_40px_-10px_rgba(255,255,255,0.6)] transition-all hover:bg-white hover:shadow-[0_0_60px_-6px_rgba(255,255,255,0.8)] sm:w-auto"
-            >
-              Start coding free
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-            <Link
-              href="/dashboard"
-              className="inline-flex w-full items-center justify-center rounded-full border border-ink-700 px-6 py-3 text-sm font-medium text-ink-100 transition-colors hover:border-ink-500 sm:w-auto"
-            >
-              Go to dashboard
-            </Link>
+          <div className="mt-9 flex justify-center">
+            <AuthCta />
           </div>
         </div>
       </Reveal>

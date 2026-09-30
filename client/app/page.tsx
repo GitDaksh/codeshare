@@ -1,6 +1,8 @@
 import { SmoothScroll } from "@/components/landing/SmoothScroll";
 import { Hero } from "@/components/landing/Hero";
 import { Marquee } from "@/components/landing/Marquee";
+import { Stats } from "@/components/landing/Stats";
+import { Tour } from "@/components/landing/Tour";
 import { Features } from "@/components/landing/Features";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { FinalCta } from "@/components/landing/FinalCta";
@@ -17,6 +19,8 @@ export default function Home() {
         </p>
         <Marquee />
       </section>
+      <Stats />
+      <Tour />
       <Features />
       <HowItWorks />
       <FinalCta />

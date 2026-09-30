@@ -1,14 +1,17 @@
 const ITEMS = [
-  "JavaScript",
-  "TypeScript",
-  "Python",
-  "C++",
-  "Java",
+  "Lens visualizer",
+  "100 practice problems",
+  "Big-O meter",
+  "Conflict-free editing",
+  "Follow mode",
   "Live cursors",
   "Shared runs",
   "Room chat",
+  "Activity streaks",
   "⌘K palette",
-  "Presence",
+  "Python",
+  "JavaScript",
+  "TypeScript",
 ];
 
 // Two identical copies side by side, scrolled by exactly -50%, make the loop

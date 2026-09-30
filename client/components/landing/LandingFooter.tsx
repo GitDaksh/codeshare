@@ -21,6 +21,12 @@ export function LandingFooter() {
           <Link href="/dashboard" className="transition-colors hover:text-ink-100">
             Dashboard
           </Link>
+          <Link href="/lens" className="transition-colors hover:text-ink-100">
+            Lens
+          </Link>
+          <Link href="/practice" className="transition-colors hover:text-ink-100">
+            Practice
+          </Link>
           <Link href="/sign-up" className="transition-colors hover:text-ink-100">
             Get started
           </Link>
