@@ -18,7 +18,9 @@ import {
   ArrowLeft,
   Maximize2,
   Minimize2,
+  Eye,
   Link as LinkIcon,
+  UserPlus,
   Play,
   AlignLeft,
   Settings,
@@ -60,6 +62,8 @@ import { ComplexityMeter } from "@/components/ComplexityMeter";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { PresenceStack } from "@/components/PresenceStack";
 import { RoomSettingsModal } from "@/components/RoomSettingsModal";
+import { PeoplePanel } from "@/components/PeoplePanel";
+import { ShareDialog } from "@/components/ShareDialog";
 import { openShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ProblemPanel } from "@/components/ProblemPanel";
 import { RoomLens } from "@/components/lens/RoomLens";
@@ -86,7 +90,7 @@ import { useCollab } from "@/lib/collab";
 import { useComplexity } from "@/lib/useComplexity";
 import { useRoomLens } from "@/lib/useRoomLens";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
-import type { Room } from "@/types/room";
+import type { AccessRequest, Room, RoomPerson, RoomRole } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
 import type { TypingEvent } from "@/types/presence";
 import type { LanguageUpdateEvent, RunResultEvent, RunStartEvent } from "@/types/roomEvents";
@@ -158,6 +162,9 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+// Why a viewer's controls are greyed out.
+const VIEW_ONLY = "View only. Ask the owner for edit access.";
+
 export default function RoomPage({
   params,
 }: {
@@ -179,6 +186,19 @@ export default function RoomPage({
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  // Everyone in the room, for the People tab (null until it loads).
+  const [people, setPeople] = useState<RoomPerson[] | null>(null);
+  // Set while you leave, so the "you were removed" notice that follows isn't shown.
+  const leavingRef = useRef(false);
+  // Your role here. Viewers can watch, follow and chat, but not change the code.
+  const role: RoomRole = room?.role ?? (room && room.ownerId === currentUserId ? "owner" : "editor");
+  const canEdit = role !== "viewer";
+  const canInvite = !!room?.invites;
+  // Owner: viewers asking to edit. Viewer: whether you've just asked.
+  const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
+  const knownRequestsRef = useRef(new Set<string>());
+  const [asked, setAsked] = useState(false);
 
   const [initialCode, setInitialCode] = useState<string | null>(null);
   const [language, setLanguage] = useState("javascript");
@@ -325,6 +345,8 @@ export default function RoomPage({
     sendLensStep,
     sendLensDrive,
     sendLensStop,
+    sendAccessRequest,
+    sendAccessDismiss,
   } = useSocket(id, {
     onChatMessage: handleIncomingMessage,
     onTyping: handleTyping,
@@ -336,6 +358,20 @@ export default function RoomPage({
     onLensStep: (event) => lens.receiveStep(event),
     onLensDriver: (event) => lens.receiveDriver(event),
     onLensStop: (event) => lens.receiveStop(event),
+    onRole: (next) => handleRoleChange(next),
+    onRemoved: () => handleRemoved(),
+    onPeople: () => {
+      loadPeople();
+      refreshAccess();
+    },
+    onAccessRequests: (requests) => handleAccessRequests(requests),
+    onAccessRequested: (ownerHere) =>
+      toast(
+        ownerHere
+          ? "Asked the owner for edit access."
+          : "The owner isn't in the room right now. They'll see your request when they're back.",
+        "info"
+      ),
   }, invite);
 
   // Shared editing: the room's document, kept in step over the socket (Yjs).
@@ -353,6 +389,7 @@ export default function RoomPage({
   }, [onlineUsers, currentUserId]);
   const getLensCode = useCallback(() => codeEditorRef.current?.getValue() ?? "", []);
   const lens = useRoomLens({
+    canDrive: canEdit,
     me: lensMe,
     send: { start: sendLensStart, step: sendLensStep, drive: sendLensDrive, stop: sendLensStop },
     notify: toast,
@@ -404,7 +441,11 @@ export default function RoomPage({
     api
       .get<ChatMessage[]>(`/api/rooms/${id}/messages${inviteQuery}`)
       .then((res) => setMessages(res.data))
-      .catch(() => toast("Could not load chat history.", "error"));
+      .catch((err) => {
+        // A room you can't open shows its own message instead.
+        if ((err as { response?: { status?: number } })?.response?.status === 404) return;
+        toast("Could not load chat history.", "error");
+      });
   }, [api, id, inviteQuery]);
 
   useEffect(() => {
@@ -492,16 +533,136 @@ export default function RoomPage({
     saveTimeoutRef.current = setTimeout(() => setSaveStatus("saved"), SAVE_INDICATOR_DELAY_MS);
   }
 
-  // The room's invite link: anyone who opens it can join. (The room's id
-  // alone isn't enough, so ids that leak or get guessed don't open rooms.)
-  function inviteLink(): string {
-    if (!room?.inviteCode) return window.location.href;
-    return `${window.location.origin}/room/${room._id}?invite=${room.inviteCode}`;
+  // Both re-reads below can overlap; only the newest answer counts, so a
+  // slower, older one can't undo a change that arrived after it.
+  const peopleReadRef = useRef(0);
+  const accessReadRef = useRef(0);
+
+  // Who's in the room, for the People tab.
+  const loadPeople = useCallback(() => {
+    const read = ++peopleReadRef.current;
+    api
+      .get<{ people: RoomPerson[] }>(`/api/rooms/${id}/people`)
+      .then((res) => {
+        if (read === peopleReadRef.current) setPeople(res.data.people);
+      })
+      .catch(() => {});
+  }, [api, id]);
+
+  // Your role and the invite links can change while you're here.
+  const refreshAccess = useCallback(() => {
+    const read = ++accessReadRef.current;
+    api
+      .get<Room>(`/api/rooms/${id}`)
+      .then((res) => {
+        if (read !== accessReadRef.current) return;
+        setRoom((prev) => (prev ? { ...prev, role: res.data.role, invites: res.data.invites } : prev));
+      })
+      .catch(() => {});
+  }, [api, id]);
+
+  useEffect(() => {
+    if (room?._id) loadPeople();
+  }, [room?._id, loadPeople]);
+
+  // Someone new joined (online, but not on the list yet): reload the list,
+  // once per person, so it can never loop.
+  const reloadedForRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!people) return;
+    const newcomer = onlineUsers.find(
+      (user) => !people.some((person) => person.userId === user.userId) && !reloadedForRef.current.has(user.userId)
+    );
+    if (!newcomer) return;
+    reloadedForRef.current.add(newcomer.userId);
+    loadPeople();
+  }, [onlineUsers, people, loadPeople]);
+
+  // Owner: who's asking to edit. Each new request gets a notice.
+  function handleAccessRequests(requests: AccessRequest[]) {
+    const fresh = requests.filter((request) => !knownRequestsRef.current.has(request.userId));
+    knownRequestsRef.current = new Set(requests.map((request) => request.userId));
+    setAccessRequests(requests);
+    for (const request of fresh) toast(`${request.name} is asking to edit. Allow it on the People tab.`, "info");
   }
 
-  function handleCopyLink() {
-    navigator.clipboard.writeText(inviteLink());
-    toast("Invite link copied. Anyone with it can join this room.");
+  function handleDismissRequest(userId: string) {
+    sendAccessDismiss(userId);
+    knownRequestsRef.current.delete(userId);
+    setAccessRequests((prev) => prev.filter((request) => request.userId !== userId));
+  }
+
+  // Viewer: ask the owner for edit access (the button rests for a minute).
+  function handleAskToEdit() {
+    if (asked || canEdit) return;
+    sendAccessRequest();
+    setAsked(true);
+    setTimeout(() => setAsked(false), 60_000);
+  }
+
+  // The owner changed your role (it already applies on the server).
+  function handleRoleChange(next: RoomRole) {
+    if (next !== "viewer") setAsked(false);
+    setRoom((prev) => (prev ? { ...prev, role: next } : prev));
+    refreshAccess();
+    toast(
+      next === "viewer"
+        ? "You're now a viewer: you can watch, follow and chat, but not edit."
+        : "You can now edit this room.",
+      "info"
+    );
+  }
+
+  function handleRemoved() {
+    if (leavingRef.current) return;
+    toast("The owner removed you from this room.", "error");
+    router.replace("/dashboard");
+  }
+
+  // The room's invite links are only sent to people who may use them (the
+  // owner and editors). Anyone who opens one joins with that link's role.
+  async function handleResetInvite(kind: "edit" | "view") {
+    try {
+      const res = await api.post<{ invites: { edit: string; view: string } }>(`/api/rooms/${id}/invites`, { kind });
+      setRoom((prev) => (prev ? { ...prev, invites: res.data.invites } : prev));
+      toast(`New ${kind} link made. The old one no longer works.`);
+    } catch {
+      toast("Could not reset the link.", "error");
+    }
+  }
+
+  async function handleChangeRole(userId: string, next: "editor" | "viewer") {
+    try {
+      await api.patch(`/api/rooms/${id}/people/${userId}`, { role: next });
+      setPeople((prev) => prev?.map((person) => (person.userId === userId ? { ...person, role: next } : person)) ?? prev);
+    } catch {
+      toast("Could not change their role.", "error");
+    }
+  }
+
+  // Removing someone also replaces both invite links, so theirs stop working.
+  async function handleRemovePerson(userId: string) {
+    try {
+      await api.delete(`/api/rooms/${id}/people/${userId}`);
+      setPeople((prev) => prev?.filter((person) => person.userId !== userId) ?? prev);
+      refreshAccess();
+      toast("Removed. Both invite links were replaced, so their old link no longer works.");
+    } catch {
+      toast("Could not remove them.", "error");
+    }
+  }
+
+  async function handleLeaveRoom() {
+    if (!currentUserId) return;
+    leavingRef.current = true;
+    try {
+      await api.delete(`/api/rooms/${id}/people/${currentUserId}`);
+      toast("You left the room.");
+      router.replace("/dashboard");
+    } catch {
+      leavingRef.current = false;
+      toast("Could not leave the room.", "error");
+    }
   }
 
   function handleCopyCode() {
@@ -586,6 +747,7 @@ export default function RoomPage({
   }
 
   async function handleFormat() {
+    if (!canEdit) return;
     const code = codeEditorRef.current?.getValue() ?? "";
     const result = await formatCode(code, language);
 
@@ -612,7 +774,7 @@ export default function RoomPage({
   }
 
   function handleLanguageChange(next: string) {
-    if (next === language) return;
+    if (next === language || !canEdit) return;
     const previous = language;
 
     setLanguage(next);
@@ -648,6 +810,10 @@ export default function RoomPage({
   }
 
   async function handleRunTests() {
+    if (!canEdit) {
+      toast(VIEW_ONLY, "info");
+      return;
+    }
     if (!problem || testsRunningRef.current) return;
     if (!isTestableLanguage(language)) {
       toast("Tests run in JavaScript, TypeScript, and Python. Switch the language to test your solution.", "info");
@@ -690,6 +856,7 @@ export default function RoomPage({
   }
 
   async function handleRun() {
+    if (!canEdit) return;
     setMobilePanel("code");
     setRunPanelOpen(true);
     if (!isRunnable(language) || isSelfRunningRef.current) return;
@@ -718,6 +885,7 @@ export default function RoomPage({
   }
 
   function handleVisualize() {
+    if (!canEdit) return;
     setMobilePanel("code");
     if (!isLensLanguage(language)) {
       toast("Lens visualizes Python, JavaScript and TypeScript. Switch the room's language to try it.", "info");
@@ -727,7 +895,7 @@ export default function RoomPage({
   }
 
   function handleVisualizeTest(index: number) {
-    if (!problem) return;
+    if (!problem || !canEdit) return;
     setMobilePanel("code");
     void lens.run({ kind: "test", index });
   }
@@ -796,13 +964,14 @@ export default function RoomPage({
       label: "Run code",
       icon: Play,
       action: handleRun,
+      disabled: !canEdit,
     },
     {
       id: "lens",
       label: "Visualize with Lens",
       icon: ScanEye,
       action: handleVisualize,
-      disabled: !lensReady,
+      disabled: !lensReady || !canEdit,
     },
     ...problemCommands,
     {
@@ -825,7 +994,7 @@ export default function RoomPage({
       label: "Format code",
       icon: AlignLeft,
       action: handleFormat,
-      disabled: !isFormattable(language),
+      disabled: !isFormattable(language) || !canEdit,
     },
     {
       id: "copy-code",
@@ -847,10 +1016,11 @@ export default function RoomPage({
     },
     ...themeCommands,
     {
-      id: "copy-link",
-      label: "Copy invite link",
+      id: "invite",
+      label: "Invite people",
       icon: LinkIcon,
-      action: handleCopyLink,
+      action: () => setShareOpen(true),
+      disabled: !canInvite,
     },
     ...desktopOnlyCommands,
     {
@@ -886,11 +1056,12 @@ export default function RoomPage({
     },
   ];
 
-  if (checking || loading || initialCode === null) {
+  if (checking || loading) {
     return <RoomSkeleton />;
   }
 
-  if (notFound || !room) {
+  // The room couldn't be opened: deleted, or the link is wrong or was reset.
+  if (notFound || !room || initialCode === null) {
     return (
       <main className="flex h-dvh flex-col items-center justify-center gap-3 px-4 text-center md:h-[calc(100dvh-56px)]">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-ink-700 bg-ink-900">
@@ -898,8 +1069,8 @@ export default function RoomPage({
         </div>
         <p className="font-semibold text-ink-100">This room doesn&apos;t exist</p>
         <p className="max-w-xs text-sm text-ink-400">
-          It may have been deleted or the link might be mistyped. To join someone else&apos;s room, ask them for its
-          invite link.
+          It may have been deleted, or the link is wrong or no longer works (invite links can be reset). To join
+          someone else&apos;s room, ask them for a fresh invite link.
         </p>
         <Link
           href="/dashboard"
@@ -962,14 +1133,38 @@ export default function RoomPage({
             <span className="hidden sm:inline">{statusMeta.label}</span>
           </span>
 
-          <button
-            onClick={handleCopyLink}
-            title="Copy invite link"
-            className="hidden items-center gap-1.5 rounded-md px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 lg:flex"
-          >
-            {shortRoomId}
-            <Copy className="h-3 w-3" />
-          </button>
+          {!canEdit && (
+            <span
+              title={VIEW_ONLY}
+              className="flex shrink-0 items-center gap-1 rounded-full border border-ink-700 bg-ink-900 px-2 py-0.5 text-[11px] font-medium text-ink-300"
+            >
+              <Eye className="h-3 w-3" />
+              <span className="hidden sm:inline">View only</span>
+            </span>
+          )}
+
+          {!canEdit && (
+            <button
+              type="button"
+              onClick={handleAskToEdit}
+              disabled={asked}
+              title={asked ? "You've asked the owner for edit access" : "Ask the owner for edit access"}
+              className="hidden shrink-0 items-center rounded-full bg-ink-100 px-2.5 py-0.5 text-[11px] font-semibold text-ink-950 transition-colors hover:bg-white disabled:bg-ink-800 disabled:text-ink-400 sm:flex"
+            >
+              {asked ? "Asked" : "Ask to edit"}
+            </button>
+          )}
+
+          {canInvite && (
+            <button
+              onClick={() => setShareOpen(true)}
+              title="Invite people"
+              className="hidden items-center gap-1.5 rounded-md px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 lg:flex"
+            >
+              {shortRoomId}
+              <Copy className="h-3 w-3" />
+            </button>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -990,12 +1185,19 @@ export default function RoomPage({
             </kbd>
           </button>
 
-          <LanguageDropdown value={language} onChange={handleLanguageChange} />
+          <LanguageDropdown
+            value={language}
+            onChange={handleLanguageChange}
+            disabled={!canEdit}
+            disabledReason={VIEW_ONLY}
+          />
 
           <button
             onClick={handleRun}
-            disabled={isSelfRunning}
-            title={runnable ? "Run (⌘↵)" : `Running ${languageLabel(language)} isn't supported yet`}
+            disabled={isSelfRunning || !canEdit}
+            title={
+              !canEdit ? VIEW_ONLY : runnable ? "Run (⌘↵)" : `Running ${languageLabel(language)} isn't supported yet`
+            }
             className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 ${
               runnable
                 ? "bg-ink-100 text-ink-950 shadow-[0_0_20px_-6px_rgba(255,255,255,0.5)] hover:bg-white"
@@ -1013,16 +1215,20 @@ export default function RoomPage({
 
           <button
             onClick={handleVisualize}
-            disabled={lens.recording}
+            disabled={lens.recording || !canEdit}
             aria-label="Visualize with Lens"
             title={
-              !lensReady
-                ? "Lens visualizes Python, JavaScript and TypeScript"
-                : lens.practice
-                  ? `Visualize ${lens.practice.next} with Lens`
-                  : "Visualize with Lens: watch the code run, step by step"
+              !canEdit
+                ? VIEW_ONLY
+                : !lensReady
+                  ? "Lens visualizes Python, JavaScript and TypeScript"
+                  : lens.practice
+                    ? `Visualize ${lens.practice.next} with Lens`
+                    : "Visualize with Lens: watch the code run, step by step"
             }
-            className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors disabled:cursor-wait disabled:opacity-60 ${
+            className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+              canEdit ? "disabled:cursor-wait" : "disabled:cursor-not-allowed"
+            } ${
               lensReady
                 ? "border-ink-700 bg-ink-900 text-ink-300 hover:border-ink-500 hover:text-ink-100"
                 : "border-ink-800 bg-ink-900 text-ink-500 hover:border-ink-700"
@@ -1044,9 +1250,15 @@ export default function RoomPage({
             </button>
             <button
               onClick={handleFormat}
-              disabled={!isFormattable(language)}
+              disabled={!isFormattable(language) || !canEdit}
               aria-label="Format code"
-              title={isFormattable(language) ? "Format code" : "Formatting not supported for this language"}
+              title={
+                !canEdit
+                  ? VIEW_ONLY
+                  : isFormattable(language)
+                    ? "Format code"
+                    : "Formatting not supported for this language"
+              }
               className={`${TOOL_BUTTON} disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent`}
             >
               <AlignLeft className="h-4 w-4" />
@@ -1054,9 +1266,16 @@ export default function RoomPage({
             <button onClick={handleDownloadCode} aria-label="Download code" title="Download code" className={TOOL_BUTTON}>
               <Download className="h-4 w-4" />
             </button>
-            <button onClick={handleCopyLink} aria-label="Copy invite link" title="Copy invite link" className={TOOL_BUTTON}>
-              <LinkIcon className="h-4 w-4" />
-            </button>
+            {canInvite && (
+              <button
+                onClick={() => setShareOpen(true)}
+                aria-label="Invite people"
+                title="Invite people"
+                className={TOOL_BUTTON}
+              >
+                <LinkIcon className="h-4 w-4" />
+              </button>
+            )}
             <button
               onClick={handleToggleZen}
               aria-label={zenMode ? "Show sidebar" : "Enter focus mode"}
@@ -1094,6 +1313,7 @@ export default function RoomPage({
               collab={collab.session}
               collabReady={collab.synced}
               collabGeneration={collab.generation}
+              viewOnly={!canEdit}
               followUserId={followed ? followed.userId : null}
               onStopFollowing={() => setFollowing(null)}
               saveStatus={saveStatus}
@@ -1177,6 +1397,13 @@ export default function RoomPage({
                               {onlineUsers.length}
                             </span>
                           )}
+                          {tab === "online" && accessRequests.length > 0 && (
+                            <span
+                              className="h-1.5 w-1.5 rounded-full bg-ink-100"
+                              title="Someone is asking to edit"
+                              aria-label="Someone is asking to edit"
+                            />
+                          )}
                           {tab === "chat" && unreadCount > 0 && !active && (
                             <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
                               {unreadCount > 9 ? "9+" : unreadCount}
@@ -1201,63 +1428,38 @@ export default function RoomPage({
                 />
               ) : activeTab === "online" ? (
                 <div className="flex min-h-0 flex-1 flex-col">
-                  <p className="px-4 pb-1.5 pt-3 text-[11px] font-medium uppercase tracking-wider text-ink-400 md:pt-1">
-                    In this room · {onlineUsers.length}
-                  </p>
-                  <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
-                    {onlineUsers.map((u) => {
-                      const isYou = u.userId === currentUserId;
-                      return (
-                        <li
-                          key={u.socketId}
-                          className="flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-ink-800/60"
-                        >
-                          <span className="relative shrink-0">
-                            <AvatarIcon avatarId={u.avatarId} className="h-8 w-8 rounded-full md:h-7 md:w-7" />
-                            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-900 bg-ink-100" />
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink-100">
-                            {isYou ? "You" : u.name}
-                          </span>
-                          {u.userId === room.ownerId && (
-                            <span className="shrink-0 rounded border border-ink-700 bg-ink-800 px-1.5 py-px text-[10px] font-medium text-ink-300">
-                              Owner
-                            </span>
-                          )}
-                          {!isYou && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFollowing(following === u.userId ? null : u.userId);
-                                if (!isDesktop) handleMobilePanel("code");
-                              }}
-                              aria-pressed={following === u.userId}
-                              title={following === u.userId ? "Stop following" : `Follow ${u.name}'s cursor`}
-                              className={`shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                                following === u.userId
-                                  ? "border-ink-100 bg-ink-100 text-ink-950"
-                                  : "border-ink-700 text-ink-300 hover:border-ink-500 hover:text-ink-100"
-                              }`}
-                            >
-                              {following === u.userId ? "Following" : "Follow"}
-                            </button>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  <PeoplePanel
+                    people={people}
+                    onlineUsers={onlineUsers}
+                    currentUserId={currentUserId ?? null}
+                    myRole={role}
+                    following={following}
+                    onFollow={(userId) => {
+                      setFollowing(userId);
+                      if (!isDesktop) handleMobilePanel("code");
+                    }}
+                    onChangeRole={handleChangeRole}
+                    onRemove={handleRemovePerson}
+                    onLeave={handleLeaveRoom}
+                    onInvite={canInvite ? () => setShareOpen(true) : undefined}
+                    requests={isOwner ? accessRequests : []}
+                    onAllow={(userId) => void handleChangeRole(userId, "editor")}
+                    onDismiss={handleDismissRequest}
+                    onAskToEdit={!canEdit ? handleAskToEdit : undefined}
+                    asked={asked}
+                  />
 
-                  {onlineUsers.length <= 1 && (
+                  {canInvite && (people?.length ?? onlineUsers.length) <= 1 && (
                     <div className="mx-2 mb-2 rounded-xl border border-dashed border-ink-700 bg-ink-950/50 p-4 text-center">
                       <p className="text-sm font-medium text-ink-100">You&apos;re the only one here</p>
-                      <p className="mt-1 text-xs text-ink-400">Share the room link to code together.</p>
+                      <p className="mt-1 text-xs text-ink-400">Invite people to code together, or just to watch.</p>
                       <button
                         type="button"
-                        onClick={handleCopyLink}
+                        onClick={() => setShareOpen(true)}
                         className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full bg-ink-100 px-3.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-white active:scale-[0.98]"
                       >
-                        <LinkIcon className="h-3.5 w-3.5" />
-                        Copy invite link
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Invite people
                       </button>
                     </div>
                   )}
@@ -1305,6 +1507,9 @@ export default function RoomPage({
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
+                {tabId === "online" && accessRequests.length > 0 && (
+                  <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-ink-100" />
+                )}
               </span>
               <span className={`relative transition-colors ${active ? "text-ink-100" : "text-ink-400"}`}>
                 {tabId === "online" ? `${label} · ${onlineUsers.length}` : label}
@@ -1320,6 +1525,14 @@ export default function RoomPage({
         onClose={() => setSettingsOpen(false)}
         currentName={room.name}
         onSave={handleRenameRoom}
+      />
+      <ShareDialog
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        roomId={room._id}
+        invites={room.invites}
+        canReset={isOwner}
+        onReset={handleResetInvite}
       />
     </main>
   );

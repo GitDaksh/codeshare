@@ -103,11 +103,14 @@ export function useRoomLens({
   send,
   notify,
   context,
+  canDrive = true,
 }: {
   me: LensDriver | null;
   send: LensSenders;
   notify: Notify;
   context?: RoomLensContext;
+  // Viewers can follow the driver or step on their own, but not take over.
+  canDrive?: boolean;
 }) {
   const [session, setSession] = useState<RoomLensSession | null>(null);
   // Where the driver is. Everyone following shows this step.
@@ -327,7 +330,7 @@ export function useRoomLens({
   const follow = () => setFollowing(true);
 
   const takeControl = () => {
-    if (!session || !session.shared || !me) return;
+    if (!session || !session.shared || !me || !canDrive) return;
     sendRef.current.drive(session.id, step);
     setSession({ ...session, driver: me });
     setPosition({ id: session.id, step });
@@ -439,6 +442,7 @@ export function useRoomLens({
     recordingTitle,
     following,
     isDriver,
+    canDrive,
     step,
     idle,
     practice,

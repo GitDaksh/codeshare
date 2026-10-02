@@ -154,6 +154,15 @@ export class CollabSession {
       this.hello();
       return;
     }
+    if (data.reason === "view-only") {
+      // You were made a viewer mid-edit: your unsent edits can't be kept, so
+      // start over from the room's document (sending them again would only be
+      // refused again).
+      this.replaceDoc();
+      this.publish({ synced: false, generation: this.snapshot.generation + 1 });
+      this.hello();
+      return;
+    }
     // Busy: sync again once it calms down (every edit is sent again).
     if (!this.resyncTimer) {
       this.resyncTimer = setTimeout(() => {

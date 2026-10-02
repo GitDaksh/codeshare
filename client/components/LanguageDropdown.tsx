@@ -16,9 +16,12 @@ const SHORT_LABELS: Record<string, string> = {
 type LanguageDropdownProps = {
   value: string;
   onChange: (value: string) => void;
+  // Viewers can see the language but not change it.
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
-export function LanguageDropdown({ value, onChange }: LanguageDropdownProps) {
+export function LanguageDropdown({ value, onChange, disabled = false, disabledReason }: LanguageDropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const current = LANGUAGES.find((l) => l.value === value);
@@ -45,10 +48,12 @@ export function LanguageDropdown({ value, onChange }: LanguageDropdownProps) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        disabled={disabled}
+        title={disabled ? disabledReason : undefined}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Language: ${current?.label ?? "Choose language"}`}
-        className={`flex h-8 items-center gap-2 rounded-lg border px-2.5 text-xs font-medium transition-colors ${
+        className={`flex h-8 items-center gap-2 rounded-lg border px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
           open
             ? "border-ink-500 bg-ink-800 text-ink-100"
             : "border-ink-700 bg-ink-900 text-ink-100 hover:border-ink-500"

@@ -4,7 +4,7 @@ import { getAuth } from "@clerk/express";
 import { Room } from "../models/Room";
 import { Profile } from "../models/Profile";
 import { Message } from "../models/Message";
-import { openRoom } from "../lib/access";
+import { openRoom, publicRoom, roleOf } from "../lib/access";
 
 const MAX_INITIAL_CODE_LENGTH = 100_000;
 const PROBLEM_SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
@@ -58,7 +58,7 @@ export async function createRoom(req: Request, res: Response, next: NextFunction
       ...(typeof problemSlug === "string" ? { problemSlug } : {}),
     });
 
-    res.status(201).json(room);
+    res.status(201).json(publicRoom(room, "owner"));
   } catch (err) {
     next(err);
   }
@@ -107,7 +107,7 @@ export async function getRoom(req: Request, res: Response, next: NextFunction) {
       return res.status(404).json({ error: "Room not found" });
     }
 
-    res.json(room);
+    res.json(publicRoom(room, roleOf(room, userId)));
 
     // Best-effort "recently joined" tracking: fires after the response is
     // already sent, and its own failure can never affect the request above.
@@ -164,7 +164,7 @@ export async function updateRoom(req: Request, res: Response, next: NextFunction
     }
 
     await room.save();
-    res.json(room);
+    res.json(publicRoom(room, "owner"));
   } catch (err) {
     next(err);
   }
