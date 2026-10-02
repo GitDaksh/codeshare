@@ -6,6 +6,7 @@ import { Profile } from "../models/Profile";
 import { canEdit, openRoom, roleOf, type RoomRole } from "../lib/access";
 import { limiter, type Limiter } from "../lib/rateLimit";
 import { awarenessShared, closeShared, flushShared, helloShared, leaveShared, updateShared } from "./collab";
+import { registerInterviewEvents, sendInterviewOnJoin, setInterviewServer } from "./interview";
 
 type PresenceUser = {
   socketId: string;
@@ -254,6 +255,7 @@ export function removeLive(roomId: string, userId: string) {
 
 export function setupSocket(io: Server) {
   server = io;
+  setInterviewServer(io);
   io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
 
@@ -276,6 +278,7 @@ export function setupSocket(io: Server) {
 
   io.on("connection", (socket: Socket) => {
     console.log(`Socket connected: ${socket.id} (user ${socket.data.userId})`);
+    registerInterviewEvents(socket);
 
     socket.on("room:join", async (data: unknown) => {
       if (!allowed(socket, "room:join")) return;
@@ -330,6 +333,8 @@ export function setupSocket(io: Server) {
         const requests = pendingRequests(roomId);
         if (requests.length) socket.emit("access:requests", { roomId, requests });
       }
+      // Catch up on an interview in progress.
+      void sendInterviewOnJoin(socket, roomId);
       console.log(`User ${socket.data.userId} joined room ${roomId}`);
     });
 

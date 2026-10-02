@@ -4,7 +4,7 @@ import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { ArrowLeft, ArrowRight, Check, FileQuestion, FlaskConical, Loader2, Play, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, FileQuestion, FlaskConical, Loader2, Play, Timer, Users } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { useToast } from "@/components/ToastProvider";
 import { DifficultyBadge } from "@/components/DifficultyBadge";
@@ -44,6 +44,9 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+// How long a solo mock interview lasts, by difficulty.
+const MOCK_MINUTES: Record<string, number> = { Easy: 20, Medium: 35, Hard: 45 };
+
 export default function PracticeProblemPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const problem = getProblem(slug);
@@ -57,6 +60,7 @@ export default function PracticeProblemPage({ params }: { params: Promise<{ slug
   const [solved, setSolved] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [creating, setCreating] = useState(false);
+  const [mocking, setMocking] = useState(false);
 
   useEffect(() => {
     document.title = problem ? `${problem.title} — Practice — CodeShare` : "Problem not found — CodeShare";
@@ -114,6 +118,36 @@ export default function PracticeProblemPage({ params }: { params: Promise<{ slug
     } catch {
       toast("Couldn't start the problem. Please try again.", "error");
       setCreating(false);
+    }
+  }
+
+  // A solo mock interview: a room for this problem, with the clock running.
+  async function handleMockInterview() {
+    if (!problem || creating || mocking) return;
+
+    if (!isSignedIn) {
+      router.push(`/sign-in?redirect_url=${encodeURIComponent(`/practice/${problem.slug}`)}`);
+      return;
+    }
+
+    setMocking(true);
+    try {
+      const room = await api.post<Room>("/api/rooms", {
+        name: problem.title,
+        language,
+        code: getProblemStarterCode(problem, language) ?? "",
+        problemSlug: problem.slug,
+      });
+      await api.post("/api/interviews", {
+        roomId: room.data._id,
+        mode: "solo",
+        problemSlug: problem.slug,
+        durationMin: MOCK_MINUTES[problem.difficulty] ?? 35,
+      });
+      router.push(`/room/${room.data._id}`);
+    } catch {
+      toast("Couldn't start the mock interview. Please try again.", "error");
+      setMocking(false);
     }
   }
 
@@ -217,6 +251,16 @@ export default function PracticeProblemPage({ params }: { params: Promise<{ slug
               >
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 {creating ? "Opening room…" : isLoaded && !isSignedIn ? "Sign in to start" : "Start solving"}
+              </button>
+              <button
+                type="button"
+                onClick={handleMockInterview}
+                disabled={!isLoaded || creating || mocking}
+                title="A timed mock interview: hints, live tests, and a report at the end"
+                className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-ink-700 bg-ink-950/40 text-sm font-medium text-ink-200 transition-colors hover:border-ink-500 hover:text-ink-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {mocking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Timer className="h-4 w-4" />}
+                {mocking ? "Starting…" : `Mock interview · ${MOCK_MINUTES[problem.difficulty] ?? 35} min`}
               </button>
 
               <ul className="mt-4 space-y-2 text-xs text-ink-400">

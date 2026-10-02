@@ -14,6 +14,7 @@ import { AvatarIcon } from "@/components/AvatarIcon";
 import { RoomCard } from "@/components/RoomCard";
 import { DashboardSkeleton, RoomCardSkeleton } from "@/components/DashboardSkeleton";
 import { DashboardSummary } from "@/components/DashboardSummary";
+import { InterviewList } from "@/components/interview/InterviewList";
 import { getStarterCode, LANGUAGES } from "@/lib/languages";
 import type { ProfileStats } from "@/types/profile";
 import type { Room } from "@/types/room";
@@ -319,6 +320,9 @@ export default function DashboardPage() {
                 </div>
               </section>
             )}
+
+            {/* ---------- Interviews ---------- */}
+            <InterviewList />
 
             {/* ---------- Your rooms ---------- */}
             <section className="mt-10">

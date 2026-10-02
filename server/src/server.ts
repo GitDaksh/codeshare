@@ -9,6 +9,7 @@ import { clerkMiddleware } from "@clerk/express";
 import { connectDB } from "./config/db";
 import roomRoutes from "./routes/roomRoutes";
 import profileRoutes from "./routes/profileRoutes";
+import interviewRoutes from "./routes/interviewRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import { setupSocket, flushAllPendingCodeSaves } from "./sockets";
 import { prepareRooms } from "./lib/access";
@@ -48,6 +49,7 @@ app.get("/", (_req, res) => {
 
 app.use("/api/rooms", roomRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/interviews", interviewRoutes);
 
 app.use(errorHandler);
 
