@@ -1,0 +1,218 @@
+"use client";
+
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Clock, Lightbulb, PartyPopper, Plus, Square, X } from "lucide-react";
+import {
+  countdownAt,
+  elapsedAt,
+  formatClock,
+  latestTests,
+  remainingAt,
+  useClock,
+  type InterviewState,
+} from "@/lib/interview";
+
+type InterviewOverlaysProps = {
+  interview: InterviewState;
+  skew: number;
+  me: string | null;
+  title: string;
+  // The text of each hint given so far, in order.
+  hints: string[];
+  onControl: (action: "extend" | "end") => void;
+};
+
+// How long the new-hint card and the time's-up banner stay up.
+const HINT_CARD_MS = 9000;
+const TIME_UP_MS = 12000;
+
+// The moments everyone should notice: the 3-2-1 start, a new hint for the
+// candidate, time running out, and the end.
+export function InterviewOverlays({ interview, skew, me, title, hints, onControl }: InterviewOverlaysProps) {
+  const now = useClock() + skew;
+  const [dismissedHint, setDismissedHint] = useState(0);
+  const [dismissedEnd, setDismissedEnd] = useState<string | null>(null);
+
+  const isInterviewer = me === interview.interviewer.userId;
+  const isCandidate = me === interview.candidate.userId;
+  const ended = interview.status === "ended";
+  const countdown = ended ? 0 : countdownAt(interview, now);
+  const sinceStart = now - Date.parse(interview.startedAt);
+  const elapsed = elapsedAt(interview, now);
+  const remaining = remainingAt(interview, now);
+
+  // The newest hint, shown to the candidate for a few seconds.
+  const lastHint = [...interview.events].reverse().find((event) => event.type === "hint");
+  const hintIndex = interview.hintsGiven;
+  const showHint =
+    !!lastHint &&
+    isCandidate &&
+    (!isInterviewer || interview.mode === "solo") &&
+    !ended &&
+    hintIndex > dismissedHint &&
+    elapsed - lastHint.at < HINT_CARD_MS &&
+    !!hints[hintIndex - 1];
+
+  const timeUp = !ended && interview.status === "running" && remaining <= 0 && -remaining < TIME_UP_MS;
+  const showEnd = ended && dismissedEnd !== interview.id && !isInterviewer;
+  const tests = latestTests(interview.events);
+
+  return (
+    <>
+      {/* 3, 2, 1, go */}
+      <AnimatePresence>
+        {(countdown > 0 || (!ended && sinceStart >= 0 && sinceStart < 800)) && (
+          <motion.div
+            key="countdown"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.4 } }}
+            className="fixed inset-0 z-[60] grid place-items-center bg-ink-950/80 backdrop-blur-md"
+          >
+            <div className="flex flex-col items-center gap-6 text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-ink-400">
+                {interview.mode === "solo" ? "Mock interview" : "Interview"} starting
+              </p>
+              <AnimatePresence mode="popLayout">
+                <motion.span
+                  key={countdown > 0 ? Math.ceil(countdown / 1000) : "go"}
+                  initial={{ scale: 0.4, opacity: 0, filter: "blur(12px)" }}
+                  animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
+                  exit={{ scale: 1.8, opacity: 0, filter: "blur(8px)" }}
+                  transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                  className="font-[family-name:var(--font-display)] text-[9rem] font-bold leading-none text-ink-100 drop-shadow-[0_0_40px_rgba(255,255,255,0.35)]"
+                >
+                  {countdown > 0 ? Math.min(3, Math.ceil(countdown / 1000)) : "Go"}
+                </motion.span>
+              </AnimatePresence>
+              <p className="max-w-sm text-sm text-ink-400">
+                {countdown > 0 ? `${formatClock(interview.durationMs)} on the clock. Think out loud.` : title}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* A new hint, for the candidate */}
+      <AnimatePresence>
+        {showHint && (
+          <motion.div
+            key={`hint-${hintIndex}`}
+            initial={{ opacity: 0, y: -16, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -12, scale: 0.98 }}
+            transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
+            className="fixed right-4 top-28 z-50 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-ink-600 bg-ink-900/95 p-4 shadow-[0_20px_60px_-20px_rgba(0,0,0,0.9),0_0_30px_-10px_rgba(255,255,255,0.25)] backdrop-blur"
+            role="status"
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-300">
+                <Lightbulb className="h-4 w-4 text-ink-100" />
+                Hint {hintIndex}
+              </span>
+              <button
+                type="button"
+                onClick={() => setDismissedHint(hintIndex)}
+                aria-label="Close"
+                className="rounded-md p-1 text-ink-500 transition-colors hover:text-ink-100"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <p className="text-sm leading-relaxed text-ink-100">{hints[hintIndex - 1]}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Time's up */}
+      <AnimatePresence>
+        {timeUp && (
+          <motion.div
+            key="time-up"
+            initial={{ opacity: 0, y: -24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            className="fixed left-1/2 top-20 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-ink-500 bg-ink-100 py-1.5 pl-4 pr-1.5 text-ink-950 shadow-[0_0_40px_-6px_rgba(255,255,255,0.6)]"
+            role="alert"
+          >
+            <Clock className="h-4 w-4" />
+            <span className="text-sm font-semibold">Time&apos;s up</span>
+            {isInterviewer ? (
+              <span className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => onControl("extend")}
+                  className="flex items-center gap-1 rounded-full bg-ink-950/10 px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-ink-950/20"
+                >
+                  <Plus className="h-3 w-3" />5 min
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onControl("end")}
+                  className="flex items-center gap-1 rounded-full bg-ink-950 px-2.5 py-1 text-xs font-semibold text-ink-100 transition-colors hover:bg-ink-800"
+                >
+                  <Square className="h-3 w-3" />
+                  End
+                </button>
+              </span>
+            ) : (
+              <span className="pr-2.5 text-xs text-ink-700">Wrap up your thoughts</span>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* The end, for the candidate and anyone watching */}
+      <AnimatePresence>
+        {showEnd && (
+          <motion.div
+            key="ended"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[55] grid place-items-center bg-ink-950/70 px-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ y: 24, scale: 0.96 }}
+              animate={{ y: 0, scale: 1 }}
+              transition={{ type: "spring", bounce: 0.3, duration: 0.6 }}
+              className="w-full max-w-sm rounded-2xl border border-ink-700 bg-ink-900 p-6 text-center shadow-2xl"
+            >
+              <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-ink-700 bg-ink-950">
+                <PartyPopper className="h-5 w-5 text-ink-100" />
+              </div>
+              <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-ink-100">
+                {isCandidate ? "Interview complete" : "The interview is over"}
+              </p>
+              <p className="mt-1.5 text-sm text-ink-400">
+                {isCandidate
+                  ? `Nice work${interview.candidate.name ? `, ${interview.candidate.name}` : ""}. Your interviewer is writing feedback; the report will show up on your dashboard.`
+                  : `${interview.interviewer.name} is writing up the feedback.`}
+              </p>
+              <div className="mt-5 grid grid-cols-3 gap-2 text-left">
+                {[
+                  ["Time", formatClock(elapsed)],
+                  ["Hints", String(interview.hintsGiven)],
+                  ["Tests", tests ? `${tests.passed}/${tests.total}` : "–"],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl border border-ink-800 bg-ink-950/60 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wider text-ink-500">{label}</p>
+                    <p className="font-[family-name:var(--font-mono)] text-sm tabular-nums text-ink-100">{value}</p>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setDismissedEnd(interview.id)}
+                className="mt-5 h-9 w-full rounded-full bg-ink-100 text-sm font-semibold text-ink-950 transition-colors hover:bg-white"
+              >
+                Back to the room
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}

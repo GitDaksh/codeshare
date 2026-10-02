@@ -132,6 +132,21 @@ function textAdded(update: Uint8Array): number | null {
   return added;
 }
 
+// The room's code right now: the live document while anyone's in the room,
+// otherwise what was last saved.
+export async function currentCode(roomId: string): Promise<string> {
+  const live = shared.get(roomId);
+  if (live) {
+    try {
+      return (await live).doc.getText("code").toString();
+    } catch {
+      // Fall back to the saved copy.
+    }
+  }
+  const room = await Room.findById(roomId, { code: 1 }).lean();
+  return room?.code ?? "";
+}
+
 // Someone (re)joined: send what they're missing, plus everyone's cursors.
 // They reply with what the server is missing (edits made while offline).
 export async function helloShared(socket: Socket, roomId: string, stateVector: unknown): Promise<void> {

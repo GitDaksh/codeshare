@@ -44,6 +44,8 @@ import {
   BookOpen,
   FlaskConical,
   ScanEye,
+  ClipboardList,
+  Timer,
   type LucideIcon,
 } from "lucide-react";
 import { useApi } from "@/lib/api";
@@ -67,6 +69,12 @@ import { ShareDialog } from "@/components/ShareDialog";
 import { openShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ProblemPanel } from "@/components/ProblemPanel";
 import { RoomLens } from "@/components/lens/RoomLens";
+import { InterviewBar } from "@/components/interview/InterviewBar";
+import { InterviewOverlays } from "@/components/interview/InterviewOverlays";
+import { InterviewSetup, type InterviewSetupChoice } from "@/components/interview/InterviewSetup";
+import { InterviewerPanel } from "@/components/interview/InterviewerPanel";
+import { GivenHints, QuestionPanel } from "@/components/interview/QuestionPanel";
+import { Scorecard, type ScorecardChoice } from "@/components/interview/Scorecard";
 import { getStarterCode, LANGUAGES } from "@/lib/languages";
 import { formatCode, isFormattable } from "@/lib/format";
 import {
@@ -89,6 +97,8 @@ import { EDITOR_THEMES } from "@/lib/editorTheme";
 import { useCollab } from "@/lib/collab";
 import { useComplexity } from "@/lib/useComplexity";
 import { useRoomLens } from "@/lib/useRoomLens";
+import { useInterview, type InterviewState } from "@/lib/interview";
+import { interviewKit } from "@/lib/interviewKits";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import type { AccessRequest, Room, RoomPerson, RoomRole } from "@/types/room";
 import type { ChatMessage } from "@/types/chat";
@@ -119,13 +129,14 @@ const FENCE_LANGUAGES: Record<string, string> = {
   java: "java",
 };
 
-type SidebarTab = "problem" | "chat" | "online";
+type SidebarTab = "problem" | "chat" | "online" | "interview";
 type MobilePanel = "code" | SidebarTab;
 
 const SIDEBAR_TAB_LABELS: Record<SidebarTab, string> = {
   problem: "Problem",
   chat: "Chat",
   online: "People",
+  interview: "Interview",
 };
 
 // The Problem tab only shows up in rooms started from a Practice problem.
@@ -134,6 +145,7 @@ const MOBILE_TABS: { id: MobilePanel; label: string; icon: LucideIcon }[] = [
   { id: "problem", label: "Problem", icon: BookOpen },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "online", label: "People", icon: Users },
+  { id: "interview", label: "Interview", icon: ClipboardList },
 ];
 
 const STATUS_META: Record<string, { label: string; dot: string; live: boolean }> = {
@@ -232,8 +244,8 @@ export default function RoomPage({
   // Tells the Big-O meter the code changed (set once the meter exists).
   const meterChangedRef = useRef<() => void>(() => {});
 
-  // Practice: the problem this room was started from (if any) and test state.
-  const problem = useMemo(() => (room?.problemSlug ? getProblem(room.problemSlug) : null), [room?.problemSlug]);
+  // Practice: test state (the problem itself is decided below, since an
+  // interview can set it).
   const [testReport, setTestReport] = useState<TestRunReport | null>(null);
   const [testsRunning, setTestsRunning] = useState(false);
   const testsRunningRef = useRef(false);
@@ -374,6 +386,34 @@ export default function RoomPage({
       ),
   }, invite);
 
+  // Interview mode: a timed mock interview in this room (lib/interview.ts).
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [scorecardOpen, setScorecardOpen] = useState(false);
+  const iv = useInterview(socket, id, {
+    // The interviewer lands on their panel; everyone else on the question.
+    onNew: (state) => {
+      setActiveTab(state.interviewer.userId === currentUserId && state.mode === "live" ? "interview" : "problem");
+      setMobilePanel("code");
+      setTestReport(null);
+    },
+    onEnded: (state) => {
+      if (state.interviewer.userId === currentUserId) setScorecardOpen(true);
+    },
+  });
+  const interview = iv.interview;
+  const interviewActive = !!interview && interview.status !== "ended";
+  const isInterviewer = !!interview && interview.interviewer.userId === currentUserId;
+  const isInterviewCandidate = !!interview && interview.candidate.userId === currentUserId;
+  const showInterviewTab = !!interview && isInterviewer && interview.mode === "live";
+
+  // The question: the interview's Practice problem while there's an
+  // interview, otherwise the room's own (in Practice rooms).
+  const problemSlug = interview ? interview.problemSlug : (room?.problemSlug ?? null);
+  const problem = useMemo(() => (problemSlug ? getProblem(problemSlug) : null), [problemSlug]);
+  const kit = useMemo(() => (interview?.problemSlug && problem ? interviewKit(problem) : null), [interview?.problemSlug, problem]);
+  // The hints in order: the kit's ladder, or the interviewer's own.
+  const interviewHints = interview ? (interview.problemSlug ? (kit?.hints ?? []) : interview.customHints) : [];
+
   // Shared editing: the room's document, kept in step over the socket (Yjs).
   const collab = useCollab(socket, id, () =>
     toast("That edit would make the code longer than 100,000 characters, so it wasn't saved.", "error")
@@ -403,6 +443,15 @@ export default function RoomPage({
   useEffect(() => {
     meterChangedRef.current = meter.notifyChange;
   });
+
+  // The candidate's Big-O readings go into the interview's record.
+  const meterResult = meter.result;
+  const meterStale = meter.stale;
+  const reportComplexity = iv.reportComplexity;
+  useEffect(() => {
+    if (!interviewActive || !isInterviewCandidate || meterStale || meterResult?.status !== "ok") return;
+    reportComplexity(meterResult.time.label, meterResult.space?.label ?? null);
+  }, [interviewActive, isInterviewCandidate, meterStale, meterResult, reportComplexity]);
 
   // A room that's still empty (made before rooms started with starter code)
   // gets it once, from its owner's browser only, so it's never added twice.
@@ -665,6 +714,45 @@ export default function RoomPage({
     }
   }
 
+  // The owner starts an interview from the setup dialog.
+  async function handleStartInterview(choice: InterviewSetupChoice) {
+    let started: InterviewState;
+    try {
+      const res = await api.post<InterviewState>("/api/interviews", {
+        roomId: id,
+        mode: choice.mode,
+        candidateId: choice.candidateId,
+        problemSlug: choice.problemSlug,
+        customTitle: choice.customTitle,
+        customPrompt: choice.customPrompt,
+        durationMin: choice.durationMin,
+      });
+      started = res.data;
+    } catch (err) {
+      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      throw new Error(message ?? "Couldn't start the interview.");
+    }
+    setSetupOpen(false);
+    iv.adopt(started);
+    // A clean editor: the problem's starter code (or nothing), for everyone.
+    if (choice.cleanStart) {
+      const chosen = choice.problemSlug ? getProblem(choice.problemSlug) : null;
+      codeEditorRef.current?.setValue((chosen ? getProblemStarterCode(chosen, language) : null) ?? "");
+    }
+  }
+
+  async function handleSaveScorecard(choice: ScorecardChoice) {
+    if (!interview) return;
+    try {
+      await api.post(`/api/interviews/${interview.id}/scorecard`, choice);
+    } catch (err) {
+      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      throw new Error(message ?? "Couldn't save the scorecard.");
+    }
+    setScorecardOpen(false);
+    router.push(`/interviews/${interview.id}`);
+  }
+
   function handleCopyCode() {
     const code = codeEditorRef.current?.getValue() ?? "";
     navigator.clipboard.writeText(code);
@@ -843,6 +931,7 @@ export default function RoomPage({
         compare: testedProblem.compare ?? "exact",
       });
       setTestReport(report);
+      if (interviewActive && isInterviewCandidate) iv.reportTests(report.passed, report.total);
       // Everyone else in the room sees a plain-text summary in their output panel.
       sendRunResult(runLanguage, { output: report.summary, error: null, durationMs: report.durationMs });
 
@@ -956,7 +1045,12 @@ export default function RoomPage({
       ]
     : [];
 
-  const sidebarTabs: SidebarTab[] = problem ? ["problem", "chat", "online"] : ["chat", "online"];
+  const sidebarTabs: SidebarTab[] = [
+    ...(problem || interview?.custom ? (["problem"] as const) : []),
+    "chat",
+    "online",
+    ...(showInterviewTab ? (["interview"] as const) : []),
+  ];
 
   const commands: Command[] = [
     {
@@ -1021,6 +1115,13 @@ export default function RoomPage({
       icon: LinkIcon,
       action: () => setShareOpen(true),
       disabled: !canInvite,
+    },
+    {
+      id: "start-interview",
+      label: "Start an interview",
+      icon: Timer,
+      action: () => setSetupOpen(true),
+      disabled: !isOwner || interviewActive,
     },
     ...desktopOnlyCommands,
     {
@@ -1185,6 +1286,18 @@ export default function RoomPage({
             </kbd>
           </button>
 
+          {isOwner && !interviewActive && (
+            <button
+              type="button"
+              onClick={() => setSetupOpen(true)}
+              title="Start a timed mock interview"
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-2.5 text-xs font-medium text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100"
+            >
+              <Timer className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Interview</span>
+            </button>
+          )}
+
           <LanguageDropdown
             value={language}
             onChange={handleLanguageChange}
@@ -1295,6 +1408,19 @@ export default function RoomPage({
           </button>
         </div>
       </header>
+
+      {interview && (
+        <InterviewBar
+          interview={interview}
+          skew={iv.skew}
+          me={currentUserId ?? null}
+          title={interview.custom?.title ?? problem?.title ?? "Interview"}
+          hintCount={kit?.hints.length ?? 3}
+          onControl={iv.control}
+          onDone={iv.done}
+          onScorecard={() => setScorecardOpen(true)}
+        />
+      )}
 
       {/* ---------- Body: floating panels on desktop, full-bleed on phones ---------- */}
       <div className="flex min-h-0 flex-1 md:px-2 md:pb-2">
@@ -1416,15 +1542,33 @@ export default function RoomPage({
                 </div>
               </div>
 
-              {activeTab === "problem" && problem ? (
-                <ProblemPanel
-                  problem={problem}
-                  language={language}
-                  report={testReport}
-                  running={testsRunning}
-                  solved={solvedSlugs.has(problem.slug)}
-                  onRunTests={handleRunTests}
-                  onVisualizeTest={lensReady ? handleVisualizeTest : undefined}
+              {activeTab === "problem" && interview?.custom ? (
+                <QuestionPanel interview={interview} hints={interviewHints} />
+              ) : activeTab === "problem" && problem ? (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  {interview && interview.problemSlug === problem.slug && interview.hintsGiven > 0 && (
+                    <div className="max-h-56 shrink-0 overflow-y-auto border-b border-ink-800 px-4 py-3">
+                      <GivenHints interview={interview} hints={interviewHints} />
+                    </div>
+                  )}
+                  <ProblemPanel
+                    problem={problem}
+                    language={language}
+                    report={testReport}
+                    running={testsRunning}
+                    solved={solvedSlugs.has(problem.slug)}
+                    onRunTests={handleRunTests}
+                    onVisualizeTest={lensReady ? handleVisualizeTest : undefined}
+                  />
+                </div>
+              ) : activeTab === "interview" && interview && isInterviewer ? (
+                <InterviewerPanel
+                  interview={interview}
+                  notes={iv.notes}
+                  kit={kit}
+                  candidateOnline={onlineUsers.some((user) => user.userId === interview.candidate.userId)}
+                  onGiveHint={(text) => iv.control("hint", text ? { text } : {})}
+                  onAddNote={iv.addNote}
                 />
               ) : activeTab === "online" ? (
                 <div className="flex min-h-0 flex-1 flex-col">
@@ -1483,7 +1627,10 @@ export default function RoomPage({
 
       {/* ---------- Phones: bottom tab bar ---------- */}
       <nav className="flex shrink-0 gap-1 border-t border-ink-800 bg-ink-950 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1.5 md:hidden">
-        {MOBILE_TABS.filter((tab) => tab.id !== "problem" || !!problem).map(({ id: tabId, label, icon: Icon }) => {
+        {MOBILE_TABS.filter(
+          (tab) =>
+            (tab.id !== "problem" || !!problem || !!interview?.custom) && (tab.id !== "interview" || showInterviewTab)
+        ).map(({ id: tabId, label, icon: Icon }) => {
           const active = mobilePanel === tabId;
           return (
             <button
@@ -1534,6 +1681,35 @@ export default function RoomPage({
         canReset={isOwner}
         onReset={handleResetInvite}
       />
+      <InterviewSetup
+        open={setupOpen}
+        onClose={() => setSetupOpen(false)}
+        me={currentUserId ?? null}
+        language={language}
+        people={people ?? []}
+        onlineIds={new Set(onlineUsers.map((user) => user.userId))}
+        editLink={room.invites ? `${typeof window !== "undefined" ? window.location.origin : ""}/room/${room._id}?invite=${room.invites.edit}` : null}
+        onStart={handleStartInterview}
+      />
+      {interview && (
+        <>
+          <InterviewOverlays
+            interview={interview}
+            skew={iv.skew}
+            me={currentUserId ?? null}
+            title={interview.custom?.title ?? problem?.title ?? "Interview"}
+            hints={interviewHints}
+            onControl={(action) => iv.control(action)}
+          />
+          <Scorecard
+            open={scorecardOpen && isInterviewer && interview.status === "ended"}
+            interview={interview}
+            target={kit?.time ?? null}
+            onClose={() => setScorecardOpen(false)}
+            onSave={handleSaveScorecard}
+          />
+        </>
+      )}
     </main>
   );
 }
