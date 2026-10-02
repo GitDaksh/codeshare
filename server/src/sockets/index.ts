@@ -3,7 +3,7 @@ import { verifyToken } from "@clerk/backend";
 import { Message } from "../models/Message";
 import { Room } from "../models/Room";
 import { Profile } from "../models/Profile";
-import { openRoom } from "../lib/access";
+import { canEdit, openRoom, roleOf, type RoomRole } from "../lib/access";
 import { limiter, type Limiter } from "../lib/rateLimit";
 import { awarenessShared, closeShared, flushShared, helloShared, leaveShared, updateShared } from "./collab";
 
@@ -12,6 +12,7 @@ type PresenceUser = {
   userId: string;
   name: string;
   avatarId: string;
+  role: RoomRole;
 };
 
 const DEFAULT_AVATAR_ID = "codeshare";
@@ -40,13 +41,63 @@ const EVENT_LIMITS: Record<string, Limiter> = {
   "lens:step": limiter(60, 30),
   "lens:drive": limiter(10, 2),
   "lens:stop": limiter(10, 2),
+  // Asking for edit access: a few times, then once every 30 seconds.
+  "access:request": limiter(3, 1 / 30),
+  "access:dismiss": limiter(20, 2),
 };
 
 function allowed(socket: Socket, event: string): boolean {
   return EVENT_LIMITS[event].take(socket.data.userId as string);
 }
 
+// Whether this connection may change the room: edit the code, switch the
+// language, share runs, or drive Lens. Viewers can watch, follow and chat.
+function mayEdit(socket: Socket): boolean {
+  return canEdit(socket.data.role as RoomRole | undefined);
+}
+
 const roomPresence = new Map<string, Map<string, PresenceUser>>();
+let server: Server | null = null;
+
+// ---------- Asking for edit access ----------
+// A viewer asks the owner to let them edit. Requests wait in memory (for an
+// hour at most), so an owner who isn't in the room sees them when they come
+// back. Granting one is just changing the person's role (peopleController.ts).
+
+type AccessRequest = { userId: string; name: string; avatarId: string; at: number };
+
+const ACCESS_REQUEST_TTL_MS = 60 * 60 * 1000;
+const MAX_REQUESTS_PER_ROOM = 50;
+const accessRequests = new Map<string, Map<string, AccessRequest>>();
+
+// The room's requests that haven't expired.
+function pendingRequests(roomId: string): AccessRequest[] {
+  const requests = accessRequests.get(roomId);
+  if (!requests) return [];
+  const now = Date.now();
+  for (const [userId, request] of requests) {
+    if (now - request.at > ACCESS_REQUEST_TTL_MS) requests.delete(userId);
+  }
+  if (requests.size === 0) accessRequests.delete(roomId);
+  return [...requests.values()];
+}
+
+// Tells the room's owner (every tab they have open) who's waiting.
+function sendRequestsToOwner(io: Server, roomId: string) {
+  const requests = pendingRequests(roomId);
+  for (const socket of io.of("/").sockets.values()) {
+    if (socket.rooms.has(roomId) && socket.data.role === "owner") {
+      socket.emit("access:requests", { roomId, requests });
+    }
+  }
+}
+
+function clearRequest(io: Server, roomId: string, userId: string) {
+  const requests = accessRequests.get(roomId);
+  if (!requests?.delete(userId)) return;
+  if (requests.size === 0) accessRequests.delete(roomId);
+  sendRequestsToOwner(io, roomId);
+}
 
 // ---------- Lens: shared step-by-step visualizations ----------
 // The person who clicks Visualize records the run in their browser and
@@ -153,7 +204,56 @@ function removeFromRoom(io: Server, socket: Socket, roomId: string) {
   broadcastPresence(io, roomId);
 }
 
+// ---------- Changes made through the API (peopleController.ts calls these) ----------
+
+// Everyone in the room re-reads who's here (and, if they may invite, the
+// invite links).
+export function roomChanged(roomId: string) {
+  server?.to(roomId).emit("room:people", { roomId });
+}
+
+// Someone's role changed: it takes effect on their open connections at once.
+export function applyRoleLive(roomId: string, userId: string, role: RoomRole) {
+  const io = server;
+  if (!io) return;
+  for (const socket of io.of("/").sockets.values()) {
+    if (socket.data.userId !== userId || !socket.rooms.has(roomId)) continue;
+    socket.data.role = role;
+    const entry = roomPresence.get(roomId)?.get(socket.id);
+    if (entry) entry.role = role;
+    socket.emit("room:role", { roomId, role });
+  }
+  // A viewer can't drive Lens: free the wheel for everyone else.
+  const lens = lensSessions.get(roomId);
+  if (!canEdit(role) && lens?.driver?.userId === userId) {
+    lens.driver = null;
+    io.to(roomId).emit("lens:driver", { id: lens.id, driver: null, step: lens.step });
+  }
+  // A request to edit is answered once their role changes.
+  clearRequest(io, roomId, userId);
+  broadcastPresence(io, roomId);
+  roomChanged(roomId);
+}
+
+// Someone was removed from the room (or left it): their open connections are
+// taken out of it straight away.
+export function removeLive(roomId: string, userId: string) {
+  const io = server;
+  if (!io) return;
+  for (const socket of io.of("/").sockets.values()) {
+    if (socket.data.userId !== userId || !socket.rooms.has(roomId)) continue;
+    socket.emit("room:removed", { roomId });
+    socket.leave(roomId);
+    removeFromRoom(io, socket, roomId);
+    socket.data.roomId = undefined;
+    socket.data.role = undefined;
+  }
+  clearRequest(io, roomId, userId);
+  roomChanged(roomId);
+}
+
 export function setupSocket(io: Server) {
+  server = io;
   io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
 
@@ -190,8 +290,10 @@ export function setupSocket(io: Server) {
         return;
       }
 
+      const role = roleOf(room, socket.data.userId as string) ?? "viewer";
       socket.join(roomId);
       socket.data.roomId = roomId;
+      socket.data.role = role;
 
       try {
         const profile = await Profile.findOne({ clerkUserId: socket.data.userId });
@@ -212,6 +314,7 @@ export function setupSocket(io: Server) {
         userId: socket.data.userId,
         name: socket.data.userName,
         avatarId: socket.data.userAvatarId,
+        role,
       });
 
       broadcastPresence(io, roomId);
@@ -221,7 +324,12 @@ export function setupSocket(io: Server) {
       if (lens) socket.emit("lens:session", lensSessionPayload(lens, false));
 
       // The browser can now sync the shared document (collab:hello).
-      socket.emit("room:joined", { roomId });
+      socket.emit("room:joined", { roomId, role });
+      // The owner sees who asked to edit while they were away.
+      if (role === "owner") {
+        const requests = pendingRequests(roomId);
+        if (requests.length) socket.emit("access:requests", { roomId, requests });
+      }
       console.log(`User ${socket.data.userId} joined room ${roomId}`);
     });
 
@@ -240,6 +348,13 @@ export function setupSocket(io: Server) {
       // to sync again (their edits are sent again, nothing is lost).
       if (!allowed(socket, "collab:update")) {
         socket.emit("collab:rejected", { roomId, reason: "busy" });
+        return;
+      }
+      // Viewers can't edit. Their editor is read-only, so this only happens
+      // when someone is made a viewer mid-keystroke (or a script tries it):
+      // they go back to the shared version.
+      if (!mayEdit(socket)) {
+        socket.emit("collab:rejected", { roomId, reason: "view-only" });
         return;
       }
       const result = await updateShared(socket, roomId, update).catch(() => "ignored" as const);
@@ -325,11 +440,43 @@ export function setupSocket(io: Server) {
       });
     });
 
+    // A viewer asks the owner for edit access.
+    socket.on("access:request", (data: unknown) => {
+      if (!allowed(socket, "access:request")) return;
+      const { roomId } = payloadOf<{ roomId: string }>(data);
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId) || socket.data.role !== "viewer") return;
+
+      // Check the room's limit first (this also clears expired requests).
+      const userId = socket.data.userId as string;
+      const waiting = pendingRequests(roomId);
+      if (!waiting.some((request) => request.userId === userId) && waiting.length >= MAX_REQUESTS_PER_ROOM) return;
+      let requests = accessRequests.get(roomId);
+      if (!requests) {
+        requests = new Map();
+        accessRequests.set(roomId, requests);
+      }
+      const { name, avatarId } = runnerInfo(socket);
+      requests.set(userId, { userId, name, avatarId, at: Date.now() });
+
+      sendRequestsToOwner(io, roomId);
+      const ownerHere = Array.from(roomPresence.get(roomId)?.values() ?? []).some((user) => user.role === "owner");
+      socket.emit("access:requested", { roomId, ownerHere });
+    });
+
+    // The owner turns a request down (it just disappears; nobody is told).
+    socket.on("access:dismiss", (data: unknown) => {
+      if (!allowed(socket, "access:dismiss")) return;
+      const { roomId, userId } = payloadOf<{ roomId: string; userId: string }>(data);
+      if (typeof roomId !== "string" || typeof userId !== "string") return;
+      if (!socket.rooms.has(roomId) || socket.data.role !== "owner") return;
+      clearRequest(io, roomId, userId);
+    });
+
     socket.on("language:change", async (data: unknown) => {
       if (!allowed(socket, "language:change")) return;
       const { roomId, language } = payloadOf<{ roomId: string; language: string }>(data);
       if (typeof roomId !== "string" || typeof language !== "string") return;
-      if (!socket.rooms.has(roomId) || !ALLOWED_LANGUAGES.has(language)) return;
+      if (!socket.rooms.has(roomId) || !ALLOWED_LANGUAGES.has(language) || !mayEdit(socket)) return;
 
       socket.to(roomId).emit("language:update", {
         language,
@@ -347,7 +494,7 @@ export function setupSocket(io: Server) {
     socket.on("run:start", (data: unknown) => {
       if (!allowed(socket, "run:start")) return;
       const { roomId, language } = payloadOf<{ roomId: string; language: string }>(data);
-      if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !mayEdit(socket)) return;
 
       socket.to(roomId).emit("run:start", {
         ...runnerInfo(socket),
@@ -364,7 +511,7 @@ export function setupSocket(io: Server) {
         error: string | null;
         durationMs: number;
       }>(data);
-      if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !mayEdit(socket)) return;
 
       socket.to(roomId).emit("run:result", {
         ...runnerInfo(socket),
@@ -384,7 +531,7 @@ export function setupSocket(io: Server) {
         code: string;
         trace: unknown;
       }>(data);
-      if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !mayEdit(socket)) return;
       if (typeof id !== "string" || !LENS_ID.test(id)) return;
       if (typeof code !== "string" || code.length > LENS_MAX_CODE_CHARS) return;
       if (!Buffer.isBuffer(trace) || trace.length === 0 || trace.length > LENS_MAX_TRACE_BYTES) return;
@@ -418,7 +565,7 @@ export function setupSocket(io: Server) {
     socket.on("lens:step", (data: unknown) => {
       if (!allowed(socket, "lens:step")) return;
       const { roomId, id, step } = payloadOf<{ roomId: string; id: string; step: number }>(data);
-      if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !isLensStep(step)) return;
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !isLensStep(step) || !mayEdit(socket)) return;
       const session = currentLensSession(roomId, id);
       // Only the driver moves everyone.
       if (!session || session.driver?.userId !== socket.data.userId) return;
@@ -431,7 +578,7 @@ export function setupSocket(io: Server) {
     socket.on("lens:drive", (data: unknown) => {
       if (!allowed(socket, "lens:drive")) return;
       const { roomId, id, step } = payloadOf<{ roomId: string; id: string; step: number }>(data);
-      if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !isLensStep(step)) return;
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !isLensStep(step) || !mayEdit(socket)) return;
       const session = currentLensSession(roomId, id);
       if (!session) return;
 
@@ -444,9 +591,9 @@ export function setupSocket(io: Server) {
     socket.on("lens:stop", (data: unknown) => {
       if (!allowed(socket, "lens:stop")) return;
       const { roomId, id } = payloadOf<{ roomId: string; id: string }>(data);
-      if (typeof roomId !== "string" || !socket.rooms.has(roomId)) return;
+      if (typeof roomId !== "string" || !socket.rooms.has(roomId) || !mayEdit(socket)) return;
       const session = currentLensSession(roomId, id);
-      // The driver ends it (or anyone, once nobody is driving).
+      // The driver ends it (or any editor, once nobody is driving).
       if (!session || (session.driver && session.driver.userId !== socket.data.userId)) return;
 
       lensSessions.delete(roomId);

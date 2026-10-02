@@ -43,7 +43,7 @@ function SessionActions({ lens }: { lens: RoomLensState }) {
           Follow
         </button>
       )}
-      {session.shared && !lens.isDriver && (
+      {session.shared && !lens.isDriver && lens.canDrive && (
         <button type="button" onClick={lens.takeControl} className={ACTION} title="Drive the steps for everyone">
           <Hand className="h-3.5 w-3.5" aria-hidden="true" />
           <span className="hidden sm:inline">Take control</span>

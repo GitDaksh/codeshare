@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import type { OnlineUser, TypingEvent } from "@/types/presence";
 import type { ChatMessage, Reaction } from "@/types/chat";
+import type { AccessRequest, RoomRole } from "@/types/room";
 import type {
   LanguageUpdateEvent,
   LensDriverEvent,
@@ -33,6 +34,16 @@ export type SocketHandlers = {
   onLensStep?: (event: LensStepEvent) => void;
   onLensDriver?: (event: LensDriverEvent) => void;
   onLensStop?: (event: LensStopEvent) => void;
+  // The owner changed your role.
+  onRole?: (role: RoomRole) => void;
+  // The owner removed you from the room.
+  onRemoved?: () => void;
+  // Who's in the room (or its invite links) changed.
+  onPeople?: () => void;
+  // Owner: the viewers asking to edit.
+  onAccessRequests?: (requests: AccessRequest[]) => void;
+  // Viewer: your request was sent (and whether the owner is in the room).
+  onAccessRequested?: (ownerHere: boolean) => void;
 };
 
 // "invite" is the code from an invite link (/room/<id>?invite=<code>): the
@@ -125,6 +136,26 @@ export function useSocket(roomId: string, handlers: SocketHandlers, invite: stri
         handlersRef.current.onLensStop?.(event);
       });
 
+      socket.on("room:role", (event: { roomId: string; role: RoomRole }) => {
+        if (event.roomId === roomId) handlersRef.current.onRole?.(event.role);
+      });
+
+      socket.on("room:removed", (event: { roomId: string }) => {
+        if (event.roomId === roomId) handlersRef.current.onRemoved?.();
+      });
+
+      socket.on("room:people", (event: { roomId: string }) => {
+        if (event.roomId === roomId) handlersRef.current.onPeople?.();
+      });
+
+      socket.on("access:requests", (event: { roomId: string; requests: AccessRequest[] }) => {
+        if (event.roomId === roomId) handlersRef.current.onAccessRequests?.(event.requests ?? []);
+      });
+
+      socket.on("access:requested", (event: { roomId: string; ownerHere: boolean }) => {
+        if (event.roomId === roomId) handlersRef.current.onAccessRequested?.(!!event.ownerHere);
+      });
+
       socket.on("disconnect", () => setStatus("disconnected"));
       socket.on("connect_error", (err) => {
         console.error("Socket connection error:", err.message);
@@ -184,6 +215,14 @@ export function useSocket(roomId: string, handlers: SocketHandlers, invite: stri
     socketRef.current?.emit("lens:stop", { roomId, id });
   }
 
+  function sendAccessRequest() {
+    socketRef.current?.emit("access:request", { roomId });
+  }
+
+  function sendAccessDismiss(userId: string) {
+    socketRef.current?.emit("access:dismiss", { roomId, userId });
+  }
+
   return {
     status,
     onlineUsers,
@@ -198,5 +237,7 @@ export function useSocket(roomId: string, handlers: SocketHandlers, invite: stri
     sendLensStep,
     sendLensDrive,
     sendLensStop,
+    sendAccessRequest,
+    sendAccessDismiss,
   };
 }

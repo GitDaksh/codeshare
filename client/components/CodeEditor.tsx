@@ -43,6 +43,8 @@ type CodeEditorProps = {
   collab?: CollabSession | null;
   collabReady?: boolean;
   collabGeneration?: number;
+  // Viewers can read along (and follow people) but not type.
+  viewOnly?: boolean;
   // Follow mode: keep this teammate's cursor in view. Moving your own cursor
   // (typing, clicking, arrow keys) ends it.
   followUserId?: string | null;
@@ -196,6 +198,7 @@ export function CodeEditor({
   collab = null,
   collabReady = false,
   collabGeneration = 0,
+  viewOnly = false,
   followUserId = null,
   onStopFollowing,
   saveStatus,
@@ -585,7 +588,10 @@ export function CodeEditor({
           beforeMount={handleEditorWillMount}
           onMount={handleMount}
           options={{
-            readOnly: syncing,
+            readOnly: syncing || viewOnly,
+            readOnlyMessage: viewOnly
+              ? { value: "You can view this room but not edit it. Ask the owner for edit access." }
+              : undefined,
             fontFamily: "var(--font-mono)",
             fontSize,
             lineHeight: lineHeightFor(fontSize),
