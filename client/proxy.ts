@@ -5,6 +5,8 @@ const isProtectedRoute = createRouteMatcher([
   "/room(.*)",
   "/profile(.*)",
   "/onboarding(.*)",
+  // The Interviews page itself is public; making, joining and reading one isn't.
+  "/interviews/(.+)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

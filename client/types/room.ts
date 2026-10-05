@@ -10,6 +10,8 @@ export type Room = {
   code: string;
   // Set when the room was started from a Practice problem.
   problemSlug?: string | null;
+  // Set for a room made for an interview (see the Interviews page).
+  interviewId?: string | null;
   // Your role in this room (sent when you open it).
   role?: RoomRole | null;
   // The room's invite links, for people who may invite others (the owner and

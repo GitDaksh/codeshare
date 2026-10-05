@@ -2,13 +2,16 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
   Code2,
-  ExternalLink,
+  Eye,
+  EyeOff,
   Flag,
   FlaskConical,
   Gauge,
@@ -20,31 +23,42 @@ import {
   Play,
   Plus,
   Printer,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
   Square,
+  Trash2,
+  UserRound,
 } from "lucide-react";
 import { useApi } from "@/lib/api";
 import { AvatarIcon } from "@/components/AvatarIcon";
+import { DifficultyBadge } from "@/components/DifficultyBadge";
 import { Scorecard, type ScorecardChoice } from "@/components/interview/Scorecard";
+import { InterviewLinks } from "@/components/interview/InterviewLobby";
 import { getProblem } from "@/lib/problems";
 import { interviewKit } from "@/lib/interviewKits";
 import { LANGUAGES } from "@/lib/languages";
 import {
   INTERVIEW_CRITERIA,
-  INTERVIEW_PHASES,
   INTERVIEW_VERDICTS,
   RATING_LABELS,
+  describeMonitor,
   elapsedAt,
   formatClock,
+  formatDuration,
   latestComplexity,
   latestTests,
+  panelVerdict,
+  questionTitle,
   sameComplexity,
+  summarizeIntegrity,
   type InterviewEvent,
   type InterviewReport,
 } from "@/lib/interview";
 
-const EVENT_ICONS = {
+const EVENT_ICONS: Partial<Record<InterviewEvent["type"], typeof Play>> = {
   start: Play,
-  phase: ListChecks,
+  question: ListChecks,
   hint: Lightbulb,
   pause: Pause,
   resume: Play,
@@ -53,14 +67,14 @@ const EVENT_ICONS = {
   complexity: Gauge,
   done: Flag,
   end: Square,
-} as const;
+};
 
 function describe(event: InterviewEvent): string {
   switch (event.type) {
     case "start":
       return "Started";
-    case "phase":
-      return `Moved to ${INTERVIEW_PHASES.find((phase) => phase.id === event.data?.phase)?.label ?? "the next phase"}`;
+    case "question":
+      return `Moved to question ${(event.question ?? 0) + 1}`;
     case "hint":
       return `Hint ${event.data?.index ?? ""} given`;
     case "pause":
@@ -74,11 +88,13 @@ function describe(event: InterviewEvent): string {
         ? `All tests passed (${event.data?.passed}/${event.data?.total})`
         : `Tests: ${event.data?.passed}/${event.data?.total} passed`;
     case "complexity":
-      return `Big-O measured: ${event.data?.time}${event.data?.space ? ` time, ${event.data.space} space` : ""}`;
+      return `Big-O measured: ${event.data?.time}`;
     case "done":
       return "Said they were done";
     case "end":
       return "Ended";
+    default:
+      return "";
   }
 }
 
@@ -92,43 +108,42 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
   );
 }
 
-export default function InterviewReportPage({ params }: { params: Promise<{ id: string }> }) {
+const SECTION = "rounded-2xl border border-ink-800 bg-ink-900 p-5";
+const ACTION =
+  "inline-flex h-8 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-3 text-xs text-ink-200 transition-colors hover:border-ink-500 hover:text-ink-100";
+
+// One interview: its plan and links before it happens, its report after.
+export default function InterviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const api = useApi();
-  const { isLoaded, isSignedIn } = useAuth();
-  const [report, setReport] = useState<InterviewReport | null>(null);
+  const router = useRouter();
+  const created = useSearchParams().get("created") === "1";
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  const [data, setData] = useState<InterviewReport | null>(null);
   const [error, setError] = useState<{ status: number; message: string } | null>(null);
-  const [picked, setPicked] = useState<number | null>(null);
   const [scoring, setScoring] = useState(false);
+  const [tab, setTab] = useState(0);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showAnswer, setShowAnswer] = useState(false);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
     api
       .get<InterviewReport>(`/api/interviews/${id}`)
-      .then((res) => setReport(res.data))
+      .then((res) => {
+        setData(res.data);
+        document.title = `${res.data.title} — Interviews — CodeShare`;
+      })
       .catch((err) =>
-        setError({
-          status: err?.response?.status ?? 0,
-          message: err?.response?.data?.error ?? "Couldn't load this report.",
-        })
+        setError({ status: err?.response?.status ?? 0, message: err?.response?.data?.error ?? "Couldn't load this interview." })
       );
   }, [api, id, isLoaded, isSignedIn]);
 
-  const problemSlug = report?.problemSlug ?? null;
+  const question = data?.questions[tab] ?? null;
+  const problemSlug = question?.problemSlug ?? null;
   const problem = useMemo(() => (problemSlug ? getProblem(problemSlug) : null), [problemSlug]);
   const kit = useMemo(() => (problem ? interviewKit(problem) : null), [problem]);
-
-  if (isLoaded && !isSignedIn) {
-    return (
-      <main className="mx-auto flex min-h-[60dvh] max-w-md flex-col items-center justify-center px-4 text-center">
-        <Lock className="h-5 w-5 text-ink-400" />
-        <p className="mt-3 font-semibold text-ink-100">Sign in to see this report</p>
-        <Link href={`/sign-in?redirect_url=${encodeURIComponent(`/interviews/${id}`)}`} className="mt-4 text-sm text-ink-300 underline">
-          Sign in
-        </Link>
-      </main>
-    );
-  }
 
   if (error) {
     return (
@@ -136,23 +151,20 @@ export default function InterviewReportPage({ params }: { params: Promise<{ id: 
         <div className="grid h-12 w-12 place-items-center rounded-2xl border border-ink-700 bg-ink-900">
           <Lock className="h-5 w-5 text-ink-300" />
         </div>
-        <p className="mt-4 font-semibold text-ink-100">{error.status === 403 ? "Not shared yet" : "Report not found"}</p>
+        <p className="mt-4 font-semibold text-ink-100">{error.status === 403 ? "Not shared yet" : "Interview not found"}</p>
         <p className="mt-1.5 text-sm text-ink-400">
           {error.status === 403
-            ? "Your interviewer is still writing feedback. The report will appear on your dashboard once it's shared."
+            ? "Your interviewers are still writing feedback. The report will appear here once it's shared."
             : error.message}
         </p>
-        <Link
-          href="/dashboard"
-          className="mt-5 inline-flex h-9 items-center rounded-full border border-ink-700 bg-ink-900 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500"
-        >
-          Back to dashboard
+        <Link href="/interviews" className="mt-5 inline-flex h-9 items-center rounded-full border border-ink-700 bg-ink-900 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500">
+          Back to Interviews
         </Link>
       </main>
     );
   }
 
-  if (!report) {
+  if (!data) {
     return (
       <main className="grid min-h-[60dvh] place-items-center">
         <Loader2 className="h-5 w-5 animate-spin text-ink-400" />
@@ -160,23 +172,33 @@ export default function InterviewReportPage({ params }: { params: Promise<{ id: 
     );
   }
 
-  const title = report.custom?.title ?? problem?.title ?? "Interview";
-  const used = elapsedAt(report, Date.parse(report.endedAt ?? report.serverNow));
-  const allotted = report.durationMs + report.extraMs;
-  const tests = latestTests(report.events);
-  const complexity = latestComplexity(report.events);
-  const verdict = INTERVIEW_VERDICTS.find((option) => option.id === report.verdict);
-  const solo = report.mode === "solo";
-  const isInterviewer = report.viewer === "interviewer";
-  // The code at each test run (the final code is always shown on its own).
-  const snapshots = report.snapshots.filter((snapshot) => snapshot.label !== "Final");
+  const staff = data.viewer === "interviewer";
+  const organizer = data.organizerId === userId;
+  const solo = data.mode === "solo";
+  const ended = data.status === "ended";
+  const live = data.status === "running" || data.status === "paused";
+  const language = LANGUAGES.find((option) => option.value === data.language)?.label ?? data.language;
+  const scorecards = data.scorecards ?? [];
+  const mine = scorecards.find((card) => card.interviewerId === userId);
+  const verdict = panelVerdict(scorecards.map((card) => card.verdict));
+  const used = elapsedAt(data, Date.parse(data.endedAt ?? data.serverNow));
+  const reached = data.questions.filter((q) => q.status !== "pending").length;
+  const passing = data.questions.filter((_, i) => {
+    const run = latestTests(data.events, i);
+    return run && run.total > 0 && run.passed === run.total;
+  }).length;
+  const hints = data.questions.reduce((sum, q) => sum + q.hintsGiven, 0);
+  const integrity = summarizeIntegrity(data.events);
+  const monitored = staff && !solo && data.settings.monitoring;
+  const snapshots = (data.snapshots ?? []).filter((snapshot) => snapshot.question === tab && snapshot.label !== "Final");
   const shown = picked === null ? null : (snapshots[picked] ?? null);
-  const language = LANGUAGES.find((option) => option.value === report.language)?.label ?? report.language;
+  const run = question ? latestTests(data.events, tab) : null;
+  const complexity = question ? latestComplexity(data.events, tab) : null;
 
   async function saveScorecard(choice: ScorecardChoice) {
     try {
       const res = await api.post<InterviewReport>(`/api/interviews/${id}/scorecard`, choice);
-      setReport(res.data);
+      setData(res.data);
       setScoring(false);
     } catch (err) {
       const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -184,33 +206,56 @@ export default function InterviewReportPage({ params }: { params: Promise<{ id: 
     }
   }
 
+  async function toggleShare() {
+    if (!data) return;
+    const res = await api.post<InterviewReport>(`/api/interviews/${id}/share`, { shared: !data.shared }).catch(() => null);
+    if (res) setData(res.data);
+  }
+
+  async function remove() {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      setTimeout(() => setConfirmDelete(false), 3000);
+      return;
+    }
+    await api.delete(`/api/interviews/${id}`).catch(() => null);
+    router.push("/interviews");
+  }
+
   return (
     <main className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6 print:max-w-none print:px-0 print:pt-0">
-      <div className="flex items-center justify-between gap-3 print:hidden">
-        <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-ink-400 transition-colors hover:text-ink-100">
+      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+        <Link href="/interviews" className="inline-flex items-center gap-1.5 text-sm text-ink-400 transition-colors hover:text-ink-100">
           <ArrowLeft className="h-4 w-4" />
-          Dashboard
+          Interviews
         </Link>
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/room/${report.roomId}`}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-3 text-xs text-ink-200 transition-colors hover:border-ink-500 hover:text-ink-100"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Open the room
-          </Link>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-3 text-xs text-ink-200 transition-colors hover:border-ink-500 hover:text-ink-100"
-          >
-            <Printer className="h-3.5 w-3.5" />
-            Save as PDF
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {organizer && ended && !solo && (
+            <button type="button" onClick={toggleShare} className={ACTION} title="Whether the candidate can read this report">
+              {data.shared ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+              {data.shared ? "Shared with the candidate" : "Not shared"}
+            </button>
+          )}
+          {ended && (
+            <button type="button" onClick={() => window.print()} className={ACTION}>
+              <Printer className="h-3.5 w-3.5" />
+              Save as PDF
+            </button>
+          )}
+          {organizer && !live && (
+            <button
+              type="button"
+              onClick={remove}
+              className={confirmDelete ? `${ACTION} border-red-500/60 text-red-300 hover:border-red-400 hover:text-red-200` : ACTION}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {confirmDelete ? "Click again to delete" : "Delete"}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* The headline */}
+      {/* ---------- The headline ---------- */}
       <motion.header
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -219,251 +264,473 @@ export default function InterviewReportPage({ params }: { params: Promise<{ id: 
       >
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-500">
-            {solo ? "Mock interview report" : "Interview report"}
+            {solo ? "Mock interview" : "Interview"} · {ended ? "report" : live ? "live now" : "upcoming"}
           </p>
           <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-ink-100 sm:text-4xl">
-            {title}
+            {data.title}
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-400">
-            <span>{new Date(report.startedAt).toLocaleDateString(undefined, { dateStyle: "medium" })}</span>
+            {[data.position, data.level, language].filter(Boolean).map((part, i) => (
+              <span key={i} className="flex items-center gap-3">
+                {i > 0 && <span className="text-ink-700">·</span>}
+                {part}
+              </span>
+            ))}
             <span className="text-ink-700">·</span>
-            <span>{language}</span>
-            {problem && (
-              <>
-                <span className="text-ink-700">·</span>
-                <span>{problem.difficulty}</span>
-              </>
-            )}
-            {!solo && (
-              <>
-                <span className="text-ink-700">·</span>
-                <span className="flex items-center gap-1.5">
-                  <AvatarIcon avatarId={report.interviewer.avatarId} className="h-5 w-5 rounded-full" />
-                  {report.interviewer.name}
-                  <span className="text-ink-600">→</span>
-                  <AvatarIcon avatarId={report.candidate.avatarId} className="h-5 w-5 rounded-full" />
-                  {report.candidate.name}
-                </span>
-              </>
-            )}
+            <span>
+              {ended
+                ? new Date(data.endedAt ?? data.serverNow).toLocaleDateString(undefined, { dateStyle: "medium" })
+                : data.scheduledFor
+                  ? new Date(data.scheduledFor).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+                  : "Not scheduled"}
+            </span>
           </div>
+          {!solo && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-300">
+              {data.interviewers.map((person) => (
+                <span key={person.userId} className="flex items-center gap-1.5 rounded-full border border-ink-800 py-0.5 pl-0.5 pr-2.5">
+                  <AvatarIcon avatarId={person.avatarId} className="h-5 w-5 rounded-full" />
+                  {person.name}
+                </span>
+              ))}
+              <ArrowRight className="h-3.5 w-3.5 text-ink-600" />
+              {data.candidate ? (
+                <span className="flex items-center gap-1.5 rounded-full border border-ink-700 py-0.5 pl-0.5 pr-2.5 text-ink-100">
+                  <AvatarIcon avatarId={data.candidate.avatarId} className="h-5 w-5 rounded-full" />
+                  {data.candidate.name}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-ink-500">
+                  <UserRound className="h-4 w-4" />
+                  No candidate yet
+                </span>
+              )}
+            </div>
+          )}
         </div>
-        {verdict ? (
+        {ended && verdict ? (
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.15, type: "spring", bounce: 0.35 }}
-            className={`flex shrink-0 items-center gap-2 rounded-2xl border px-5 py-3 ${
-              report.verdict === "yes" || report.verdict === "strong-yes"
-                ? "border-ink-100 bg-ink-100 text-ink-950 shadow-[0_0_40px_-12px_rgba(255,255,255,0.6)]"
-                : "border-ink-600 bg-ink-900 text-ink-100"
-            }`}
+            className="shrink-0 text-right"
           >
-            {(report.verdict === "yes" || report.verdict === "strong-yes") && <Check className="h-5 w-5" />}
-            <span className="font-[family-name:var(--font-display)] text-xl font-semibold">{verdict.label}</span>
+            <div
+              className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 ${
+                verdict.score >= 3
+                  ? "border-ink-100 bg-ink-100 text-ink-950 shadow-[0_0_40px_-12px_rgba(255,255,255,0.6)]"
+                  : "border-ink-600 bg-ink-900 text-ink-100"
+              }`}
+            >
+              {verdict.score >= 3 && <Check className="h-5 w-5" />}
+              <span className="font-[family-name:var(--font-display)] text-xl font-semibold">{verdict.label}</span>
+            </div>
+            {scorecards.length > 1 && (
+              <p className="mt-1.5 text-[11px] text-ink-500">The panel&apos;s average of {scorecards.length} scorecards</p>
+            )}
           </motion.div>
         ) : (
-          isInterviewer && (
+          ended &&
+          staff && (
             <button
               type="button"
               onClick={() => setScoring(true)}
               className="h-11 shrink-0 rounded-full bg-ink-100 px-5 text-sm font-semibold text-ink-950 transition-colors hover:bg-white print:hidden"
             >
-              {solo ? "Review yourself" : "Fill in the scorecard"}
+              {solo ? "Review yourself" : "Fill in your scorecard"}
             </button>
           )
         )}
       </motion.header>
 
-      {/* The numbers */}
-      <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Time used" value={formatClock(used)} note={`of ${formatClock(allotted)}`} />
-        <Stat
-          label="Hints"
-          value={String(report.hintsGiven)}
-          note={report.problemSlug ? `of ${kit?.hints.length ?? 3}` : undefined}
-        />
-        <Stat
-          label="Tests"
-          value={tests ? `${tests.passed}/${tests.total}` : "–"}
-          note={tests ? (tests.passed === tests.total ? "All passing" : "Some failing") : "Never run"}
-        />
-        <Stat
-          label="Big-O"
-          value={complexity?.time ?? "–"}
-          note={kit ? (sameComplexity(complexity?.time, kit.time) ? "✓ Matched the target" : `Target ${kit.time}`) : undefined}
-        />
-      </div>
+      {/* ---------- Before (and during) ---------- */}
+      {!ended && (
+        <>
+          {created && staff && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-8 flex items-start gap-3 rounded-2xl border border-ink-600 bg-ink-900 p-4"
+            >
+              <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-ink-100" />
+              <div>
+                <p className="text-sm font-semibold text-ink-100">Your interview is ready.</p>
+                <p className="mt-0.5 text-sm text-ink-400">
+                  {solo
+                    ? "Open the room and start whenever you like."
+                    : "Send the candidate link (and the interviewer link to your panel). When it's time, open the lobby and start."}
+                </p>
+              </div>
+            </motion.div>
+          )}
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-        <div className="space-y-6">
-          {/* Scores */}
-          {report.ratings && (
-            <section className="rounded-2xl border border-ink-800 bg-ink-900 p-5">
-              <h2 className="text-sm font-semibold text-ink-100">{solo ? "Self-review" : "Scores"}</h2>
-              <div className="mt-4 space-y-4">
-                {INTERVIEW_CRITERIA.map((criterion, index) => {
-                  const rating = report.ratings?.[criterion.id] ?? 0;
-                  return (
-                    <div key={criterion.id}>
-                      <div className="mb-1.5 flex items-baseline justify-between gap-3 text-sm">
-                        <span className="text-ink-200">{criterion.label}</span>
-                        <span className="text-xs text-ink-400">{RATING_LABELS[rating - 1] ?? "–"}</span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-ink-800">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${(rating / 4) * 100}%` }}
-                          transition={{ delay: 0.2 + index * 0.08, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-                          className="h-full rounded-full bg-ink-100"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <section className={SECTION}>
+              <h2 className="text-sm font-semibold text-ink-100">
+                {data.questions.length} question{data.questions.length === 1 ? "" : "s"} · {formatDuration(data.durationMs)}
+              </h2>
+              {staff ? (
+                <ol className="mt-4 space-y-2">
+                  {data.questions.map((q, i) => {
+                    const p = q.problemSlug ? getProblem(q.problemSlug) : null;
+                    return (
+                      <li key={i} className="flex items-center gap-3 rounded-xl border border-ink-800 px-3 py-2.5">
+                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-ink-700 text-[11px] font-semibold text-ink-300">
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm text-ink-100">{questionTitle(q, i)}</p>
+                          <p className="truncate text-[11px] text-ink-500">{p ? p.topics.join(" · ") : "Your own question"}</p>
+                        </div>
+                        {p && <DifficultyBadge difficulty={p.difficulty} />}
+                        <span className="shrink-0 font-[family-name:var(--font-mono)] text-xs text-ink-400">{q.minutes}m</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : (
+                <p className="mt-3 text-sm leading-relaxed text-ink-400">
+                  The questions are revealed one at a time once the interview starts. Each one has its own time budget.
+                </p>
+              )}
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {[
+                  ["Hints", data.settings.hints],
+                  ["Test runs", data.settings.runTests],
+                  ["Lens", data.settings.lens],
+                  ["Big-O meter", data.settings.meter],
+                  ...(solo ? [] : [["Monitoring", data.settings.monitoring] as const]),
+                ].map(([label, on]) => (
+                  <span
+                    key={String(label)}
+                    className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${on ? "border-ink-600 text-ink-200" : "border-ink-800 text-ink-500 line-through"}`}
+                  >
+                    {label}
+                  </span>
+                ))}
               </div>
             </section>
-          )}
 
-          {/* Feedback */}
-          {report.feedback && (
-            <section className="rounded-2xl border border-ink-800 bg-ink-900 p-5">
-              <h2 className="text-sm font-semibold text-ink-100">{solo ? "Notes to self" : "Feedback"}</h2>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink-300">{report.feedback}</p>
-            </section>
-          )}
-
-          {/* The interviewer's private notes */}
-          {isInterviewer && !solo && report.notes.length > 0 && (
-            <section className="rounded-2xl border border-ink-800 bg-ink-900 p-5">
-              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-ink-100">
-                <Lock className="h-3.5 w-3.5 text-ink-500" />
-                Your notes
-                <span className="text-xs font-normal text-ink-500">· only you see these</span>
-              </h2>
-              <ul className="mt-3 space-y-2">
-                {report.notes.map((note, index) => (
-                  <li key={index} className="flex gap-3 text-sm">
-                    <span className="w-12 shrink-0 font-[family-name:var(--font-mono)] text-xs tabular-nums text-ink-500">
-                      {formatClock(note.at)}
-                    </span>
-                    <span className="min-w-0 flex-1 text-ink-300">
-                      {note.tag && note.tag !== "follow-up" && <span className="mr-1 text-ink-500">{note.tag}</span>}
-                      {note.text}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {/* The timeline */}
-          <section className="rounded-2xl border border-ink-800 bg-ink-900 p-5">
-            <h2 className="text-sm font-semibold text-ink-100">Timeline</h2>
-            <ol className="relative mt-4 space-y-1 before:absolute before:bottom-2 before:left-[3.4rem] before:top-2 before:w-px before:bg-ink-800">
-              {report.events.map((event, index) => {
-                const Icon = EVENT_ICONS[event.type];
-                // A test run shows the code at that moment; the end shows the final code.
-                const snapshotIndex =
-                  event.type === "tests" ? snapshots.findIndex((snapshot) => snapshot.at === event.at) : -1;
-                const isEnd = event.type === "end";
-                const hasCode = isEnd || snapshotIndex >= 0;
-                const active = isEnd ? picked === null : snapshotIndex >= 0 && picked === snapshotIndex;
-                return (
-                  <li key={`${event.type}-${event.at}-${index}`}>
-                    <button
-                      type="button"
-                      disabled={!hasCode}
-                      onClick={() => setPicked(isEnd ? null : snapshotIndex)}
-                      className={`relative flex w-full items-center gap-3 rounded-lg px-1.5 py-1.5 text-left text-sm transition-colors ${
-                        hasCode ? "hover:bg-ink-800/60" : "cursor-default"
-                      } ${active ? "bg-ink-800/80" : ""}`}
-                    >
-                      <span className="w-11 shrink-0 font-[family-name:var(--font-mono)] text-xs tabular-nums text-ink-500">
-                        {formatClock(event.at)}
-                      </span>
-                      <span
-                        className={`relative z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full border ${
-                          event.type === "tests" && event.data?.passed === event.data?.total
-                            ? "border-ink-100 bg-ink-100 text-ink-950"
-                            : "border-ink-700 bg-ink-950 text-ink-300"
-                        }`}
-                      >
-                        <Icon className="h-3 w-3" />
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-ink-200">{describe(event)}</span>
-                      {hasCode && (
-                        <span className="flex shrink-0 items-center gap-1 text-[11px] text-ink-500">
-                          <Code2 className="h-3 w-3" />
-                          code
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-        </div>
-
-        {/* The code, at the chosen moment */}
-        <section className="flex min-h-[24rem] flex-col overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-7rem)] print:max-h-none">
-          <div className="flex items-center justify-between gap-3 border-b border-ink-800 px-4 py-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-100">
-              <Code2 className="h-4 w-4 text-ink-400" />
-              {shown ? `Code at ${shown.label.toLowerCase()}` : "Final code"}
-            </h2>
-            <span className="font-[family-name:var(--font-mono)] text-xs text-ink-500">{formatClock(shown ? shown.at : used)}</span>
+            <div className="space-y-6">
+              {staff && !solo && data.codes && (
+                <section className={SECTION}>
+                  <InterviewLinks interview={data} />
+                </section>
+              )}
+              {!staff && data.settings.monitoring && (
+                <section className={`${SECTION} flex items-start gap-3`}>
+                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-ink-200" />
+                  <p className="text-sm leading-relaxed text-ink-400">
+                    This interview is monitored: your interviewers will see tab switches, pastes, large insertions,
+                    other tabs and dropped connections. Never your screen or camera.
+                  </p>
+                </section>
+              )}
+              <Link
+                href={`/room/${data.roomId}`}
+                className="flex h-12 items-center justify-center gap-2 rounded-full bg-ink-100 text-sm font-semibold text-ink-950 shadow-[0_0_32px_-8px_rgba(255,255,255,0.6)] transition-all hover:bg-white active:scale-[0.99]"
+              >
+                {live ? "Join the live interview" : staff ? "Open the lobby" : "Go to the interview room"}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto bg-ink-950/60 py-3">
-            <pre className="font-[family-name:var(--font-mono)] text-[12.5px] leading-6 text-ink-200">
-              {(shown ? shown.code : report.finalCode).split("\n").map((line, index) => (
-                <div key={index} className="flex">
-                  <span className="w-12 shrink-0 select-none pr-4 text-right tabular-nums text-ink-600">{index + 1}</span>
-                  <code className="whitespace-pre pr-4">{line || " "}</code>
-                </div>
-              ))}
-            </pre>
+        </>
+      )}
+
+      {/* ---------- After: the report ---------- */}
+      {ended && (
+        <>
+          <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <Stat label="Time used" value={formatClock(used)} note={`of ${formatClock(data.durationMs + data.extraMs)}`} />
+            <Stat label="Questions" value={`${reached}/${data.questions.length}`} note="reached" />
+            <Stat label="Passing" value={`${passing}/${data.questions.length}`} note="all tests passed" />
+            <Stat label="Hints" value={String(hints)} note="given in total" />
+            {monitored ? (
+              <Stat label="Integrity" value={String(integrity.flags.length)} note={integrity.flags.length ? "things to review" : "nothing unusual"} />
+            ) : (
+              <Stat label="Scorecards" value={String(scorecards.length)} note={solo ? "self-review" : `of ${data.interviewers.length}`} />
+            )}
           </div>
-          {snapshots.length > 0 && (
-            <div className="flex gap-1.5 overflow-x-auto border-t border-ink-800 px-3 py-2 print:hidden">
-              {snapshots.map((snapshot, index) => (
+
+          {/* Each question */}
+          <section className="mt-8">
+            <div className="flex gap-1.5 overflow-x-auto pb-1 print:hidden">
+              {data.questions.map((q, i) => (
                 <button
-                  key={`${snapshot.at}-${index}`}
+                  key={i}
                   type="button"
-                  onClick={() => setPicked(index)}
-                  className={`shrink-0 rounded-md border px-2 py-1 text-[11px] transition-colors ${
-                    snapshot === shown
-                      ? "border-ink-100 bg-ink-100 text-ink-950"
-                      : "border-ink-700 text-ink-400 hover:border-ink-500 hover:text-ink-100"
+                  onClick={() => {
+                    setTab(i);
+                    setPicked(null);
+                    setShowAnswer(false);
+                  }}
+                  className={`shrink-0 rounded-xl border px-3 py-2 text-left text-xs transition-colors ${
+                    i === tab ? "border-ink-100 bg-ink-100 text-ink-950" : "border-ink-800 text-ink-300 hover:border-ink-600"
                   }`}
                 >
-                  {formatClock(snapshot.at)} · {snapshot.label}
+                  <span className="block font-semibold">Q{i + 1}</span>
+                  <span className="block max-w-[11rem] truncate opacity-80">{questionTitle(q, i)}</span>
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={() => setPicked(null)}
-                className={`shrink-0 rounded-md border px-2 py-1 text-[11px] transition-colors ${
-                  shown === null
-                    ? "border-ink-100 bg-ink-100 text-ink-950"
-                    : "border-ink-700 text-ink-400 hover:border-ink-500 hover:text-ink-100"
-                }`}
-              >
-                {formatClock(used)} · Final
-              </button>
             </div>
-          )}
-        </section>
-      </div>
 
-      <Scorecard
-        open={scoring}
-        interview={report}
-        target={kit?.time ?? null}
-        onClose={() => setScoring(false)}
-        onSave={saveScorecard}
-      />
+            {question && (
+              <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+                <div className={SECTION}>
+                  <div className="flex items-start justify-between gap-3">
+                    <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold text-ink-100">{questionTitle(question, tab)}</h2>
+                    {problem ? <DifficultyBadge difficulty={problem.difficulty} /> : !question.hidden && <span className="text-[11px] text-ink-500">Your own question</span>}
+                  </div>
+                  {question.hidden ? (
+                    <p className="mt-3 text-sm text-ink-500">The interview didn&apos;t reach this question.</p>
+                  ) : (
+                    <>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        {[
+                          ["Time", `${formatDuration(question.timeSpentMs)} / ${question.minutes}m`],
+                          ["Hints", String(question.hintsGiven)],
+                          ["Tests", run ? `${run.passed}/${run.total}` : "Never run"],
+                          ["Big-O", complexity?.time ?? "–"],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded-xl border border-ink-800 bg-ink-950/60 px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-wider text-ink-500">{label}</p>
+                            <p className="mt-0.5 font-[family-name:var(--font-mono)] text-sm tabular-nums text-ink-100">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {kit && (
+                        <p className="mt-2 text-[11px] text-ink-500">
+                          {complexity && sameComplexity(complexity.time, kit.time) ? "✓ Matched the target complexity" : `Target complexity: ${kit.time}`}
+                        </p>
+                      )}
+                      {question.prompt && <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-ink-400">{question.prompt}</p>}
+                      {staff && (kit || question.answer) && (
+                        <div className="mt-4 print:hidden">
+                          <button type="button" onClick={() => setShowAnswer((s) => !s)} className="flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-100">
+                            {showAnswer ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            {showAnswer ? "Hide the answer key" : "Show the answer key"}
+                          </button>
+                          {showAnswer && (
+                            <p className="mt-2 whitespace-pre-wrap rounded-xl border border-ink-800 bg-ink-950/60 p-3 text-xs leading-relaxed text-ink-300">
+                              {kit ? `${kit.approach} (${kit.time} time, ${kit.space} space)` : question.answer}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-ink-800 bg-ink-900">
+                  <div className="flex items-center justify-between gap-3 border-b border-ink-800 px-4 py-3">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-100">
+                      <Code2 className="h-4 w-4 text-ink-400" />
+                      {shown ? `Code at ${shown.label.toLowerCase()}` : "Final code"}
+                    </h3>
+                    {shown && <span className="font-[family-name:var(--font-mono)] text-xs text-ink-500">{formatClock(shown.at)}</span>}
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-auto bg-ink-950/60 py-3">
+                    <pre className="font-[family-name:var(--font-mono)] text-[12.5px] leading-6 text-ink-200">
+                      {(shown ? shown.code : (question.code ?? "")).split("\n").map((line, i) => (
+                        <div key={i} className="flex">
+                          <span className="w-12 shrink-0 select-none pr-4 text-right tabular-nums text-ink-600">{i + 1}</span>
+                          <code className="whitespace-pre pr-4">{line || " "}</code>
+                        </div>
+                      ))}
+                    </pre>
+                  </div>
+                  {snapshots.length > 0 && (
+                    <div className="flex gap-1.5 overflow-x-auto border-t border-ink-800 px-3 py-2 print:hidden">
+                      {snapshots.map((snapshot, i) => (
+                        <button
+                          key={`${snapshot.at}-${i}`}
+                          type="button"
+                          onClick={() => setPicked(i)}
+                          className={`shrink-0 rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                            picked === i ? "border-ink-100 bg-ink-100 text-ink-950" : "border-ink-700 text-ink-400 hover:border-ink-500 hover:text-ink-100"
+                          }`}
+                        >
+                          {formatClock(snapshot.at)} · {snapshot.label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setPicked(null)}
+                        className={`shrink-0 rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                          picked === null ? "border-ink-100 bg-ink-100 text-ink-950" : "border-ink-700 text-ink-400 hover:border-ink-500 hover:text-ink-100"
+                        }`}
+                      >
+                        Final
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Scorecards */}
+          <section className="mt-8">
+            <h2 className="text-sm font-semibold text-ink-100">{solo ? "Self-review" : "Scorecards"}</h2>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              {scorecards.map((card) => {
+                const label = INTERVIEW_VERDICTS.find((option) => option.id === card.verdict)?.label;
+                return (
+                  <div key={card.interviewerId} className={SECTION}>
+                    <div className="flex items-center gap-2.5">
+                      <AvatarIcon avatarId={card.avatarId} className="h-8 w-8 rounded-full" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-ink-100">{card.interviewerId === userId ? "You" : card.name}</p>
+                        <p className="text-[11px] text-ink-500">{new Date(card.at).toLocaleDateString(undefined, { dateStyle: "medium" })}</p>
+                      </div>
+                      <span className="rounded-full border border-ink-600 px-2.5 py-0.5 text-xs font-semibold text-ink-100">{label}</span>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {INTERVIEW_CRITERIA.map((criterion, i) => {
+                        const rating = card.ratings?.[criterion.id] ?? 0;
+                        return (
+                          <div key={criterion.id}>
+                            <div className="mb-1 flex items-baseline justify-between text-xs">
+                              <span className="text-ink-300">{criterion.label}</span>
+                              <span className="text-ink-500">{RATING_LABELS[rating - 1] ?? "–"}</span>
+                            </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-ink-800">
+                              <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${(rating / 4) * 100}%` }}
+                                transition={{ delay: 0.15 + i * 0.06, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                                className="h-full rounded-full bg-ink-100"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {card.feedback && <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-ink-300">{card.feedback}</p>}
+                    {card.interviewerId === userId && (
+                      <button type="button" onClick={() => setScoring(true)} className="mt-3 text-xs text-ink-400 underline-offset-4 hover:text-ink-100 hover:underline print:hidden">
+                        Edit
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {staff && !mine && (
+                <button
+                  type="button"
+                  onClick={() => setScoring(true)}
+                  className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-ink-700 text-sm text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100 print:hidden"
+                >
+                  <Plus className="h-5 w-5" />
+                  {solo ? "Review yourself" : "Add your scorecard"}
+                </button>
+              )}
+              {!staff && scorecards.length === 0 && <p className="text-sm text-ink-500">No scorecards yet.</p>}
+            </div>
+          </section>
+
+          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* What monitoring saw (interviewers only) */}
+            {monitored && (
+              <section className={SECTION}>
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-100">
+                  {integrity.flags.length ? <ShieldAlert className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+                  Integrity
+                  <span className="text-xs font-normal text-ink-500">· interviewers only</span>
+                </h2>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  {[
+                    ["Tab switches", String(integrity.tabSwitches)],
+                    ["Time away", formatDuration(integrity.awayMs)],
+                    ["Pastes", String(integrity.pastes)],
+                    ["Largest paste", integrity.largestPaste ? `${integrity.largestPaste}` : "–"],
+                    ["Insertions", String(integrity.inserts)],
+                    ["Tabs / drops", `${integrity.extraTabs} / ${integrity.drops}`],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-xl border border-ink-800 bg-ink-950/60 px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-wider text-ink-500">{label}</p>
+                      <p className="mt-0.5 font-[family-name:var(--font-mono)] text-sm tabular-nums text-ink-100">{value}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-[11px] text-ink-500">
+                  {integrity.consented ? "The candidate acknowledged monitoring before it started." : "The candidate didn't acknowledge monitoring."}
+                </p>
+                {integrity.flags.length > 0 && (
+                  <ul className="mt-3 space-y-1.5">
+                    {integrity.flags.map((event, i) => (
+                      <li key={i} className="flex gap-3 text-xs">
+                        <span className="w-11 shrink-0 font-[family-name:var(--font-mono)] tabular-nums text-ink-500">{formatClock(event.at)}</span>
+                        <span className="min-w-0 flex-1 text-ink-300">{describeMonitor(event)}</span>
+                        <span className="shrink-0 text-[10px] text-ink-600">Q{(event.question ?? 0) + 1}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
+
+            {/* The panel's notes */}
+            {staff && !solo && (data.notes ?? []).length > 0 && (
+              <section className={SECTION}>
+                <h2 className="flex items-center gap-1.5 text-sm font-semibold text-ink-100">
+                  <Lock className="h-3.5 w-3.5 text-ink-500" />
+                  Notes
+                  <span className="text-xs font-normal text-ink-500">· interviewers only</span>
+                </h2>
+                <ul className="mt-3 space-y-2.5">
+                  {data.notes.map((note, i) => (
+                    <li key={i} className="text-sm">
+                      <p className="text-[10px] text-ink-500">
+                        <span className="font-[family-name:var(--font-mono)] tabular-nums">{formatClock(note.at)}</span> · Q{note.question + 1} ·{" "}
+                        {note.authorName}
+                      </p>
+                      <p className="mt-0.5 text-ink-300">
+                        {note.tag && note.tag !== "follow-up" && <span className="mr-1 text-ink-500">{note.tag}</span>}
+                        {note.text}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* Everything that happened */}
+            <section className={SECTION}>
+              <h2 className="text-sm font-semibold text-ink-100">Timeline</h2>
+              <ol className="mt-3 space-y-1">
+                {data.events
+                  .filter((event) => event.type !== "monitor" && event.type !== "phase")
+                  .map((event, i) => {
+                    const Icon = EVENT_ICONS[event.type] ?? Play;
+                    return (
+                      <li key={i} className="flex items-center gap-3 py-1 text-sm">
+                        <span className="w-11 shrink-0 font-[family-name:var(--font-mono)] text-xs tabular-nums text-ink-500">{formatClock(event.at)}</span>
+                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-ink-700 bg-ink-950 text-ink-300">
+                          <Icon className="h-3 w-3" />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-ink-200">{describe(event)}</span>
+                        {data.questions.length > 1 && <span className="shrink-0 text-[10px] text-ink-600">Q{(event.question ?? 0) + 1}</span>}
+                      </li>
+                    );
+                  })}
+              </ol>
+            </section>
+          </div>
+        </>
+      )}
+
+      {staff && ended && (
+        <Scorecard
+          open={scoring}
+          interview={data}
+          canShare={organizer}
+          initial={mine ? { ratings: mine.ratings, verdict: mine.verdict, feedback: mine.feedback, shared: data.shared } : { shared: data.shared || true }}
+          onClose={() => setScoring(false)}
+          onSave={saveScorecard}
+        />
+      )}
     </main>
   );
 }

@@ -138,11 +138,13 @@ export default function PracticeProblemPage({ params }: { params: Promise<{ slug
         code: getProblemStarterCode(problem, language) ?? "",
         problemSlug: problem.slug,
       });
+      const minutes = MOCK_MINUTES[problem.difficulty] ?? 35;
       await api.post("/api/interviews", {
         roomId: room.data._id,
         mode: "solo",
-        problemSlug: problem.slug,
-        durationMin: MOCK_MINUTES[problem.difficulty] ?? 35,
+        title: problem.title,
+        questions: [{ problemSlug: problem.slug, minutes, starter: getProblemStarterCode(problem, language) ?? "" }],
+        durationMin: minutes,
       });
       router.push(`/room/${room.data._id}`);
     } catch {

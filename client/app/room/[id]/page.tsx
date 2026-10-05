@@ -71,6 +71,7 @@ import { ProblemPanel } from "@/components/ProblemPanel";
 import { RoomLens } from "@/components/lens/RoomLens";
 import { InterviewBar } from "@/components/interview/InterviewBar";
 import { InterviewOverlays } from "@/components/interview/InterviewOverlays";
+import { InterviewLobby } from "@/components/interview/InterviewLobby";
 import { InterviewSetup, type InterviewSetupChoice } from "@/components/interview/InterviewSetup";
 import { InterviewerPanel } from "@/components/interview/InterviewerPanel";
 import { GivenHints, QuestionPanel } from "@/components/interview/QuestionPanel";
@@ -97,7 +98,8 @@ import { EDITOR_THEMES } from "@/lib/editorTheme";
 import { useCollab } from "@/lib/collab";
 import { useComplexity } from "@/lib/useComplexity";
 import { useRoomLens } from "@/lib/useRoomLens";
-import { useInterview, type InterviewState } from "@/lib/interview";
+import { isCandidateIn, isInterviewerIn, useInterview, type InterviewState } from "@/lib/interview";
+import { useInterviewMonitor } from "@/lib/useInterviewMonitor";
 import { interviewKit } from "@/lib/interviewKits";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import type { AccessRequest, Room, RoomPerson, RoomRole } from "@/types/room";
@@ -206,7 +208,8 @@ export default function RoomPage({
   // Your role here. Viewers can watch, follow and chat, but not change the code.
   const role: RoomRole = room?.role ?? (room && room.ownerId === currentUserId ? "owner" : "editor");
   const canEdit = role !== "viewer";
-  const canInvite = !!room?.invites;
+  // Interview rooms are joined with the interview's own links instead.
+  const canInvite = !!room?.invites && !room?.interviewId;
   // Owner: viewers asking to edit. Viewer: whether you've just asked.
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const knownRequestsRef = useRef(new Set<string>());
@@ -386,33 +389,56 @@ export default function RoomPage({
       ),
   }, invite);
 
-  // Interview mode: a timed mock interview in this room (lib/interview.ts).
+  // Interviews: this room's interview, if it has one (lib/interview.ts).
   const [setupOpen, setSetupOpen] = useState(false);
   const [scorecardOpen, setScorecardOpen] = useState(false);
   const iv = useInterview(socket, id, {
-    // The interviewer lands on their panel; everyone else on the question.
+    // Interviewers land on their panel; the candidate on the question.
     onNew: (state) => {
-      setActiveTab(state.interviewer.userId === currentUserId && state.mode === "live" ? "interview" : "problem");
+      const staff = isInterviewerIn(state, currentUserId);
+      setActiveTab(staff && state.mode === "live" ? "interview" : state.status === "scheduled" ? "chat" : "problem");
       setMobilePanel("code");
       setTestReport(null);
     },
-    onEnded: (state) => {
-      if (state.interviewer.userId === currentUserId) setScorecardOpen(true);
+    onStarted: (state) => {
+      if (!isInterviewerIn(state, currentUserId) || state.mode === "solo") setActiveTab("problem");
     },
+    onQuestion: (state) => {
+      setTestReport(null);
+      if (!isInterviewerIn(state, currentUserId) || state.mode === "solo") setActiveTab("problem");
+    },
+    onEnded: (state) => {
+      if (isInterviewerIn(state, currentUserId)) setScorecardOpen(true);
+    },
+    onError: (message) => toast(message, "error"),
   });
   const interview = iv.interview;
-  const interviewActive = !!interview && interview.status !== "ended";
-  const isInterviewer = !!interview && interview.interviewer.userId === currentUserId;
-  const isInterviewCandidate = !!interview && interview.candidate.userId === currentUserId;
-  const showInterviewTab = !!interview && isInterviewer && interview.mode === "live";
+  const interviewOpen = !!interview && interview.status !== "ended";
+  const interviewLive = !!interview && (interview.status === "running" || interview.status === "paused");
+  const isInterviewer = !!interview && isInterviewerIn(interview, currentUserId);
+  const isInterviewCandidate = !!interview && isCandidateIn(interview, currentUserId);
+  const showInterviewTab = isInterviewer && interview?.mode === "live";
+  // What the interview lets the candidate use (interviewers always can).
+  const lockedBy = (setting: "runTests" | "lens" | "meter") =>
+    !!interview && interviewOpen && !isInterviewer && !interview.settings[setting];
+  const testsLocked = lockedBy("runTests");
+  const lensLocked = lockedBy("lens");
+  const meterHidden = lockedBy("meter");
+  // Until it starts, the candidate's editor is read-only.
+  const lobbyLocked = !!interview && interview.status === "scheduled" && !isInterviewer;
+  useInterviewMonitor(interview, currentUserId, iv.monitor);
 
-  // The question: the interview's Practice problem while there's an
-  // interview, otherwise the room's own (in Practice rooms).
-  const problemSlug = interview ? interview.problemSlug : (room?.problemSlug ?? null);
+  // The question: the interview's current one (once you may see it),
+  // otherwise the room's own (in Practice rooms).
+  const question =
+    interview && !interview.questions[interview.current]?.hidden ? (interview.questions[interview.current] ?? null) : null;
+  const problemSlug = interview ? (question?.problemSlug ?? null) : (room?.problemSlug ?? null);
+  const customQuestion = question && !question.problemSlug ? question : null;
   const problem = useMemo(() => (problemSlug ? getProblem(problemSlug) : null), [problemSlug]);
-  const kit = useMemo(() => (interview?.problemSlug && problem ? interviewKit(problem) : null), [interview?.problemSlug, problem]);
-  // The hints in order: the kit's ladder, or the interviewer's own.
-  const interviewHints = interview ? (interview.problemSlug ? (kit?.hints ?? []) : interview.customHints) : [];
+  const hasInterview = !!interview;
+  const kit = useMemo(() => (hasInterview && problem ? interviewKit(problem) : null), [hasInterview, problem]);
+  // The current question's hints in order: the kit's ladder, or the interviewer's own.
+  const interviewHints = question ? (question.problemSlug ? (kit?.hints ?? []) : (question.hints ?? [])) : [];
 
   // Shared editing: the room's document, kept in step over the socket (Yjs).
   const collab = useCollab(socket, id, () =>
@@ -449,9 +475,9 @@ export default function RoomPage({
   const meterStale = meter.stale;
   const reportComplexity = iv.reportComplexity;
   useEffect(() => {
-    if (!interviewActive || !isInterviewCandidate || meterStale || meterResult?.status !== "ok") return;
+    if (!interviewLive || !isInterviewCandidate || meterStale || meterResult?.status !== "ok") return;
     reportComplexity(meterResult.time.label, meterResult.space?.label ?? null);
-  }, [interviewActive, isInterviewCandidate, meterStale, meterResult, reportComplexity]);
+  }, [interviewLive, isInterviewCandidate, meterStale, meterResult, reportComplexity]);
 
   // A room that's still empty (made before rooms started with starter code)
   // gets it once, from its owner's browser only, so it's never added twice.
@@ -715,17 +741,23 @@ export default function RoomPage({
   }
 
   // The owner starts an interview from the setup dialog.
+  // (A clean editor, if asked for, is set by the server, for everyone.)
   async function handleStartInterview(choice: InterviewSetupChoice) {
+    const chosen = choice.problemSlug ? getProblem(choice.problemSlug) : null;
     let started: InterviewState;
     try {
       const res = await api.post<InterviewState>("/api/interviews", {
         roomId: id,
         mode: choice.mode,
         candidateId: choice.candidateId,
-        problemSlug: choice.problemSlug,
-        customTitle: choice.customTitle,
-        customPrompt: choice.customPrompt,
+        title: chosen?.title ?? choice.customTitle ?? "Interview",
+        questions: [
+          chosen
+            ? { problemSlug: chosen.slug, minutes: choice.durationMin, starter: getProblemStarterCode(chosen, language) ?? "" }
+            : { title: choice.customTitle, prompt: choice.customPrompt, minutes: choice.durationMin, starter: "" },
+        ],
         durationMin: choice.durationMin,
+        cleanStart: choice.cleanStart,
       });
       started = res.data;
     } catch (err) {
@@ -734,11 +766,6 @@ export default function RoomPage({
     }
     setSetupOpen(false);
     iv.adopt(started);
-    // A clean editor: the problem's starter code (or nothing), for everyone.
-    if (choice.cleanStart) {
-      const chosen = choice.problemSlug ? getProblem(choice.problemSlug) : null;
-      codeEditorRef.current?.setValue((chosen ? getProblemStarterCode(chosen, language) : null) ?? "");
-    }
   }
 
   async function handleSaveScorecard(choice: ScorecardChoice) {
@@ -902,6 +929,10 @@ export default function RoomPage({
       toast(VIEW_ONLY, "info");
       return;
     }
+    if (testsLocked) {
+      toast("Running the tests is off for this interview.", "info");
+      return;
+    }
     if (!problem || testsRunningRef.current) return;
     if (!isTestableLanguage(language)) {
       toast("Tests run in JavaScript, TypeScript, and Python. Switch the language to test your solution.", "info");
@@ -931,7 +962,7 @@ export default function RoomPage({
         compare: testedProblem.compare ?? "exact",
       });
       setTestReport(report);
-      if (interviewActive && isInterviewCandidate) iv.reportTests(report.passed, report.total);
+      if (interviewLive && isInterviewCandidate) iv.reportTests(report.passed, report.total);
       // Everyone else in the room sees a plain-text summary in their output panel.
       sendRunResult(runLanguage, { output: report.summary, error: null, durationMs: report.durationMs });
 
@@ -975,6 +1006,10 @@ export default function RoomPage({
 
   function handleVisualize() {
     if (!canEdit) return;
+    if (lensLocked) {
+      toast("Lens is off for this interview.", "info");
+      return;
+    }
     setMobilePanel("code");
     if (!isLensLanguage(language)) {
       toast("Lens visualizes Python, JavaScript and TypeScript. Switch the room's language to try it.", "info");
@@ -984,7 +1019,7 @@ export default function RoomPage({
   }
 
   function handleVisualizeTest(index: number) {
-    if (!problem || !canEdit) return;
+    if (!problem || !canEdit || lensLocked) return;
     setMobilePanel("code");
     void lens.run({ kind: "test", index });
   }
@@ -1027,7 +1062,7 @@ export default function RoomPage({
           label: "Run tests",
           icon: FlaskConical,
           action: handleRunTests,
-          disabled: !isTestableLanguage(language) || testsRunning,
+          disabled: !isTestableLanguage(language) || testsRunning || testsLocked,
         },
         {
           id: "show-problem",
@@ -1046,7 +1081,7 @@ export default function RoomPage({
     : [];
 
   const sidebarTabs: SidebarTab[] = [
-    ...(problem || interview?.custom ? (["problem"] as const) : []),
+    ...(problem || customQuestion ? (["problem"] as const) : []),
     "chat",
     "online",
     ...(showInterviewTab ? (["interview"] as const) : []),
@@ -1065,7 +1100,7 @@ export default function RoomPage({
       label: "Visualize with Lens",
       icon: ScanEye,
       action: handleVisualize,
-      disabled: !lensReady || !canEdit,
+      disabled: !lensReady || !canEdit || lensLocked,
     },
     ...problemCommands,
     {
@@ -1121,7 +1156,7 @@ export default function RoomPage({
       label: "Start an interview",
       icon: Timer,
       action: () => setSetupOpen(true),
-      disabled: !isOwner || interviewActive,
+      disabled: !isOwner || !!room?.interviewId || interviewOpen,
     },
     ...desktopOnlyCommands,
     {
@@ -1210,7 +1245,7 @@ export default function RoomPage({
             )}
           </div>
 
-          {problem && (
+          {problem && !interview && (
             <Link
               href={`/practice/${problem.slug}`}
               title={`${problem.difficulty} practice problem`}
@@ -1286,7 +1321,7 @@ export default function RoomPage({
             </kbd>
           </button>
 
-          {isOwner && !interviewActive && (
+          {isOwner && !room.interviewId && !interviewOpen && (
             <button
               type="button"
               onClick={() => setSetupOpen(true)}
@@ -1328,10 +1363,12 @@ export default function RoomPage({
 
           <button
             onClick={handleVisualize}
-            disabled={lens.recording || !canEdit}
+            disabled={lens.recording || !canEdit || lensLocked}
             aria-label="Visualize with Lens"
             title={
-              !canEdit
+              lensLocked
+                ? "Lens is off for this interview"
+                : !canEdit
                 ? VIEW_ONLY
                 : !lensReady
                   ? "Lens visualizes Python, JavaScript and TypeScript"
@@ -1414,7 +1451,6 @@ export default function RoomPage({
           interview={interview}
           skew={iv.skew}
           me={currentUserId ?? null}
-          title={interview.custom?.title ?? problem?.title ?? "Interview"}
           hintCount={kit?.hints.length ?? 3}
           onControl={iv.control}
           onDone={iv.done}
@@ -1439,7 +1475,7 @@ export default function RoomPage({
               collab={collab.session}
               collabReady={collab.synced}
               collabGeneration={collab.generation}
-              viewOnly={!canEdit}
+              viewOnly={!canEdit || lobbyLocked}
               followUserId={followed ? followed.userId : null}
               onStopFollowing={() => setFollowing(null)}
               saveStatus={saveStatus}
@@ -1467,8 +1503,17 @@ export default function RoomPage({
                 </div>
               </div>
             )}
-            <ComplexityMeter meter={meter} />
+            {!meterHidden && <ComplexityMeter meter={meter} />}
             <RoomLens lens={lens} />
+            {interview?.status === "scheduled" && (
+              <InterviewLobby
+                interview={interview}
+                me={currentUserId ?? null}
+                onlineIds={new Set(onlineUsers.map((user) => user.userId))}
+                onStart={() => iv.control("start")}
+                onConsent={() => iv.monitor("consent")}
+              />
+            )}
           </div>
           <RunPanel
             open={runPanelOpen}
@@ -1542,13 +1587,18 @@ export default function RoomPage({
                 </div>
               </div>
 
-              {activeTab === "problem" && interview?.custom ? (
-                <QuestionPanel interview={interview} hints={interviewHints} />
+              {activeTab === "problem" && customQuestion && interview ? (
+                <QuestionPanel question={customQuestion} total={interview.questions.length} events={interview.events} />
               ) : activeTab === "problem" && problem ? (
                 <div className="flex min-h-0 flex-1 flex-col">
-                  {interview && interview.problemSlug === problem.slug && interview.hintsGiven > 0 && (
+                  {interview && question && question.hintsGiven > 0 && (
                     <div className="max-h-56 shrink-0 overflow-y-auto border-b border-ink-800 px-4 py-3">
-                      <GivenHints interview={interview} hints={interviewHints} />
+                      <GivenHints
+                        hints={interviewHints}
+                        given={question.hintsGiven}
+                        events={interview.events}
+                        question={interview.current}
+                      />
                     </div>
                   )}
                   <ProblemPanel
@@ -1566,8 +1616,9 @@ export default function RoomPage({
                   interview={interview}
                   notes={iv.notes}
                   kit={kit}
-                  candidateOnline={onlineUsers.some((user) => user.userId === interview.candidate.userId)}
+                  candidateOnline={onlineUsers.some((user) => user.userId === interview.candidate?.userId)}
                   onGiveHint={(text) => iv.control("hint", text ? { text } : {})}
+                  onGoto={(index) => iv.control("goto", { index })}
                   onAddNote={iv.addNote}
                 />
               ) : activeTab === "online" ? (
@@ -1629,7 +1680,7 @@ export default function RoomPage({
       <nav className="flex shrink-0 gap-1 border-t border-ink-800 bg-ink-950 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1.5 md:hidden">
         {MOBILE_TABS.filter(
           (tab) =>
-            (tab.id !== "problem" || !!problem || !!interview?.custom) && (tab.id !== "interview" || showInterviewTab)
+            (tab.id !== "problem" || !!problem || !!customQuestion) && (tab.id !== "interview" || showInterviewTab)
         ).map(({ id: tabId, label, icon: Icon }) => {
           const active = mobilePanel === tabId;
           return (
@@ -1697,14 +1748,13 @@ export default function RoomPage({
             interview={interview}
             skew={iv.skew}
             me={currentUserId ?? null}
-            title={interview.custom?.title ?? problem?.title ?? "Interview"}
             hints={interviewHints}
             onControl={(action) => iv.control(action)}
           />
           <Scorecard
             open={scorecardOpen && isInterviewer && interview.status === "ended"}
             interview={interview}
-            target={kit?.time ?? null}
+            canShare={interview.organizerId === currentUserId}
             onClose={() => setScorecardOpen(false)}
             onSave={handleSaveScorecard}
           />

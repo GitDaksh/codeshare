@@ -39,7 +39,7 @@ type AwarenessChanges = { added: number[]; updated: number[]; removed: number[] 
 const shared = new Map<string, Promise<SharedRoom>>();
 const closing = new Map<string, Promise<void>>();
 
-function bytesOf(value: unknown): Uint8Array | null {
+export function bytesOf(value: unknown): Uint8Array | null {
   if (value instanceof Uint8Array) return value;
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
   return null;
@@ -130,6 +130,39 @@ function textAdded(update: Uint8Array): number | null {
     }
   }
   return added;
+}
+
+// How many characters an edit adds and removes (for spotting large pastes;
+// reformatting adds a lot but removes about as much).
+export function measureUpdate(update: Uint8Array): { added: number; deleted: number } {
+  try {
+    const decoded = Y.decodeUpdate(update);
+    let added = 0;
+    for (const struct of decoded.structs) {
+      if (struct instanceof Y.Item && struct.content instanceof Y.ContentString) added += struct.content.str.length;
+    }
+    let deleted = 0;
+    decoded.ds.clients.forEach((items) => items.forEach((item) => (deleted += item.len)));
+    return { added, deleted };
+  } catch {
+    return { added: 0, deleted: 0 };
+  }
+}
+
+// Replaces the room's code for everyone, as if typed (an interview moving to
+// another question). Line endings are always \n, like everywhere else.
+export async function replaceCode(io: Server, roomId: string, code: string): Promise<void> {
+  const room = await openShared(roomId);
+  const text = room.doc.getText("code");
+  const before = Y.encodeStateVector(room.doc);
+  room.doc.transact(() => {
+    text.delete(0, text.length);
+    const next = code.replace(/\r\n?/g, "\n").slice(0, MAX_CODE_CHARS);
+    if (next) text.insert(0, next);
+  }, "server");
+  const update = Y.encodeStateAsUpdate(room.doc, before);
+  io.to(roomId).emit("collab:update", { roomId, update });
+  scheduleSave(roomId, room);
 }
 
 // The room's code right now: the live document while anyone's in the room,

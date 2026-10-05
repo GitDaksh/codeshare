@@ -7,7 +7,9 @@ import {
   countdownAt,
   elapsedAt,
   formatClock,
-  latestTests,
+  isCandidateIn,
+  isInterviewerIn,
+  questionTitle,
   remainingAt,
   useClock,
   type InterviewState,
@@ -17,52 +19,59 @@ type InterviewOverlaysProps = {
   interview: InterviewState;
   skew: number;
   me: string | null;
-  title: string;
-  // The text of each hint given so far, in order.
+  // The current question's hint texts, in order.
   hints: string[];
   onControl: (action: "extend" | "end") => void;
 };
 
-// How long the new-hint card and the time's-up banner stay up.
 const HINT_CARD_MS = 9000;
+const QUESTION_CARD_MS = 2600;
 const TIME_UP_MS = 12000;
 
-// The moments everyone should notice: the 3-2-1 start, a new hint for the
-// candidate, time running out, and the end.
-export function InterviewOverlays({ interview, skew, me, title, hints, onControl }: InterviewOverlaysProps) {
+// The moments everyone should notice: the 3-2-1 start, each new question, a
+// new hint for the candidate, time running out, and the end.
+export function InterviewOverlays({ interview, skew, me, hints, onControl }: InterviewOverlaysProps) {
   const now = useClock() + skew;
-  const [dismissedHint, setDismissedHint] = useState(0);
+  const [dismissedHint, setDismissedHint] = useState<string | null>(null);
   const [dismissedEnd, setDismissedEnd] = useState<string | null>(null);
 
-  const isInterviewer = me === interview.interviewer.userId;
-  const isCandidate = me === interview.candidate.userId;
+  const staff = isInterviewerIn(interview, me);
+  const candidate = isCandidateIn(interview, me);
+  const solo = interview.mode === "solo";
   const ended = interview.status === "ended";
-  const countdown = ended ? 0 : countdownAt(interview, now);
-  const sinceStart = now - Date.parse(interview.startedAt);
+  const running = interview.status === "running" || interview.status === "paused";
+  const countdown = running ? countdownAt(interview, now) : 0;
+  const sinceStart = interview.startedAt ? now - Date.parse(interview.startedAt) : -1;
   const elapsed = elapsedAt(interview, now);
   const remaining = remainingAt(interview, now);
+  const question = interview.questions[interview.current];
+  const total = interview.questions.length;
 
-  // The newest hint, shown to the candidate for a few seconds.
-  const lastHint = [...interview.events].reverse().find((event) => event.type === "hint");
-  const hintIndex = interview.hintsGiven;
+  // A new question, announced for everyone.
+  const lastMove = [...interview.events].reverse().find((event) => event.type === "question");
+  const showQuestion = running && !!lastMove && elapsed - lastMove.at < QUESTION_CARD_MS && lastMove.question === interview.current;
+
+  // The newest hint for this question, for the candidate.
+  const lastHint = [...interview.events].reverse().find((event) => event.type === "hint" && event.question === interview.current);
+  const hintKey = lastHint ? `${interview.current}:${lastHint.data?.index}` : null;
+  const hintIndex = Number(lastHint?.data?.index ?? 0);
   const showHint =
     !!lastHint &&
-    isCandidate &&
-    (!isInterviewer || interview.mode === "solo") &&
-    !ended &&
-    hintIndex > dismissedHint &&
+    candidate &&
+    (!staff || solo) &&
+    running &&
+    hintKey !== dismissedHint &&
     elapsed - lastHint.at < HINT_CARD_MS &&
     !!hints[hintIndex - 1];
 
-  const timeUp = !ended && interview.status === "running" && remaining <= 0 && -remaining < TIME_UP_MS;
-  const showEnd = ended && dismissedEnd !== interview.id && !isInterviewer;
-  const tests = latestTests(interview.events);
+  const timeUp = interview.status === "running" && remaining <= 0 && -remaining < TIME_UP_MS;
+  const showEnd = ended && dismissedEnd !== interview.id && !staff;
 
   return (
     <>
       {/* 3, 2, 1, go */}
       <AnimatePresence>
-        {(countdown > 0 || (!ended && sinceStart >= 0 && sinceStart < 800)) && (
+        {running && (countdown > 0 || (sinceStart >= 0 && sinceStart < 800)) && (
           <motion.div
             key="countdown"
             initial={{ opacity: 0 }}
@@ -72,7 +81,7 @@ export function InterviewOverlays({ interview, skew, me, title, hints, onControl
           >
             <div className="flex flex-col items-center gap-6 text-center">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-ink-400">
-                {interview.mode === "solo" ? "Mock interview" : "Interview"} starting
+                {solo ? "Mock interview" : interview.title} starting
               </p>
               <AnimatePresence mode="popLayout">
                 <motion.span
@@ -87,9 +96,36 @@ export function InterviewOverlays({ interview, skew, me, title, hints, onControl
                 </motion.span>
               </AnimatePresence>
               <p className="max-w-sm text-sm text-ink-400">
-                {countdown > 0 ? `${formatClock(interview.durationMs)} on the clock. Think out loud.` : title}
+                {countdown > 0
+                  ? `${total} question${total === 1 ? "" : "s"} · ${formatClock(interview.durationMs)} on the clock. Think out loud.`
+                  : question
+                    ? questionTitle(question, interview.current)
+                    : ""}
               </p>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* A new question */}
+      <AnimatePresence>
+        {showQuestion && question && (
+          <motion.div
+            key={`question-${interview.current}-${lastMove?.at}`}
+            initial={{ opacity: 0, scale: 0.94, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 1.04 }}
+            transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
+            className="pointer-events-none fixed inset-x-0 top-1/3 z-50 mx-auto w-fit rounded-2xl border border-ink-600 bg-ink-900/95 px-8 py-5 text-center shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9),0_0_40px_-10px_rgba(255,255,255,0.25)] backdrop-blur"
+            role="status"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-400">
+              Question {interview.current + 1} of {total}
+            </p>
+            <p className="mt-2 font-[family-name:var(--font-display)] text-2xl font-semibold text-ink-100">
+              {questionTitle(question, interview.current)}
+            </p>
+            <p className="mt-1 text-xs text-ink-500">{question.minutes} minutes</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -98,7 +134,7 @@ export function InterviewOverlays({ interview, skew, me, title, hints, onControl
       <AnimatePresence>
         {showHint && (
           <motion.div
-            key={`hint-${hintIndex}`}
+            key={`hint-${hintKey}`}
             initial={{ opacity: 0, y: -16, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -12, scale: 0.98 }}
@@ -113,7 +149,7 @@ export function InterviewOverlays({ interview, skew, me, title, hints, onControl
               </span>
               <button
                 type="button"
-                onClick={() => setDismissedHint(hintIndex)}
+                onClick={() => setDismissedHint(hintKey)}
                 aria-label="Close"
                 className="rounded-md p-1 text-ink-500 transition-colors hover:text-ink-100"
               >
@@ -138,7 +174,7 @@ export function InterviewOverlays({ interview, skew, me, title, hints, onControl
           >
             <Clock className="h-4 w-4" />
             <span className="text-sm font-semibold">Time&apos;s up</span>
-            {isInterviewer ? (
+            {staff ? (
               <span className="flex items-center gap-1">
                 <button
                   type="button"
@@ -183,18 +219,18 @@ export function InterviewOverlays({ interview, skew, me, title, hints, onControl
                 <PartyPopper className="h-5 w-5 text-ink-100" />
               </div>
               <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-ink-100">
-                {isCandidate ? "Interview complete" : "The interview is over"}
+                {candidate ? "Interview complete" : "The interview is over"}
               </p>
               <p className="mt-1.5 text-sm text-ink-400">
-                {isCandidate
-                  ? `Nice work${interview.candidate.name ? `, ${interview.candidate.name}` : ""}. Your interviewer is writing feedback; the report will show up on your dashboard.`
-                  : `${interview.interviewer.name} is writing up the feedback.`}
+                {candidate
+                  ? `Nice work${interview.candidate?.name ? `, ${interview.candidate.name}` : ""}. Your interviewers are writing feedback; you'll find the report on your Interviews page once it's shared.`
+                  : "The interviewers are writing up their feedback."}
               </p>
               <div className="mt-5 grid grid-cols-3 gap-2 text-left">
                 {[
                   ["Time", formatClock(elapsed)],
-                  ["Hints", String(interview.hintsGiven)],
-                  ["Tests", tests ? `${tests.passed}/${tests.total}` : "–"],
+                  ["Questions", `${interview.questions.filter((q) => q.status !== "pending").length}/${total}`],
+                  ["Hints", String(interview.questions.reduce((sum, q) => sum + q.hintsGiven, 0))],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-xl border border-ink-800 bg-ink-950/60 px-3 py-2">
                     <p className="text-[10px] uppercase tracking-wider text-ink-500">{label}</p>

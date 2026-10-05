@@ -8,6 +8,7 @@ import {
   getRecentRooms,
   markProblemSolved,
   getProfileStats,
+  searchPeople,
 } from "../controllers/profileController";
 
 const router = Router();
@@ -15,6 +16,7 @@ const router = Router();
 router.use(requireAuth, limitRequests(apiRequests));
 
 router.get("/username-available", checkUsername);
+router.get("/search", searchPeople);
 router.get("/recent-rooms", getRecentRooms);
 router.get("/stats", getProfileStats);
 router.post("/solved", markProblemSolved);
