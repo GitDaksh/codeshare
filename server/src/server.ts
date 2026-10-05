@@ -13,6 +13,7 @@ import interviewRoutes from "./routes/interviewRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import { setupSocket, flushAllPendingCodeSaves } from "./sockets";
 import { prepareRooms } from "./lib/access";
+import { prepareInterviews } from "./lib/interviews";
 
 dotenv.config();
 
@@ -74,6 +75,11 @@ async function start() {
     await prepareRooms();
   } catch (err) {
     console.error("Failed to prepare invite links for existing rooms:", err);
+  }
+  try {
+    await prepareInterviews();
+  } catch (err) {
+    console.error("Failed to move interviews to the multi-question format:", err);
   }
   httpServer.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

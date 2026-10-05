@@ -1,4 +1,4 @@
-import { Schema, model, Document } from "mongoose";
+import { Schema, model, Document, Types } from "mongoose";
 import { newInviteCode } from "../lib/inviteCode";
 
 export interface IRoom extends Document {
@@ -12,6 +12,8 @@ export interface IRoom extends Document {
   members: string[];
   viewers: string[];
   yState?: Buffer;
+  // Set for a room made for an interview (it lives on the Interviews page).
+  interviewId: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -75,6 +77,10 @@ const roomSchema = new Schema<IRoom>(
     yState: {
       type: Buffer,
       select: false,
+    },
+    interviewId: {
+      type: Schema.Types.ObjectId,
+      default: null,
     },
   },
   {

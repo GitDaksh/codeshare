@@ -95,6 +95,26 @@ export async function updateProfile(req: Request, res: Response, next: NextFunct
   }
 }
 
+// People by username, for adding them to an interview (at most 8, not you).
+export async function searchPeople(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const query = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase().replace(/^@/, "") : "";
+    if (query.length < 2 || query.length > 30 || !/^[a-z0-9_.-]+$/.test(query)) return res.json([]);
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const people = await Profile.find(
+      { username: { $regex: `^${escaped}` }, clerkUserId: { $ne: userId } },
+      { clerkUserId: 1, username: 1, avatarId: 1 }
+    )
+      .limit(8)
+      .lean();
+    res.json(people.map((person) => ({ userId: person.clerkUserId, username: person.username, avatarId: person.avatarId })));
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getRecentRooms(req: Request, res: Response, next: NextFunction) {
   try {
     const { userId } = getAuth(req);

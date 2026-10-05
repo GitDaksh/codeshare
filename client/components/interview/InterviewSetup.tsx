@@ -147,7 +147,7 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
           </div>
           {mode === "live" &&
             (others.length ? (
-              <div className="grid gap-1.5 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {others.map((person) => {
                   const selected = person.userId === candidateId;
                   const online = onlineIds.has(person.userId);

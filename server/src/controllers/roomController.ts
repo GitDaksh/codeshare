@@ -81,9 +81,11 @@ export async function listMyRooms(req: Request, res: Response, next: NextFunctio
     }
 
     // problemSlug: null also matches rooms created before Practice existed.
+    // Rooms made for interviews live on the Interviews page instead.
     const rooms = await Room.find({
       ownerId: userId,
       problemSlug: typeof problem === "string" ? problem : null,
+      interviewId: null,
     }).sort({ updatedAt: -1 });
     res.json(rooms);
   } catch (err) {

@@ -62,6 +62,13 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
+// Where to go once you're set up: back to where you came from (an interview
+// link, say), or the dashboard. Only paths on this site.
+function afterOnboarding(): string {
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+}
+
 export default function OnboardingPage() {
   const api = useApi();
   const router = useRouter();
@@ -88,7 +95,7 @@ export default function OnboardingPage() {
       .get<Profile>("/api/profile")
       .then((res) => {
         if (res.data.username) {
-          router.replace("/dashboard");
+          router.replace(afterOnboarding());
           return;
         }
         setAvatarId(res.data.avatarId);
@@ -107,7 +114,7 @@ export default function OnboardingPage() {
         githubUsername: githubUsername.trim(),
       });
       toast(`Welcome, @${username}!`);
-      router.push("/dashboard");
+      router.push(afterOnboarding());
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||

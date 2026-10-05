@@ -9,9 +9,8 @@ import {
   RATING_LABELS,
   elapsedAt,
   formatClock,
-  latestComplexity,
   latestTests,
-  sameComplexity,
+  summarizeIntegrity,
   type InterviewCriterion,
   type InterviewState,
   type InterviewVerdict,
@@ -21,20 +20,20 @@ export type ScorecardChoice = {
   ratings: Record<InterviewCriterion, number>;
   verdict: InterviewVerdict;
   feedback: string;
-  shared: boolean;
+  shared?: boolean;
 };
 
 type ScorecardProps = {
   open: boolean;
   interview: InterviewState;
-  // The target complexity, for Practice problems.
-  target: string | null;
+  // The organizer decides whether the candidate sees the report.
+  canShare: boolean;
   initial?: Partial<ScorecardChoice>;
   onClose: () => void;
   onSave: (choice: ScorecardChoice) => Promise<void>;
 };
 
-function ScorecardCard({ interview, target, initial, onClose, onSave }: Omit<ScorecardProps, "open">) {
+function ScorecardCard({ interview, canShare, initial, onClose, onSave }: Omit<ScorecardProps, "open">) {
   const solo = interview.mode === "solo";
   const [ratings, setRatings] = useState<Partial<Record<InterviewCriterion, number>>>(initial?.ratings ?? {});
   const [verdict, setVerdict] = useState<InterviewVerdict | null>(initial?.verdict ?? null);
@@ -43,9 +42,14 @@ function ScorecardCard({ interview, target, initial, onClose, onSave }: Omit<Sco
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const tests = latestTests(interview.events);
-  const complexity = latestComplexity(interview.events);
   const used = elapsedAt(interview, Date.parse(interview.endedAt ?? interview.serverNow));
+  const reached = interview.questions.filter((question) => question.status !== "pending").length;
+  const hints = interview.questions.reduce((sum, question) => sum + question.hintsGiven, 0);
+  const passing = interview.questions.filter((_, index) => {
+    const run = latestTests(interview.events, index);
+    return run && run.total > 0 && run.passed === run.total;
+  }).length;
+  const flags = summarizeIntegrity(interview.events).flags.length;
   const complete = INTERVIEW_CRITERIA.every((criterion) => ratings[criterion.id]) && !!verdict;
 
   async function save() {
@@ -53,7 +57,12 @@ function ScorecardCard({ interview, target, initial, onClose, onSave }: Omit<Sco
     setBusy(true);
     setError(null);
     try {
-      await onSave({ ratings: ratings as Record<InterviewCriterion, number>, verdict, feedback, shared: solo || shared });
+      await onSave({
+        ratings: ratings as Record<InterviewCriterion, number>,
+        verdict,
+        feedback,
+        ...(canShare || solo ? { shared: solo || shared } : {}),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save the scorecard.");
       setBusy(false);
@@ -74,10 +83,14 @@ function ScorecardCard({ interview, target, initial, onClose, onSave }: Omit<Sco
       <div className="flex items-start justify-between gap-4 border-b border-ink-800 px-5 pb-4 pt-5">
         <div>
           <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold text-ink-100">
-            {solo ? "How did it go?" : `Scorecard for ${interview.candidate.name}`}
+            {solo ? "How did it go?" : `Your scorecard for ${interview.candidate?.name ?? "the candidate"}`}
           </h2>
           <p className="mt-0.5 text-xs text-ink-400">
-            {solo ? "Rate yourself honestly. It's only for you." : "Rate each area, then make the call."}
+            {solo
+              ? "Rate yourself honestly. It's only for you."
+              : interview.interviewers.length > 1
+                ? "Each interviewer fills their own. Rate each area, then make your call."
+                : "Rate each area, then make the call."}
           </p>
         </div>
         <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-ink-400 transition-colors hover:text-ink-100">
@@ -89,9 +102,9 @@ function ScorecardCard({ interview, target, initial, onClose, onSave }: Omit<Sco
         <div className="grid grid-cols-4 gap-2">
           {[
             ["Time", formatClock(used)],
-            ["Hints", String(interview.hintsGiven)],
-            ["Tests", tests ? `${tests.passed}/${tests.total}` : "–"],
-            ["Big-O", complexity ? complexity.time : "–"],
+            ["Questions", `${reached}/${interview.questions.length}`],
+            ["Passing", `${passing}/${interview.questions.length}`],
+            [solo ? "Hints" : "Flags", solo ? String(hints) : String(flags)],
           ].map(([label, value]) => (
             <div key={label} className="rounded-xl border border-ink-800 bg-ink-950/60 px-2.5 py-2">
               <p className="text-[10px] uppercase tracking-wider text-ink-500">{label}</p>
@@ -99,11 +112,6 @@ function ScorecardCard({ interview, target, initial, onClose, onSave }: Omit<Sco
             </div>
           ))}
         </div>
-        {target && complexity && (
-          <p className="-mt-3 text-[11px] text-ink-500">
-            {sameComplexity(complexity.time, target) ? "✓ Matched the target complexity" : `The target was ${target}.`}
-          </p>
-        )}
 
         <div className="space-y-3.5">
           {INTERVIEW_CRITERIA.map((criterion) => (
@@ -137,7 +145,7 @@ function ScorecardCard({ interview, target, initial, onClose, onSave }: Omit<Sco
         </div>
 
         <div>
-          <p className="mb-1.5 text-sm font-medium text-ink-100">{solo ? "Would you have passed?" : "Verdict"}</p>
+          <p className="mb-1.5 text-sm font-medium text-ink-100">{solo ? "Would you have passed?" : "Your verdict"}</p>
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {INTERVIEW_VERDICTS.map((option) => (
               <button
@@ -167,7 +175,7 @@ function ScorecardCard({ interview, target, initial, onClose, onSave }: Omit<Sco
           />
         </div>
 
-        {!solo && (
+        {canShare && !solo && (
           <label className="flex cursor-pointer items-start gap-2.5 text-xs text-ink-300">
             <input
               type="checkbox"
@@ -176,8 +184,10 @@ function ScorecardCard({ interview, target, initial, onClose, onSave }: Omit<Sco
               className="mt-0.5 h-3.5 w-3.5 accent-white"
             />
             <span>
-              Let {interview.candidate.name} read the report
-              <span className="block text-ink-500">They see the scores, verdict, feedback and timeline. Never your notes.</span>
+              Let {interview.candidate?.name ?? "the candidate"} read the report
+              <span className="block text-ink-500">
+                They see every scorecard, the feedback and their code. Never your notes or the integrity details.
+              </span>
             </span>
           </label>
         )}

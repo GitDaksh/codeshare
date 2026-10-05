@@ -6,7 +6,7 @@ import { Profile } from "../models/Profile";
 import { canEdit, openRoom, roleOf, type RoomRole } from "../lib/access";
 import { limiter, type Limiter } from "../lib/rateLimit";
 import { awarenessShared, closeShared, flushShared, helloShared, leaveShared, updateShared } from "./collab";
-import { registerInterviewEvents, sendInterviewOnJoin, setInterviewServer } from "./interview";
+import { noteEdit, noteLeave, registerInterviewEvents, sendInterviewOnJoin, setInterviewServer } from "./interview";
 
 type PresenceUser = {
   socketId: string;
@@ -187,6 +187,7 @@ function removeFromRoom(io: Server, socket: Socket, roomId: string) {
 
   room.delete(socket.id);
   leaveShared(io, socket, roomId);
+  noteLeave(socket, roomId);
   if (room.size === 0) {
     roomPresence.delete(roomId);
     void closeShared(roomId);
@@ -364,6 +365,8 @@ export function setupSocket(io: Server) {
       }
       const result = await updateShared(socket, roomId, update).catch(() => "ignored" as const);
       if (result === "rejected") socket.emit("collab:rejected", { roomId, reason: "too-long" });
+      // A large insertion by an interview's candidate is noted (monitoring).
+      if (result === "ok") noteEdit(socket, roomId, update);
     });
 
     socket.on("collab:awareness", async (data: unknown) => {
