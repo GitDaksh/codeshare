@@ -92,7 +92,7 @@ export function NavigationProgress() {
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-[70] h-0.5">
       <div
-        className="h-full origin-left bg-ink-100 shadow-[0_0_12px_rgba(255,255,255,0.7)]"
+        className="h-full origin-left bg-ink-100 shadow-xs"
         style={PHASE_STYLES[phase]}
       />
     </div>

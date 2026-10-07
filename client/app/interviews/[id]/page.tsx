@@ -6,9 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft,
   ArrowRight,
-  Check,
   Code2,
   Eye,
   EyeOff,
@@ -31,6 +29,8 @@ import {
   UserRound,
 } from "lucide-react";
 import { useApi } from "@/lib/api";
+import { PageContainer, PageHeader } from "@/components/PageHeader";
+import { ui } from "@/lib/ui";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { DifficultyBadge } from "@/components/DifficultyBadge";
 import { Scorecard, type ScorecardChoice } from "@/components/interview/Scorecard";
@@ -100,7 +100,7 @@ function describe(event: InterviewEvent): string {
 
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="rounded-2xl border border-ink-800 bg-ink-900 px-4 py-3">
+    <div className="rounded-xl border border-ink-800 bg-ink-900 px-4 py-3">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-500">{label}</p>
       <p className="mt-1 truncate font-[family-name:var(--font-mono)] text-lg tabular-nums text-ink-100">{value}</p>
       {note && <p className="mt-0.5 truncate text-[11px] text-ink-500">{note}</p>}
@@ -108,10 +108,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
   );
 }
 
-const SECTION = "rounded-2xl border border-ink-800 bg-ink-900 p-5";
-const ACTION =
-  "inline-flex h-8 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-3 text-xs text-ink-200 transition-colors hover:border-ink-500 hover:text-ink-100";
-
+const SECTION = "rounded-xl border border-ink-800 bg-ink-900 p-5";
 // One interview: its plan and links before it happens, its report after.
 export default function InterviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -148,7 +145,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
   if (error) {
     return (
       <main className="mx-auto flex min-h-[60dvh] max-w-md flex-col items-center justify-center px-4 text-center">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl border border-ink-700 bg-ink-900">
+        <div className="grid h-12 w-12 place-items-center rounded-xl border border-ink-700 bg-ink-900">
           <Lock className="h-5 w-5 text-ink-300" />
         </div>
         <p className="mt-4 font-semibold text-ink-100">{error.status === 403 ? "Not shared yet" : "Interview not found"}</p>
@@ -157,7 +154,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
             ? "Your interviewers are still writing feedback. The report will appear here once it's shared."
             : error.message}
         </p>
-        <Link href="/interviews" className="mt-5 inline-flex h-9 items-center rounded-full border border-ink-700 bg-ink-900 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500">
+        <Link href="/interviews" className="mt-5 inline-flex h-9 items-center rounded-lg border border-ink-700 bg-ink-900 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500">
           Back to Interviews
         </Link>
       </main>
@@ -173,6 +170,12 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
   }
 
   const staff = data.viewer === "interviewer";
+  const when =
+    data.status === "ended"
+      ? new Date(data.endedAt ?? data.serverNow).toLocaleDateString(undefined, { dateStyle: "medium" })
+      : data.scheduledFor
+        ? new Date(data.scheduledFor).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+        : "Not scheduled";
   const organizer = data.organizerId === userId;
   const solo = data.mode === "solo";
   const ended = data.status === "ended";
@@ -223,125 +226,66 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6 print:max-w-none print:px-0 print:pt-0">
-      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <Link href="/interviews" className="inline-flex items-center gap-1.5 text-sm text-ink-400 transition-colors hover:text-ink-100">
-          <ArrowLeft className="h-4 w-4" />
-          Interviews
-        </Link>
-        <div className="flex flex-wrap items-center gap-2">
-          {organizer && ended && !solo && (
-            <button type="button" onClick={toggleShare} className={ACTION} title="Whether the candidate can read this report">
-              {data.shared ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-              {data.shared ? "Shared with the candidate" : "Not shared"}
-            </button>
-          )}
-          {ended && (
-            <button type="button" onClick={() => window.print()} className={ACTION}>
-              <Printer className="h-3.5 w-3.5" />
-              Save as PDF
-            </button>
-          )}
-          {organizer && !live && (
-            <button
-              type="button"
-              onClick={remove}
-              className={confirmDelete ? `${ACTION} border-red-500/60 text-red-300 hover:border-red-400 hover:text-red-200` : ACTION}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              {confirmDelete ? "Click again to delete" : "Delete"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ---------- The headline ---------- */}
-      <motion.header
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="mt-8 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between"
+    <PageContainer className="print:max-w-none print:px-0 print:pt-0">
+      <PageHeader
+        back={{ href: "/interviews", label: "Interviews" }}
+        title={data.title}
+        description={[solo ? "Mock interview" : null, data.position, data.level, language, when].filter(Boolean).join(" · ")}
+        actions={
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            {organizer && ended && !solo && (
+              <button type="button" onClick={toggleShare} className={ui.secondarySm} title="Whether the candidate can read this report">
+                {data.shared ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                {data.shared ? "Shared with the candidate" : "Not shared"}
+              </button>
+            )}
+            {ended && (
+              <button type="button" onClick={() => window.print()} className={ui.secondarySm}>
+                <Printer className="h-3.5 w-3.5" />
+                Save as PDF
+              </button>
+            )}
+            {organizer && !live && (
+              <button
+                type="button"
+                onClick={remove}
+                className={confirmDelete ? `${ui.secondarySm} border-danger-line text-danger hover:bg-danger-soft` : ui.secondarySm}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {confirmDelete ? "Click again to delete" : "Delete"}
+              </button>
+            )}
+            {ended && staff && !mine && (
+              <button type="button" onClick={() => setScoring(true)} className={ui.primarySm}>
+                {solo ? "Review yourself" : "Fill in your scorecard"}
+              </button>
+            )}
+          </div>
+        }
       >
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-500">
-            {solo ? "Mock interview" : "Interview"} · {ended ? "report" : live ? "live now" : "upcoming"}
-          </p>
-          <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-ink-100 sm:text-4xl">
-            {data.title}
-          </h1>
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-400">
-            {[data.position, data.level, language].filter(Boolean).map((part, i) => (
-              <span key={i} className="flex items-center gap-3">
-                {i > 0 && <span className="text-ink-700">·</span>}
-                {part}
+        {!solo && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-300">
+            {data.interviewers.map((person) => (
+              <span key={person.userId} className="flex items-center gap-1.5 rounded-md border border-ink-800 bg-ink-900 py-0.5 pl-0.5 pr-2">
+                <AvatarIcon avatarId={person.avatarId} className="h-5 w-5 rounded-full" />
+                {person.name}
               </span>
             ))}
-            <span className="text-ink-700">·</span>
-            <span>
-              {ended
-                ? new Date(data.endedAt ?? data.serverNow).toLocaleDateString(undefined, { dateStyle: "medium" })
-                : data.scheduledFor
-                  ? new Date(data.scheduledFor).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
-                  : "Not scheduled"}
-            </span>
-          </div>
-          {!solo && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-300">
-              {data.interviewers.map((person) => (
-                <span key={person.userId} className="flex items-center gap-1.5 rounded-full border border-ink-800 py-0.5 pl-0.5 pr-2.5">
-                  <AvatarIcon avatarId={person.avatarId} className="h-5 w-5 rounded-full" />
-                  {person.name}
-                </span>
-              ))}
-              <ArrowRight className="h-3.5 w-3.5 text-ink-600" />
-              {data.candidate ? (
-                <span className="flex items-center gap-1.5 rounded-full border border-ink-700 py-0.5 pl-0.5 pr-2.5 text-ink-100">
-                  <AvatarIcon avatarId={data.candidate.avatarId} className="h-5 w-5 rounded-full" />
-                  {data.candidate.name}
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5 text-ink-500">
-                  <UserRound className="h-4 w-4" />
-                  No candidate yet
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-        {ended && verdict ? (
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.15, type: "spring", bounce: 0.35 }}
-            className="shrink-0 text-right"
-          >
-            <div
-              className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 ${
-                verdict.score >= 3
-                  ? "border-ink-100 bg-ink-100 text-ink-950 shadow-[0_0_40px_-12px_rgba(255,255,255,0.6)]"
-                  : "border-ink-600 bg-ink-900 text-ink-100"
-              }`}
-            >
-              {verdict.score >= 3 && <Check className="h-5 w-5" />}
-              <span className="font-[family-name:var(--font-display)] text-xl font-semibold">{verdict.label}</span>
-            </div>
-            {scorecards.length > 1 && (
-              <p className="mt-1.5 text-[11px] text-ink-500">The panel&apos;s average of {scorecards.length} scorecards</p>
+            <ArrowRight className="h-3.5 w-3.5 text-ink-600" />
+            {data.candidate ? (
+              <span className="flex items-center gap-1.5 rounded-md border border-ink-700 bg-ink-900 py-0.5 pl-0.5 pr-2 font-medium text-ink-100">
+                <AvatarIcon avatarId={data.candidate.avatarId} className="h-5 w-5 rounded-full" />
+                {data.candidate.name}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-ink-500">
+                <UserRound className="h-4 w-4" />
+                No candidate yet
+              </span>
             )}
-          </motion.div>
-        ) : (
-          ended &&
-          staff && (
-            <button
-              type="button"
-              onClick={() => setScoring(true)}
-              className="h-11 shrink-0 rounded-full bg-ink-100 px-5 text-sm font-semibold text-ink-950 transition-colors hover:bg-white print:hidden"
-            >
-              {solo ? "Review yourself" : "Fill in your scorecard"}
-            </button>
-          )
+          </div>
         )}
-      </motion.header>
+      </PageHeader>
 
       {/* ---------- Before (and during) ---------- */}
       {!ended && (
@@ -350,12 +294,12 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-8 flex items-start gap-3 rounded-2xl border border-ink-600 bg-ink-900 p-4"
+              className="mb-6 flex items-start gap-3 rounded-xl border border-success-line bg-success-soft p-4"
             >
-              <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-ink-100" />
+              <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-success" />
               <div>
-                <p className="text-sm font-semibold text-ink-100">Your interview is ready.</p>
-                <p className="mt-0.5 text-sm text-ink-400">
+                <p className="text-sm font-semibold text-success">Your interview is ready.</p>
+                <p className="mt-0.5 text-sm text-success">
                   {solo
                     ? "Open the room and start whenever you like."
                     : "Send the candidate link (and the interviewer link to your panel). When it's time, open the lobby and start."}
@@ -364,7 +308,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
             </motion.div>
           )}
 
-          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <section className={SECTION}>
               <h2 className="text-sm font-semibold text-ink-100">
                 {data.questions.length} question{data.questions.length === 1 ? "" : "s"} · {formatDuration(data.durationMs)}
@@ -374,7 +318,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
                   {data.questions.map((q, i) => {
                     const p = q.problemSlug ? getProblem(q.problemSlug) : null;
                     return (
-                      <li key={i} className="flex items-center gap-3 rounded-xl border border-ink-800 px-3 py-2.5">
+                      <li key={i} className="flex items-center gap-3 rounded-lg border border-ink-800 px-3 py-2.5">
                         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-ink-700 text-[11px] font-semibold text-ink-300">
                           {i + 1}
                         </span>
@@ -403,7 +347,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
                 ].map(([label, on]) => (
                   <span
                     key={String(label)}
-                    className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${on ? "border-ink-600 text-ink-200" : "border-ink-800 text-ink-500 line-through"}`}
+                    className={`rounded-md border px-2 py-0.5 text-[10px] font-medium ${on ? "border-ink-600 text-ink-200" : "border-ink-800 text-ink-500 line-through"}`}
                   >
                     {label}
                   </span>
@@ -428,7 +372,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
               )}
               <Link
                 href={`/room/${data.roomId}`}
-                className="flex h-12 items-center justify-center gap-2 rounded-full bg-ink-100 text-sm font-semibold text-ink-950 shadow-[0_0_32px_-8px_rgba(255,255,255,0.6)] transition-all hover:bg-white active:scale-[0.99]"
+                className="flex h-12 items-center justify-center gap-2 rounded-lg bg-ink-100 text-sm font-semibold text-ink-950 shadow-xs transition-all hover:bg-ink-200 active:scale-[0.99]"
               >
                 {live ? "Join the live interview" : staff ? "Open the lobby" : "Go to the interview room"}
                 <ArrowRight className="h-4 w-4" />
@@ -441,7 +385,20 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
       {/* ---------- After: the report ---------- */}
       {ended && (
         <>
-          <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {verdict ? (
+              <div className={`rounded-xl border px-4 py-3 ${verdict.score >= 3 ? "border-success-line bg-success-soft" : "border-danger-line bg-danger-soft"}`}>
+                <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${verdict.score >= 3 ? "text-success" : "text-danger"}`}>
+                  Verdict
+                </p>
+                <p className={`mt-1 truncate text-lg font-semibold ${verdict.score >= 3 ? "text-success" : "text-danger"}`}>{verdict.label}</p>
+                <p className={`mt-0.5 truncate text-[11px] ${verdict.score >= 3 ? "text-success" : "text-danger"}`}>
+                  {scorecards.length > 1 ? `Average of ${scorecards.length} scorecards` : "From the scorecard"}
+                </p>
+              </div>
+            ) : (
+              <Stat label="Verdict" value="–" note="No scorecards yet" />
+            )}
             <Stat label="Time used" value={formatClock(used)} note={`of ${formatClock(data.durationMs + data.extraMs)}`} />
             <Stat label="Questions" value={`${reached}/${data.questions.length}`} note="reached" />
             <Stat label="Passing" value={`${passing}/${data.questions.length}`} note="all tests passed" />
@@ -465,7 +422,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
                     setPicked(null);
                     setShowAnswer(false);
                   }}
-                  className={`shrink-0 rounded-xl border px-3 py-2 text-left text-xs transition-colors ${
+                  className={`shrink-0 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
                     i === tab ? "border-ink-100 bg-ink-100 text-ink-950" : "border-ink-800 text-ink-300 hover:border-ink-600"
                   }`}
                 >
@@ -493,7 +450,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
                           ["Tests", run ? `${run.passed}/${run.total}` : "Never run"],
                           ["Big-O", complexity?.time ?? "–"],
                         ].map(([label, value]) => (
-                          <div key={label} className="rounded-xl border border-ink-800 bg-ink-950/60 px-3 py-2">
+                          <div key={label} className="rounded-lg border border-ink-800 bg-ink-950 px-3 py-2">
                             <p className="text-[10px] uppercase tracking-wider text-ink-500">{label}</p>
                             <p className="mt-0.5 font-[family-name:var(--font-mono)] text-sm tabular-nums text-ink-100">{value}</p>
                           </div>
@@ -512,7 +469,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
                             {showAnswer ? "Hide the answer key" : "Show the answer key"}
                           </button>
                           {showAnswer && (
-                            <p className="mt-2 whitespace-pre-wrap rounded-xl border border-ink-800 bg-ink-950/60 p-3 text-xs leading-relaxed text-ink-300">
+                            <p className="mt-2 whitespace-pre-wrap rounded-lg border border-ink-800 bg-ink-950 p-3 text-xs leading-relaxed text-ink-300">
                               {kit ? `${kit.approach} (${kit.time} time, ${kit.space} space)` : question.answer}
                             </p>
                           )}
@@ -522,7 +479,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
                   )}
                 </div>
 
-                <div className="flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-ink-800 bg-ink-900">
+                <div className="flex min-h-[22rem] flex-col overflow-hidden rounded-xl border border-ink-800 bg-ink-900">
                   <div className="flex items-center justify-between gap-3 border-b border-ink-800 px-4 py-3">
                     <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-100">
                       <Code2 className="h-4 w-4 text-ink-400" />
@@ -575,7 +532,8 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
             <h2 className="text-sm font-semibold text-ink-100">{solo ? "Self-review" : "Scorecards"}</h2>
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               {scorecards.map((card) => {
-                const label = INTERVIEW_VERDICTS.find((option) => option.id === card.verdict)?.label;
+                const option = INTERVIEW_VERDICTS.find((choice) => choice.id === card.verdict);
+                const good = (option?.score ?? 0) >= 3;
                 return (
                   <div key={card.interviewerId} className={SECTION}>
                     <div className="flex items-center gap-2.5">
@@ -584,7 +542,13 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
                         <p className="truncate text-sm font-semibold text-ink-100">{card.interviewerId === userId ? "You" : card.name}</p>
                         <p className="text-[11px] text-ink-500">{new Date(card.at).toLocaleDateString(undefined, { dateStyle: "medium" })}</p>
                       </div>
-                      <span className="rounded-full border border-ink-600 px-2.5 py-0.5 text-xs font-semibold text-ink-100">{label}</span>
+                      <span
+                        className={`rounded-md border px-2 py-0.5 text-xs font-semibold ${
+                          good ? "border-success-line bg-success-soft text-success" : "border-danger-line bg-danger-soft text-danger"
+                        }`}
+                      >
+                        {option?.label}
+                      </span>
                     </div>
                     <div className="mt-4 space-y-3">
                       {INTERVIEW_CRITERIA.map((criterion, i) => {
@@ -620,7 +584,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
                 <button
                   type="button"
                   onClick={() => setScoring(true)}
-                  className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-ink-700 text-sm text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100 print:hidden"
+                  className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-ink-700 text-sm text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100 print:hidden"
                 >
                   <Plus className="h-5 w-5" />
                   {solo ? "Review yourself" : "Add your scorecard"}
@@ -635,7 +599,11 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
             {monitored && (
               <section className={SECTION}>
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-100">
-                  {integrity.flags.length ? <ShieldAlert className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+                  {integrity.flags.length ? (
+                    <ShieldAlert className="h-4 w-4 text-warning" />
+                  ) : (
+                    <ShieldCheck className="h-4 w-4 text-success" />
+                  )}
                   Integrity
                   <span className="text-xs font-normal text-ink-500">· interviewers only</span>
                 </h2>
@@ -648,7 +616,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
                     ["Insertions", String(integrity.inserts)],
                     ["Tabs / drops", `${integrity.extraTabs} / ${integrity.drops}`],
                   ].map(([label, value]) => (
-                    <div key={label} className="rounded-xl border border-ink-800 bg-ink-950/60 px-3 py-2">
+                    <div key={label} className="rounded-lg border border-ink-800 bg-ink-950 px-3 py-2">
                       <p className="text-[10px] uppercase tracking-wider text-ink-500">{label}</p>
                       <p className="mt-0.5 font-[family-name:var(--font-mono)] text-sm tabular-nums text-ink-100">{value}</p>
                     </div>
@@ -731,6 +699,6 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
           onSave={saveScorecard}
         />
       )}
-    </main>
+    </PageContainer>
   );
 }

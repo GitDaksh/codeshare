@@ -35,9 +35,9 @@ type ProblemPanelProps = {
 type View = "description" | "tests";
 
 function StatusIcon({ status }: { status: TestCaseResult["status"] }) {
-  if (status === "passed") return <CheckCircle2 className="h-4 w-4 shrink-0 text-ink-100" />;
-  if (status === "failed") return <XCircle className="h-4 w-4 shrink-0 text-red-400" />;
-  if (status === "error") return <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />;
+  if (status === "passed") return <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />;
+  if (status === "failed") return <XCircle className="h-4 w-4 shrink-0 text-danger" />;
+  if (status === "error") return <AlertTriangle className="h-4 w-4 shrink-0 text-danger" />;
   return <Circle className="h-4 w-4 shrink-0 text-ink-600" />;
 }
 
@@ -47,7 +47,7 @@ function DetailRow({ label, value, tone = "normal" }: { label: string; value: st
       <p className="text-[10px] font-medium uppercase tracking-wider text-ink-500">{label}</p>
       <pre
         className={`max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg border px-2.5 py-2 font-[family-name:var(--font-mono)] text-[11px] leading-5 ${
-          tone === "error" ? "border-red-500/30 bg-red-500/5 text-red-300" : "border-ink-800 bg-ink-950 text-ink-100"
+          tone === "error" ? "border-danger-line bg-danger-soft text-danger" : "border-ink-800 bg-ink-950 text-ink-100"
         }`}
       >
         {value}
@@ -97,7 +97,7 @@ export function ProblemPanel({
             {problem.title}
           </h2>
           {solved && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-semibold text-ink-950">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-success-line bg-success-soft px-1.5 py-0.5 text-[11px] font-medium text-success">
               <Check className="h-3 w-3" strokeWidth={3} />
               Solved
             </span>
@@ -108,14 +108,14 @@ export function ProblemPanel({
           {problem.topics.map((topic) => (
             <span
               key={topic}
-              className="rounded-full border border-ink-700 px-2 py-0.5 text-[11px] text-ink-400"
+              className="rounded-md border border-ink-800 bg-ink-950 px-1.5 py-0.5 text-[11px] font-medium text-ink-400"
             >
               {topic}
             </span>
           ))}
         </div>
 
-        <div className="mt-3 flex rounded-lg border border-ink-800 bg-ink-950/60 p-1">
+        <div className="mt-3 flex rounded-lg border border-ink-800 bg-ink-950 p-0.5">
           {(["description", "tests"] as const).map((tab) => {
             const active = view === tab;
             return (
@@ -128,18 +128,18 @@ export function ProblemPanel({
                 {active && (
                   <motion.span
                     layoutId="problem-panel-pill"
-                    className="absolute inset-0 rounded-md bg-ink-800 ring-1 ring-ink-700"
+                    className="absolute inset-0 rounded-md bg-ink-900 shadow-xs ring-1 ring-ink-800"
                     transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
                   />
                 )}
                 <span
                   className={`relative inline-flex items-center gap-1.5 transition-colors ${
-                    active ? "text-ink-100" : "text-ink-400 hover:text-ink-100"
+                    active ? "text-ink-100" : "text-ink-500 hover:text-ink-100"
                   }`}
                 >
                   {tab === "description" ? "Problem" : "Tests"}
                   {tab === "tests" && (
-                    <span className="rounded border border-ink-700 bg-ink-900 px-1 text-[10px] tabular-nums text-ink-300">
+                    <span className="rounded bg-ink-800 px-1 text-[10px] tabular-nums text-ink-500">
                       {report ? `${report.passed}/${report.total}` : total}
                     </span>
                   )}
@@ -167,50 +167,52 @@ export function ProblemPanel({
           <div className="space-y-4">
             {/* Summary */}
             {running ? (
-              <div className="flex items-center gap-2.5 rounded-xl border border-ink-700 bg-ink-950/60 px-3.5 py-3 text-sm text-ink-300">
+              <div className="flex items-center gap-2.5 rounded-lg border border-ink-800 bg-ink-950 px-3.5 py-3 text-sm text-ink-300">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Running {total} tests…
               </div>
             ) : report ? (
               report.outcome !== "completed" ? (
-                <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-3.5 py-3">
-                  <p className="flex items-center gap-2 text-sm font-medium text-red-300">
+                <div className="rounded-lg border border-danger-line bg-danger-soft px-3.5 py-3">
+                  <p className="flex items-center gap-2 text-sm font-medium text-danger">
                     <AlertTriangle className="h-4 w-4" />
                     {report.outcome === "timeout" ? "Tests stopped" : "Couldn't run the tests"}
                   </p>
-                  <p className="mt-1.5 whitespace-pre-wrap break-words font-[family-name:var(--font-mono)] text-[11px] leading-5 text-red-300/90">
+                  <p className="mt-1.5 whitespace-pre-wrap break-words font-[family-name:var(--font-mono)] text-[11px] leading-5 text-danger">
                     {report.message}
                   </p>
                 </div>
               ) : (
                 <div
-                  className={`rounded-xl border px-3.5 py-3 ${
-                    allPassed ? "border-ink-500 bg-ink-100/[0.06]" : "border-ink-700 bg-ink-950/60"
+                  className={`rounded-lg border px-3.5 py-3 ${
+                    allPassed ? "border-success-line bg-success-soft" : "border-ink-800 bg-ink-950"
                   }`}
                 >
                   <div className="flex items-baseline justify-between gap-3">
-                    <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-ink-100">
+                    <p
+                      className={`font-[family-name:var(--font-display)] text-lg font-semibold ${allPassed ? "text-success" : "text-ink-100"}`}
+                    >
                       {allPassed ? "All tests passed" : `${report.passed} of ${report.total} passed`}
                     </p>
                     <span className="text-[11px] tabular-nums text-ink-500">{Math.round(report.durationMs)} ms</span>
                   </div>
                   <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-ink-800">
                     <motion.div
-                      className="h-full rounded-full bg-ink-100"
+                      className="h-full rounded-full bg-success-strong"
                       initial={{ width: 0 }}
                       animate={{ width: `${(report.passed / Math.max(report.total, 1)) * 100}%` }}
                       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                     />
                   </div>
                   {allPassed && (
-                    <p className="mt-2 text-xs text-ink-400">
+                    <p className="mt-2 text-xs text-success">
                       {solved ? "Nice work. This problem is marked as solved." : "Nice work."}
                     </p>
                   )}
                 </div>
               )
             ) : (
-              <p className="rounded-xl border border-dashed border-ink-700 px-3.5 py-3 text-xs leading-relaxed text-ink-400">
+              <p className="rounded-lg border border-dashed border-ink-700 px-3.5 py-3 text-xs leading-relaxed text-ink-400">
                 Run the tests to check your solution against {total} cases. Your function name must match the starter
                 code.
               </p>
@@ -265,7 +267,7 @@ export function ProblemPanel({
                               <button
                                 type="button"
                                 onClick={() => onVisualizeTest(result.index)}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-ink-700 px-2 py-1 text-[11px] font-medium text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-ink-700 bg-ink-900 px-2 py-1 text-[11px] font-medium text-ink-300 shadow-xs transition-colors hover:border-ink-600 hover:text-ink-100"
                               >
                                 <ScanEye className="h-3.5 w-3.5" aria-hidden="true" />
                                 Visualize this test
@@ -299,7 +301,7 @@ export function ProblemPanel({
             type="button"
             onClick={onRunTests}
             disabled={running}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-ink-100 text-sm font-semibold text-ink-950 shadow-[0_0_24px_-10px_rgba(255,255,255,0.6)] transition-all hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-ink-100 text-sm font-semibold text-ink-950 shadow-xs transition-all hover:bg-ink-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
             {running ? "Running tests…" : "Run tests"}

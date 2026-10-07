@@ -53,14 +53,14 @@ function LensCode({
             aria-current={current ? "step" : undefined}
             className={cx(
               "relative flex min-w-max pr-6 transition-colors duration-150",
-              current && (error ? "bg-red-500/10" : "bg-ink-800"),
+              current && (error ? "bg-danger-soft" : "bg-ink-800"),
               ran && "bg-ink-900",
             )}
           >
             <span
               className={cx(
                 "absolute inset-y-0 left-0 w-0.5",
-                current ? (error ? "bg-red-400" : "bg-ink-100") : ran ? "bg-ink-600" : "bg-transparent",
+                current ? (error ? "bg-danger-strong" : "bg-ink-100") : ran ? "bg-ink-600" : "bg-transparent",
               )}
             />
             <span
@@ -72,7 +72,7 @@ function LensCode({
             <span
               className={cx(
                 "whitespace-pre",
-                current ? (error ? "text-red-300" : "text-ink-100") : ran ? "text-ink-300" : "text-ink-400",
+                current ? (error ? "text-danger" : "text-ink-100") : ran ? "text-ink-300" : "text-ink-400",
               )}
             >
               {text || " "}
@@ -208,7 +208,7 @@ export function LensPlayer({
       aria-label="Lens player. Use the arrow keys to step and Space to play."
       className={cx(
         "bg-ink-950 outline-none focus-visible:ring-2 focus-visible:ring-ink-500/60",
-        fill ? "flex h-full flex-col focus-visible:ring-inset" : "overflow-hidden rounded-2xl border border-ink-800",
+        fill ? "flex h-full flex-col focus-visible:ring-inset" : "overflow-hidden rounded-xl border border-ink-800",
       )}
     >
       {/* Status */}
@@ -217,11 +217,11 @@ export function LensPlayer({
           <span
             className={cx(
               "h-1.5 w-1.5 shrink-0 rounded-full",
-              status.tone === "error" ? "bg-red-400" : status.tone === "done" ? "bg-ink-400" : "bg-ink-100",
+              status.tone === "error" ? "bg-danger-strong" : status.tone === "done" ? "bg-ink-400" : "bg-ink-100",
             )}
           />
           <span
-            className={cx("truncate text-xs font-medium", status.tone === "error" ? "text-red-300" : "text-ink-300")}
+            className={cx("truncate text-xs font-medium", status.tone === "error" ? "text-danger" : "text-ink-300")}
           >
             {status.text}
           </span>
@@ -231,7 +231,7 @@ export function LensPlayer({
           <button
             type="button"
             onClick={onEdit}
-            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-ink-700 px-2.5 text-xs font-medium text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100"
+            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-2.5 text-xs font-medium text-ink-300 shadow-xs transition-colors hover:border-ink-600 hover:text-ink-100"
           >
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             Edit code
@@ -293,7 +293,7 @@ export function LensPlayer({
             type="button"
             onClick={togglePlay}
             aria-label={isPlaying ? "Pause" : atEnd ? "Replay" : "Play"}
-            className="mx-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink-100 text-ink-950 transition-transform hover:scale-105 active:scale-95"
+            className="mx-1 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-ink-100 text-ink-950 transition-transform hover:scale-105 active:scale-95"
           >
             {isPlaying ? (
               <Pause className="h-4 w-4" />

@@ -1,32 +1,128 @@
 @import "tailwindcss";
 
 /*
-  Ink scale: a neutral near-black system rather than pure #000.
-  Pure black causes glare and halation around light text on screens, and
-  leaves no room below the background for depth. Every component uses these
-  names, so this block alone tunes the whole app.
+  Ink scale: the whole app's neutral palette, named from the page outward.
+  950 is the page itself, 900 the cards and panels on it, and 100 the
+  strongest text. Dark is the default (a soft charcoal, never pure black);
+  the `.light` class on <html> switches to the light set. Any section can
+  force a theme with `.dark` or `.light`, and `.theme-invert` shows the
+  opposite of the current theme (the landing page's closing band). The
+  utilities read these variables directly, so this block tunes the whole app.
 
-    950  app background (rich near-black)
-    900  raised surfaces: cards, panels, the code editor
-    800  hover / selected fills, inner dividers
-    700  borders
-    600  strong borders, disabled text
-    500  tertiary text
+    950  page background
+    900  surfaces: cards, panels, inputs, the editor
+    800  hover and selected fills, hairline borders and dividers
+    700  control borders, active fills
+    600  strong borders, faint text (separators, hints)
+    500  tertiary text and icons
     400  secondary text
     300  body text
-    100  primary text and primary buttons
-*/
-@theme {
-  --color-ink-950: #0a0a0a;
-  --color-ink-900: #141414;
-  --color-ink-800: #1f1f1f;
-  --color-ink-700: #2e2e2e;
-  --color-ink-600: #474747;
-  --color-ink-500: #737373;
-  --color-ink-400: #a3a3a3;
-  --color-ink-300: #d4d4d4;
-  --color-ink-100: #f5f5f5;
+    200  emphasized text
+    100  headings, primary text and primary buttons
 
+  Status colors (success, warning, danger) come in four strengths each:
+  the text color, a soft fill, a hairline border, and a strong color for
+  dots and bars. Each theme has its own, so they read well on both.
+*/
+:root,
+.dark,
+.light .theme-invert {
+  --ink-950: #131316;
+  --ink-900: #1b1b1f;
+  --ink-800: #27272c;
+  --ink-700: #36363d;
+  --ink-600: #4d4d55;
+  --ink-500: #8b8b94;
+  --ink-400: #a9a9b2;
+  --ink-300: #d4d4d9;
+  --ink-200: #e6e6ea;
+  --ink-100: #f6f6f7;
+  --ink-50: #ffffff;
+
+  --success: #34d399;
+  --success-soft: rgb(16 185 129 / 0.12);
+  --success-line: rgb(16 185 129 / 0.32);
+  --success-strong: #10b981;
+  --warning: #fbbf24;
+  --warning-soft: rgb(245 158 11 / 0.12);
+  --warning-line: rgb(245 158 11 / 0.32);
+  --warning-strong: #f59e0b;
+  --danger: #f87171;
+  --danger-soft: rgb(239 68 68 / 0.12);
+  --danger-line: rgb(239 68 68 / 0.32);
+  --danger-strong: #ef4444;
+
+  --elev-xs: 0 1px 2px rgb(0 0 0 / 0.3);
+  --elev-card: 0 1px 3px rgb(0 0 0 / 0.35), 0 1px 2px -1px rgb(0 0 0 / 0.25);
+  --elev-raised: 0 22px 52px -16px rgb(0 0 0 / 0.65), 0 8px 18px -8px rgb(0 0 0 / 0.45);
+  color-scheme: dark;
+}
+
+.light,
+:root:not(.light) .theme-invert {
+  --ink-950: #fafafa;
+  --ink-900: #ffffff;
+  --ink-800: #ececf0;
+  --ink-700: #dfdfe4;
+  --ink-600: #a8a8b0;
+  --ink-500: #71717a;
+  --ink-400: #52525b;
+  --ink-300: #3f3f46;
+  --ink-200: #27272a;
+  --ink-100: #18181b;
+  --ink-50: #09090b;
+
+  --success: #047857;
+  --success-soft: #ecfdf5;
+  --success-line: #a7f3d0;
+  --success-strong: #10b981;
+  --warning: #b45309;
+  --warning-soft: #fffbeb;
+  --warning-line: #fde68a;
+  --warning-strong: #f59e0b;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-line: #fecaca;
+  --danger-strong: #ef4444;
+
+  --elev-xs: 0 1px 2px rgb(16 24 40 / 0.05);
+  --elev-card: 0 1px 3px rgb(16 24 40 / 0.06), 0 1px 2px -1px rgb(16 24 40 / 0.04);
+  --elev-raised: 0 18px 44px -14px rgb(16 24 40 / 0.22), 0 6px 14px -6px rgb(16 24 40 / 0.08);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-ink-950: var(--ink-950);
+  --color-ink-900: var(--ink-900);
+  --color-ink-800: var(--ink-800);
+  --color-ink-700: var(--ink-700);
+  --color-ink-600: var(--ink-600);
+  --color-ink-500: var(--ink-500);
+  --color-ink-400: var(--ink-400);
+  --color-ink-300: var(--ink-300);
+  --color-ink-200: var(--ink-200);
+  --color-ink-100: var(--ink-100);
+  --color-ink-50: var(--ink-50);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-line: var(--success-line);
+  --color-success-strong: var(--success-strong);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-line: var(--warning-line);
+  --color-warning-strong: var(--warning-strong);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+  --color-danger-strong: var(--danger-strong);
+
+  --shadow-xs: var(--elev-xs);
+  --shadow-card: var(--elev-card);
+  --shadow-raised: var(--elev-raised);
+}
+
+@theme {
   /* Motion: one shared timing for every Tailwind transition that doesn't set
      its own duration or curve, so hovers across the app share one rhythm. */
   --default-transition-duration: 180ms;
@@ -35,8 +131,9 @@
 }
 
 body {
-  background: var(--color-ink-950);
-  color: var(--color-ink-100);
+  background: var(--ink-950);
+  color: var(--ink-100);
+  font-feature-settings: "cv11", "ss01";
   /* Safety net against accidental sideways scrolling on small screens.
      "clip" (unlike "hidden") doesn't create a scroll container, so sticky
      headers keep working. */
@@ -49,8 +146,14 @@ a {
 }
 
 ::selection {
-  background: rgba(255, 255, 255, 0.22);
+  background: color-mix(in srgb, var(--ink-100) 14%, transparent);
   color: inherit;
+}
+
+/* Thin, quiet scrollbars that follow the theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-700) transparent;
 }
 
 /* iOS Safari zooms the whole page into any focused form field whose text is
@@ -98,7 +201,7 @@ a {
       [role="radio"],
       [tabindex]:not([tabindex="-1"])
     ):not(.monaco-editor *):focus-visible {
-    outline: 2px solid var(--color-ink-100);
+    outline: 2px solid var(--ink-100);
     outline-offset: 2px;
   }
 
@@ -117,8 +220,8 @@ a {
 
 /*
   app/template.tsx re-mounts on every navigation, so this entrance replays
-  each time a new page opens: a quick fade out of a soft blur, plus a slightly
-  longer rise that settles gently. Keyframes only define the starting state,
+  each time a new page opens: a quick fade, plus a slightly longer rise that
+  settles gently. Keyframes only define the starting state,
   so they animate to the element's normal styles.
 
   "backwards" fill applies the first frame immediately but leaves nothing
@@ -129,13 +232,12 @@ a {
 @keyframes page-fade-in {
   from {
     opacity: 0;
-    filter: blur(3px);
   }
 }
 
 @keyframes page-rise {
   from {
-    transform: translate3d(0, 10px, 0);
+    transform: translate3d(0, 8px, 0);
   }
 }
 
@@ -145,10 +247,20 @@ a {
   }
 }
 
+/* Only opacity and transform: both run on the GPU, so the entrance stays
+   smooth on any device (a blur would have to repaint the whole page). */
 .page-enter {
   animation:
-    page-fade-in 340ms cubic-bezier(0.25, 0.1, 0.25, 1) backwards,
-    page-rise 560ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    page-fade-in 280ms cubic-bezier(0.2, 0, 0, 1) backwards,
+    page-rise 520ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Switching between dark and light crossfades the whole page (View
+   Transitions; see lib/theme.ts) instead of snapping. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 340ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -186,8 +298,8 @@ a {
   border-radius: 9999px;
   overflow: hidden;
   box-shadow:
-    0 0 0 2px var(--color-ink-950),
-    0 2px 6px rgba(0, 0, 0, 0.5);
+    0 0 0 2px var(--ink-900),
+    0 2px 6px rgb(0 0 0 / 0.25);
 }
 
 .remote-cursor-name {
@@ -197,8 +309,8 @@ a {
   margin-bottom: 4px;
   padding: 1px 6px;
   border-radius: 9999px;
-  background: var(--color-ink-100);
-  color: var(--color-ink-950);
+  background: var(--ink-100);
+  color: var(--ink-950);
   font-size: 10px;
   font-weight: 600;
   line-height: 14px;
@@ -216,36 +328,36 @@ a {
 }
 
 .remote-cursor-ink-100 {
-  background: var(--color-ink-100);
+  background: var(--ink-100);
 }
 .remote-cursor-ink-400 {
-  background: var(--color-ink-400);
+  background: var(--ink-400);
 }
 .remote-cursor-ink-600 {
-  background: var(--color-ink-600);
+  background: var(--ink-600);
 }
 .remote-cursor-ink-300 {
-  background: var(--color-ink-300);
+  background: var(--ink-300);
 }
 
 /* Teammates' selections, in their cursor's shade. */
 .remote-selection-ink-100 {
-  background: color-mix(in srgb, var(--color-ink-100) 16%, transparent);
+  background: color-mix(in srgb, var(--ink-100) 12%, transparent);
 }
 .remote-selection-ink-400 {
-  background: color-mix(in srgb, var(--color-ink-400) 20%, transparent);
+  background: color-mix(in srgb, var(--ink-400) 16%, transparent);
 }
 .remote-selection-ink-600 {
-  background: color-mix(in srgb, var(--color-ink-600) 45%, transparent);
+  background: color-mix(in srgb, var(--ink-600) 30%, transparent);
 }
 .remote-selection-ink-300 {
-  background: color-mix(in srgb, var(--color-ink-300) 18%, transparent);
+  background: color-mix(in srgb, var(--ink-300) 14%, transparent);
 }
 
 /* ---------- Landing page ---------- */
 
 .text-gradient {
-  background: linear-gradient(180deg, #ffffff 25%, #8f8f8f 100%);
+  background: linear-gradient(180deg, var(--ink-100) 35%, var(--ink-400) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -253,15 +365,15 @@ a {
 
 .hero-grid {
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+    linear-gradient(to right, color-mix(in srgb, var(--ink-100) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--ink-100) 6%, transparent) 1px, transparent 1px);
   background-size: 56px 56px;
   mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 25%, transparent 100%);
   -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 25%, transparent 100%);
 }
 
 .dot-grid {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px);
+  background-image: radial-gradient(color-mix(in srgb, var(--ink-100) 14%, transparent) 1px, transparent 1px);
   background-size: 16px 16px;
   mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
   -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
@@ -270,7 +382,7 @@ a {
 .spotlight-border {
   background: radial-gradient(
     260px circle at var(--spot-x, 50%) var(--spot-y, 50%),
-    rgba(255, 255, 255, 0.35),
+    color-mix(in srgb, var(--ink-100) 22%, transparent),
     transparent 70%
   );
 }
@@ -278,7 +390,7 @@ a {
 .spotlight-fill {
   background: radial-gradient(
     380px circle at var(--spot-x, 50%) var(--spot-y, 50%),
-    rgba(255, 255, 255, 0.055),
+    color-mix(in srgb, var(--ink-100) 4%, transparent),
     transparent 60%
   );
 }
@@ -312,7 +424,7 @@ a {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  opacity: 0.035;
+  opacity: 0.02;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 

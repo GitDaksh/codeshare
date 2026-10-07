@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-mot
 import { Check, Eye, Loader2, Play } from "lucide-react";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { DEMO_AVATARS } from "@/components/landing/demoAvatars";
+import { DifficultyBadge } from "@/components/DifficultyBadge";
 
 const EASE: [number, number, number, number] = [0.21, 0.47, 0.32, 0.98];
 
@@ -44,7 +45,7 @@ export function Window({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-ink-700/80 bg-ink-900/90 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_40px_120px_-30px_rgba(255,255,255,0.18)]">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-ink-700/80 bg-ink-900/90 text-left shadow-raised">
       <div className="flex items-center justify-between gap-3 border-b border-ink-800 px-3 py-2.5 sm:px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex shrink-0 gap-1.5" aria-hidden="true">
@@ -198,7 +199,7 @@ export function CollabVisual() {
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
-                  className="flex items-center gap-1.5 rounded-full border border-ink-600 bg-ink-800 px-2 py-0.5 text-[10px] font-medium text-ink-100"
+                  className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-800 px-2 py-0.5 text-[10px] font-medium text-ink-100"
                 >
                   <Eye className="h-3 w-3" aria-hidden="true" />
                   <span className="hidden sm:inline">Following</span> maya
@@ -218,8 +219,8 @@ export function CollabVisual() {
           <div className="relative flex min-w-0 flex-1 flex-col">
             <div className="flex-1 py-5 pr-4 font-[family-name:var(--font-mono)] text-[11px] leading-7 sm:text-[13px]">
               {lines.map((text, i) => (
-                <div key={i} className={cx("flex", (i === 2 || i === 3) && tick > 0 && "bg-white/[0.02]")}>
-                  <span className="w-10 shrink-0 select-none pr-4 text-right text-ink-700">{i + 1}</span>
+                <div key={i} className={cx("flex", (i === 2 || i === 3) && tick > 0 && "bg-ink-100/[0.04]")}>
+                  <span className="w-10 shrink-0 select-none pr-4 text-right text-ink-600">{i + 1}</span>
                   <span className="relative whitespace-pre">
                     {i === 2 && selection > 0 && (
                       <span
@@ -243,7 +244,7 @@ export function CollabVisual() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 6 }}
                   transition={{ duration: 0.3, ease: EASE }}
-                  className="absolute bottom-12 left-4 flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-800/95 px-3 py-2 text-[11px] text-ink-300 shadow-lg"
+                  className="absolute bottom-12 left-4 flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-800/95 px-3 py-2 text-[11px] text-ink-300 shadow-raised"
                 >
                   <kbd className="rounded border border-ink-600 px-1.5 font-[family-name:var(--font-mono)] text-[10px] text-ink-100">
                     ⌘Z
@@ -255,7 +256,7 @@ export function CollabVisual() {
 
             <div className="flex items-center justify-between border-t border-ink-800 px-4 py-2 text-[10px] text-ink-500">
               <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-100" />2 editing
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success-strong" />2 editing
               </span>
               <span>All changes synced</span>
             </div>
@@ -319,14 +320,14 @@ export function PracticeVisual() {
     <div ref={ref} className="h-full">
       <Window
         title="Two Sum"
-        badge={<Pill>Easy</Pill>}
+        badge={<DifficultyBadge difficulty="Easy" />}
         right={<span className="rounded border border-ink-700 px-1.5 py-0.5 text-[10px] text-ink-400">Python</span>}
       >
         <div className="grid h-full sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
           <div className="hidden border-r border-ink-800 py-5 pr-3 font-[family-name:var(--font-mono)] text-[12px] leading-7 sm:block">
             {SOLUTION.map((text, i) => (
               <div key={i} className="flex">
-                <span className="w-9 shrink-0 select-none pr-3 text-right text-ink-700">{i + 1}</span>
+                <span className="w-9 shrink-0 select-none pr-3 text-right text-ink-600">{i + 1}</span>
                 <span className="whitespace-pre">
                   <Code text={text} />
                 </span>
@@ -354,7 +355,7 @@ export function PracticeVisual() {
                     key={name}
                     className={cx(
                       "flex items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors duration-300",
-                      s === "passed" ? "border-ink-600 bg-ink-800/80 text-ink-100" : "border-ink-800 text-ink-500",
+                      s === "passed" ? "border-success-line bg-success-soft text-success" : "border-ink-800 text-ink-500",
                     )}
                   >
                     <span className="flex items-center gap-2">
@@ -365,7 +366,7 @@ export function PracticeVisual() {
                           <motion.span
                             initial={{ scale: 0.4, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
-                            className="flex h-4 w-4 items-center justify-center rounded-full bg-ink-100 text-ink-950"
+                            className="flex h-4 w-4 items-center justify-center rounded-full bg-success-strong text-white"
                           >
                             <Check className="h-3 w-3" strokeWidth={3} />
                           </motion.span>
@@ -390,7 +391,7 @@ export function PracticeVisual() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.4, ease: EASE }}
-                  className="mt-auto flex items-center justify-between rounded-xl border border-ink-600 bg-ink-100 px-3 py-2.5 text-ink-950"
+                  className="mt-auto flex items-center justify-between rounded-lg border border-success-line bg-success-soft px-3 py-2.5 text-success"
                 >
                   <span className="text-xs font-semibold">All 5 tests passed · Solved</span>
                   <span className="font-[family-name:var(--font-mono)] text-[10px] font-semibold tabular-nums">
@@ -462,9 +463,9 @@ export function BigOVisual() {
                 <AnimatePresence mode="popLayout" initial={false}>
                   <motion.span
                     key={fast ? "fast" : "slow"}
-                    initial={{ opacity: 0, y: 12, filter: "blur(4px)" }}
-                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                    exit={{ opacity: 0, y: -12, filter: "blur(4px)" }}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
                     transition={{ duration: 0.45, ease: EASE }}
                     className="font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-ink-100"
                   >
@@ -529,7 +530,7 @@ export function BigOVisual() {
                     transition={{ duration: 0.3, delay: i * 0.05, ease: EASE }}
                     className="flex"
                   >
-                    <span className="w-10 shrink-0 select-none pr-4 text-right text-ink-700">{i + 1}</span>
+                    <span className="w-10 shrink-0 select-none pr-4 text-right text-ink-600">{i + 1}</span>
                     <span className="whitespace-pre">
                       <Code text={text} />
                     </span>
@@ -548,7 +549,7 @@ export function BigOVisual() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.3 }}
-                className="font-[family-name:var(--font-mono)] text-ink-100"
+                className={`font-[family-name:var(--font-mono)] ${fast ? "text-success" : "text-danger"}`}
               >
                 {fast ? "≈ 100 thousand steps · instant" : "≈ 10 billion steps · too slow"}
               </motion.span>
@@ -670,7 +671,13 @@ export function ProgressVisual() {
                   <span className="flex min-w-0 items-center gap-2">
                     <Check className="h-3 w-3 shrink-0 text-ink-300" strokeWidth={3} aria-hidden="true" />
                     <span className="truncate text-ink-100">{solve.title}</span>
-                    <span className="shrink-0 text-ink-500">{solve.difficulty}</span>
+                    <span
+                      className={`shrink-0 ${
+                        solve.difficulty === "Easy" ? "text-success" : solve.difficulty === "Medium" ? "text-warning" : "text-danger"
+                      }`}
+                    >
+                      {solve.difficulty}
+                    </span>
                   </span>
                   <span className="shrink-0 text-ink-500">{solve.when}</span>
                 </motion.li>

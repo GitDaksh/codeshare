@@ -36,10 +36,12 @@ import {
 
 type Tone = "normal" | "active" | "changed";
 
+// Theme colors (CSS variables, so arrows follow the palette): quiet for
+// normal, stronger for active, strongest for what just changed.
 const TONE_COLOR: Record<Tone, string> = {
-  normal: "#737373",
-  active: "#d4d4d4",
-  changed: "#f5f5f5",
+  normal: "var(--ink-500)",
+  active: "var(--ink-300)",
+  changed: "var(--ink-100)",
 };
 
 const TREE_COLUMN = 60;
@@ -104,17 +106,21 @@ function InlineDefinition({ obj }: { obj: LensObject }) {
   );
 }
 
+// A value that just changed glows briefly: a tint in the text color that
+// fades out, so it shows on any background.
 function Flash({ on, children, className }: { on: boolean; children: ReactNode; className?: string }) {
   if (!on) return <span className={className}>{children}</span>;
   return (
-    <motion.span
-      className={className}
-      initial={{ backgroundColor: "rgba(245,245,245,0.24)" }}
-      animate={{ backgroundColor: "rgba(245,245,245,0)" }}
-      transition={{ duration: 1.1, ease: "easeOut" }}
-    >
+    <span className={cx("relative", className)}>
       {children}
-    </motion.span>
+      <motion.span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 rounded-[inherit] bg-ink-100/15"
+        initial={{ opacity: 1 }}
+        animate={{ opacity: 0 }}
+        transition={{ duration: 1.1, ease: "easeOut" }}
+      />
+    </span>
   );
 }
 
@@ -131,7 +137,7 @@ function Pointer({ target, source, tone, down }: { target: string; source: strin
         className={cx(
           "h-2 w-2 rounded-full",
           tone === "changed"
-            ? "bg-ink-100 shadow-[0_0_0_3px_rgba(245,245,245,0.14)]"
+            ? "bg-ink-100 shadow-[0_0_0_3px_color-mix(in_srgb,var(--ink-100)_14%,transparent)]"
             : tone === "active"
               ? "bg-ink-300"
               : "bg-ink-500",
@@ -270,7 +276,7 @@ function SequenceBox({
       <Label>{obj.cls ?? obj.k}</Label>
       <Appear
         id={obj.id}
-        className={cx("inline-flex border border-ink-700 bg-ink-900", obj.k === "set" ? "rounded-2xl" : "rounded-lg")}
+        className={cx("inline-flex border border-ink-700 bg-ink-900", obj.k === "set" ? "rounded-xl" : "rounded-lg")}
       >
         {obj.items.length === 0 && <span className="px-3 py-2 font-mono text-[11px] text-ink-600">empty</span>}
         {obj.items.map((item, position) => {
@@ -368,7 +374,7 @@ function ListNodeBox({ obj, diff, stepIndex }: BoxProps & { obj: Extract<LensObj
   return (
     <Appear
       id={obj.id}
-      className="flex items-stretch rounded-lg border border-ink-600 bg-ink-900 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]"
+      className="flex items-stretch rounded-lg border border-ink-600 bg-ink-900 shadow-raised"
     >
       <div className="flex min-w-12 flex-col items-center justify-center gap-0.5 px-2.5 py-1.5">
         <span className="font-mono text-[9px] uppercase tracking-wider text-ink-500">{valueName ?? obj.cls}</span>
@@ -421,7 +427,7 @@ function TreeNodeBox({ obj, diff, stepIndex }: BoxProps & { obj: Extract<LensObj
   return (
     <Appear
       id={obj.id}
-      className="flex flex-col items-center rounded-xl border border-ink-600 bg-ink-900 pt-1.5 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]"
+      className="flex flex-col items-center rounded-xl border border-ink-600 bg-ink-900 pt-1.5 shadow-raised"
     >
       <div className="flex h-5 items-center">
         {value ? (
@@ -756,7 +762,7 @@ function ArrowLayer({ contentRef, version }: { contentRef: RefObject<HTMLDivElem
             markerHeight="7"
             orient="auto-start-reverse"
           >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill={TONE_COLOR[tone]} />
+            <path d="M 0 0 L 10 5 L 0 10 z" style={{ fill: TONE_COLOR[tone] }} />
           </marker>
         ))}
       </defs>
@@ -765,7 +771,7 @@ function ArrowLayer({ contentRef, version }: { contentRef: RefObject<HTMLDivElem
           key={arrow.key}
           d={arrow.d}
           fill="none"
-          stroke={TONE_COLOR[arrow.tone]}
+          style={{ stroke: TONE_COLOR[arrow.tone] }}
           strokeWidth={arrow.tone === "changed" ? 2 : 1.5}
           strokeLinecap="round"
           markerEnd={`url(#${markerId}-${arrow.tone})`}

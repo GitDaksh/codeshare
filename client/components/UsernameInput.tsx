@@ -59,9 +59,9 @@ export function UsernameInput({ value, onChange, onValidityChange }: UsernameInp
   const icon = {
     idle: null,
     checking: <Loader2 className="h-4 w-4 animate-spin text-ink-500" />,
-    available: <Check className="h-4 w-4 text-ink-100" />,
-    taken: <X className="h-4 w-4 text-red-400" />,
-    invalid: <X className="h-4 w-4 text-red-400" />,
+    available: <Check className="h-4 w-4 text-success" />,
+    taken: <X className="h-4 w-4 text-danger" />,
+    invalid: <X className="h-4 w-4 text-danger" />,
   }[status];
 
   const helper = {
@@ -75,15 +75,15 @@ export function UsernameInput({ value, onChange, onValidityChange }: UsernameInp
   const isError = status === "taken" || status === "invalid";
 
   const borderClass = isError
-    ? "border-red-500/50"
+    ? "border-danger-line"
     : status === "available"
-      ? "border-ink-500"
-      : "border-ink-800";
+      ? "border-success-line"
+      : "border-ink-700";
 
   return (
     <div>
       <div
-        className={`relative flex h-12 items-center rounded-xl border bg-ink-950 transition-colors focus-within:border-ink-500 ${borderClass}`}
+        className={`relative flex h-11 items-center rounded-lg border bg-ink-900 shadow-xs transition-colors focus-within:border-ink-500 focus-within:ring-4 focus-within:ring-ink-100/[0.06] ${borderClass}`}
       >
         <span className="pointer-events-none pl-4 text-ink-500">@</span>
         <input
@@ -95,11 +95,13 @@ export function UsernameInput({ value, onChange, onValidityChange }: UsernameInp
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
-          className="h-full min-w-0 flex-1 bg-transparent pl-1 pr-10 text-sm text-ink-100 placeholder:text-ink-700 focus:outline-none"
+          className="h-full min-w-0 flex-1 bg-transparent pl-1 pr-10 text-sm text-ink-100 placeholder:text-ink-500 focus:outline-none"
         />
         <span className="absolute right-3.5 top-1/2 -translate-y-1/2">{icon}</span>
       </div>
-      <p className={`mt-2 text-xs transition-colors ${isError ? "text-red-400" : "text-ink-500"}`}>{helper}</p>
+      <p className={`mt-2 text-xs transition-colors ${isError ? "text-danger" : status === "available" ? "text-success" : "text-ink-500"}`}>
+        {helper}
+      </p>
     </div>
   );
 }

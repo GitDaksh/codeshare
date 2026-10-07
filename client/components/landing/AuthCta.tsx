@@ -18,7 +18,7 @@ export function AuthCta() {
       <Link
         href={state === "in" ? "/dashboard" : "/sign-up"}
         aria-busy={state === "loading"}
-        className="group relative inline-flex h-14 w-full items-center justify-center overflow-hidden rounded-full bg-ink-100 px-8 text-base font-semibold text-ink-950 shadow-[0_0_48px_-10px_rgba(255,255,255,0.65)] transition-[background-color,box-shadow,transform] duration-300 hover:bg-white hover:shadow-[0_0_72px_-6px_rgba(255,255,255,0.85)] active:scale-[0.98] sm:w-auto sm:min-w-[15.5rem]"
+        className="group relative inline-flex h-11 w-full items-center justify-center overflow-hidden rounded-lg bg-ink-100 px-5 text-[15px] font-medium text-ink-950 shadow-xs transition-[background-color,box-shadow,transform] duration-300 hover:bg-ink-200 hover:shadow-card active:scale-[0.98] sm:w-auto sm:min-w-[11.5rem]"
       >
         {/* A soft sheen that sweeps across on hover. */}
         <span
@@ -35,7 +35,7 @@ export function AuthCta() {
             className="relative inline-flex items-center gap-2"
           >
             {state === "loading" ? (
-              <span className="h-2.5 w-28 animate-pulse rounded-full bg-ink-950/15" />
+              <span className="h-2 w-24 animate-pulse rounded-full bg-ink-950/15" />
             ) : (
               <>
                 {state === "in" ? "Go to dashboard" : "Get started"}
@@ -50,7 +50,7 @@ export function AuthCta() {
         href={state === "in" ? "/lens" : "/sign-in"}
         aria-hidden={state === "loading" ? true : undefined}
         tabIndex={state === "loading" ? -1 : undefined}
-        className={`inline-flex h-14 w-full items-center justify-center rounded-full border border-ink-700 bg-ink-950/50 px-7 text-base font-medium text-ink-100 backdrop-blur transition-[border-color,opacity] duration-300 hover:border-ink-500 sm:w-auto sm:min-w-[10rem] ${
+        className={`inline-flex h-11 w-full items-center justify-center rounded-lg border border-ink-700 bg-ink-950/50 px-5 text-[15px] font-medium text-ink-100 backdrop-blur transition-[border-color,opacity] duration-300 hover:border-ink-500 sm:w-auto sm:min-w-[8.5rem] ${
           state === "loading" ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >

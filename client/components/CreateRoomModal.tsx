@@ -90,7 +90,7 @@ export function CreateRoomModal({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
           // Bottom sheet on phones (sits above the keyboard); centered dialog on larger screens.
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:px-4"
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:px-4"
           onClick={onClose}
         >
           <motion.div
@@ -101,14 +101,14 @@ export function CreateRoomModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.98 }}
             transition={{ duration: 0.22, ease: EASE }}
-            className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-ink-700 bg-ink-900 shadow-2xl shadow-black/70 sm:max-w-lg sm:rounded-2xl"
+            className="max-h-[92dvh] w-full overflow-y-auto rounded-t-xl border border-ink-800 bg-ink-900 shadow-raised sm:max-w-lg sm:rounded-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <form onSubmit={handleSubmit}>
               {/* ---------- Header ---------- */}
               <div className="flex items-start justify-between gap-4 border-b border-ink-800 px-5 pb-4 pt-5 sm:px-6">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-ink-700 bg-ink-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-ink-700 bg-ink-800 shadow-xs">
                     <Code2 className="h-4.5 w-4.5 text-ink-100" />
                   </div>
                   <div>
@@ -151,7 +151,7 @@ export function CreateRoomModal({
                     placeholder="e.g. Interview prep"
                     enterKeyHint="done"
                     autoComplete="off"
-                    className="h-12 w-full rounded-xl border border-ink-700 bg-black/40 px-4 text-sm text-ink-100 placeholder:text-ink-600 transition-colors focus:border-ink-500 focus:outline-none"
+                    className="h-11 w-full rounded-lg border border-ink-700 bg-ink-900 px-3.5 text-sm text-ink-100 shadow-xs placeholder:text-ink-500 transition-colors focus:border-ink-500 focus:outline-none focus:ring-4 focus:ring-ink-100/[0.06]"
                   />
                   <div className="mt-2.5 flex flex-wrap gap-1.5">
                     {NAME_IDEAS.map((idea) => (
@@ -159,10 +159,10 @@ export function CreateRoomModal({
                         key={idea}
                         type="button"
                         onClick={() => applyIdea(idea)}
-                        className={`h-7 rounded-full border px-2.5 text-[11px] transition-colors ${
+                        className={`h-7 rounded-md border px-2.5 text-[11px] font-medium transition-colors ${
                           name === idea
-                            ? "border-ink-300 bg-ink-800 text-ink-100"
-                            : "border-ink-700 text-ink-400 hover:border-ink-500 hover:text-ink-100"
+                            ? "border-ink-100 bg-ink-100 text-ink-950"
+                            : "border-ink-800 bg-ink-900 text-ink-400 hover:border-ink-700 hover:text-ink-100"
                         }`}
                       >
                         {idea}
@@ -186,7 +186,7 @@ export function CreateRoomModal({
                           onClick={() => setLanguage(lang.value)}
                           className={`relative flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-center transition-all duration-200 ${
                             selected
-                              ? "border-ink-100 bg-ink-800 shadow-[0_0_24px_-10px_rgba(255,255,255,0.5)]"
+                              ? "border-ink-100 bg-ink-800 shadow-xs"
                               : "border-ink-700 bg-ink-950/60 hover:border-ink-500"
                           }`}
                         >
@@ -231,7 +231,7 @@ export function CreateRoomModal({
                 {/* ---------- Live preview ---------- */}
                 <div>
                   <span className="mb-2 block text-xs font-medium text-ink-300">Preview</span>
-                  <div className="overflow-hidden rounded-xl border border-ink-700 bg-ink-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="overflow-hidden rounded-xl border border-ink-700 bg-ink-950 shadow-xs">
                     <div className="flex items-center justify-between gap-3 border-b border-ink-800 px-3.5 py-2.5">
                       <span
                         className={`truncate text-sm font-semibold ${trimmedName ? "text-ink-100" : "text-ink-600"}`}
@@ -242,7 +242,7 @@ export function CreateRoomModal({
                         {languageLabel(language)}
                       </span>
                     </div>
-                    <div className="flex gap-3 bg-black/40 px-3.5 py-2.5 font-[family-name:var(--font-mono)] text-[11px] leading-5">
+                    <div className="flex gap-3 bg-ink-950 px-3.5 py-2.5 font-[family-name:var(--font-mono)] text-[11px] leading-5">
                       <span className="shrink-0 text-ink-600">1</span>
                       <span className="truncate text-ink-400">{getStarterCode(language)}</span>
                     </div>
@@ -270,14 +270,14 @@ export function CreateRoomModal({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="h-10 rounded-full px-4 text-sm text-ink-300 transition-colors hover:text-ink-100"
+                    className="h-10 rounded-lg px-4 text-sm text-ink-300 transition-colors hover:text-ink-100"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={!trimmedName || submitting}
-                    className="inline-flex h-10 items-center gap-1.5 rounded-full bg-ink-100 px-5 text-sm font-semibold text-ink-950 shadow-[0_0_24px_-8px_rgba(255,255,255,0.55)] transition-all hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-ink-400 disabled:shadow-none"
+                    className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-ink-100 px-5 text-sm font-semibold text-ink-950 shadow-xs transition-all hover:bg-ink-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-ink-400 disabled:shadow-none"
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                     {submitting ? "Creating…" : "Create room"}

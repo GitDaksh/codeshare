@@ -1,12 +1,10 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowDown,
-  ArrowLeft,
   ArrowUp,
   Check,
   Dices,
@@ -24,6 +22,8 @@ import {
 import { useApi } from "@/lib/api";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { DifficultyBadge } from "@/components/DifficultyBadge";
+import { PageContainer, PageHeader } from "@/components/PageHeader";
+import { ui } from "@/lib/ui";
 import { getStarterCode, LANGUAGES } from "@/lib/languages";
 import {
   DIFFICULTIES,
@@ -78,10 +78,9 @@ function starterFor(title: string, language: string, problem: Problem | null): s
   return language === "cpp" || language === "java" ? `${header}${getStarterCode(language)}` : `${header}\n`;
 }
 
-const FIELD =
-  "h-10 w-full rounded-xl border border-ink-700 bg-ink-950/60 px-3 text-sm text-ink-100 placeholder:text-ink-500 transition-colors focus:border-ink-500 focus:outline-none";
-const LABEL = "mb-1.5 block text-xs font-medium text-ink-300";
-const CARD = "rounded-2xl border border-ink-800 bg-ink-900 p-5";
+const FIELD = ui.input;
+const LABEL = ui.label;
+const CARD = `${ui.card} p-5`;
 
 function SectionTitle({ number, title, detail }: { number: number; title: string; detail?: string }) {
   return (
@@ -125,7 +124,7 @@ function PersonPicker({ placeholder, exclude, onPick }: { placeholder: string; e
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
       <input value={query} onChange={(e) => search(e.target.value)} placeholder={placeholder} className={`${FIELD} pl-9`} />
       {results.length > 0 && (
-        <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-ink-700 bg-ink-900 shadow-2xl">
+        <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-ink-700 bg-ink-900 shadow-raised">
           {results.map((person) => (
             <li key={person.userId}>
               <button
@@ -149,9 +148,9 @@ function PersonPicker({ placeholder, exclude, onPick }: { placeholder: string; e
 
 function PersonChip({ person, onRemove }: { person: Person; onRemove: () => void }) {
   return (
-    <span className="flex items-center gap-1.5 rounded-full border border-ink-700 bg-ink-800 py-0.5 pl-0.5 pr-1 text-xs text-ink-100">
+    <span className="flex items-center gap-1.5 rounded-md border border-ink-700 bg-ink-800 py-0.5 pl-0.5 pr-1 text-xs text-ink-100">
       <AvatarIcon avatarId={person.avatarId} className="h-5 w-5 rounded-full" />@{person.username}
-      <button type="button" onClick={onRemove} aria-label={`Remove @${person.username}`} className="rounded-full p-0.5 text-ink-400 hover:text-ink-100">
+      <button type="button" onClick={onRemove} aria-label={`Remove @${person.username}`} className="rounded-md p-0.5 text-ink-400 hover:text-ink-100">
         <X className="h-3 w-3" />
       </button>
     </span>
@@ -304,29 +303,21 @@ function Builder() {
   }
 
   return (
-    <main className="relative min-h-[calc(100dvh-56px)] overflow-hidden">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[360px] bg-[linear-gradient(to_right,rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]"
+    <PageContainer>
+      <PageHeader
+        back={{ href: "/interviews", label: "Interviews" }}
+        title="New interview"
+        description="Start from a template, or build it step by step. The summary on the right shows exactly what you'll create."
       />
-      <div className="relative mx-auto max-w-6xl px-4 pb-24 pt-8 sm:pt-10">
-        <Link href="/interviews" className="group inline-flex items-center gap-1.5 text-xs text-ink-400 transition-colors hover:text-ink-100">
-          <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
-          Interviews
-        </Link>
-        <h1 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-ink-100 sm:text-4xl">
-          New interview
-        </h1>
-        <p className="mt-2 text-sm text-ink-400">Start from a template, or build it yourself. You can preview everything on the right.</p>
 
         {/* ---------- Templates ---------- */}
-        <div className="mt-6 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           {TEMPLATES.map((template) => (
             <button
               key={template.id}
               type="button"
               onClick={() => applyTemplate(template)}
-              className="group rounded-2xl border border-ink-800 bg-ink-900 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-ink-600"
+              className={`${ui.cardHover} group p-4 text-left`}
             >
               <p className="text-sm font-semibold text-ink-100">{template.label}</p>
               <p className="mt-1 text-[11px] text-ink-500">{template.detail}</p>
@@ -386,8 +377,10 @@ function Builder() {
                         key={option || "none"}
                         type="button"
                         onClick={() => setLevel(option)}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                          level === option ? "border-ink-100 bg-ink-100 text-ink-950" : "border-ink-700 text-ink-300 hover:border-ink-500"
+                        className={`h-7 rounded-md border px-2.5 text-xs font-medium transition-colors ${
+                          level === option
+                            ? "border-ink-100 bg-ink-100 text-ink-950"
+                            : "border-ink-800 bg-ink-900 text-ink-400 hover:border-ink-700 hover:text-ink-100"
                         }`}
                       >
                         {option || "Any"}
@@ -403,10 +396,10 @@ function Builder() {
                       type="datetime-local"
                       value={scheduledFor}
                       onChange={(e) => setScheduledFor(e.target.value)}
-                      className={`${FIELD} [color-scheme:dark]`}
+                      className={FIELD}
                     />
                     {scheduledFor && (
-                      <button type="button" onClick={() => setScheduledFor("")} className="shrink-0 rounded-xl border border-ink-700 px-3 text-xs text-ink-300 hover:border-ink-500">
+                      <button type="button" onClick={() => setScheduledFor("")} className={ui.secondary}>
                         Clear
                       </button>
                     )}
@@ -415,7 +408,7 @@ function Builder() {
                 </div>
               </div>
               {!isTestableLanguage(language) && (
-                <p className="mt-4 rounded-xl border border-ink-800 bg-ink-950/60 px-3 py-2 text-xs text-ink-400">
+                <p className="mt-4 rounded-lg border border-ink-800 bg-ink-950 px-3 py-2 text-xs text-ink-400">
                   Tests, Lens and the Big-O meter work in JavaScript, TypeScript and Python. In {LANGUAGES.find((l) => l.value === language)?.label},
                   it&apos;s just the editor and you.
                 </p>
@@ -425,14 +418,14 @@ function Builder() {
             {/* ---------- 2. People ---------- */}
             <section className={CARD}>
               <SectionTitle number={2} title="People" detail="Anyone you don't add here can join later with an invite link." />
-              <div className="mb-4 flex rounded-lg border border-ink-800 bg-ink-950/60 p-1">
+              <div className="mb-4 flex rounded-lg border border-ink-800 bg-ink-950 p-0.5">
                 {(["live", "solo"] as const).map((option) => (
                   <button
                     key={option}
                     type="button"
                     onClick={() => setMode(option)}
                     className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                      mode === option ? "bg-ink-800 text-ink-100" : "text-ink-400 hover:text-ink-100"
+                      mode === option ? "bg-ink-900 text-ink-100 shadow-xs ring-1 ring-ink-800" : "text-ink-500 hover:text-ink-100"
                     }`}
                   >
                     {option === "live" ? <Users className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
@@ -495,7 +488,7 @@ function Builder() {
                 detail={`${questions.length}/${MAX_QUESTIONS} · ${formatDuration(totalMinutes * 60000)} in total. They're asked in this order.`}
               />
               {questions.length === 0 && (
-                <p className="mb-4 rounded-xl border border-dashed border-ink-700 px-4 py-6 text-center text-sm text-ink-500">
+                <p className="mb-4 rounded-lg border border-dashed border-ink-700 px-4 py-6 text-center text-sm text-ink-500">
                   No questions yet. Pick a template above, or add them below.
                 </p>
               )}
@@ -510,7 +503,7 @@ function Builder() {
                         initial={{ opacity: 0, y: -6 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, x: -12 }}
-                        className="flex flex-wrap items-center gap-3 rounded-xl border border-ink-800 bg-ink-950/40 px-3 py-2.5"
+                        className="flex flex-wrap items-center gap-3 rounded-lg border border-ink-800 bg-ink-900 px-3 py-2.5 shadow-xs"
                       >
                         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-ink-700 text-[11px] font-semibold text-ink-300">
                           {index + 1}
@@ -558,8 +551,10 @@ function Builder() {
                   <button
                     type="button"
                     onClick={() => setPanel(panel === "library" ? null : "library")}
-                    className={`flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition-colors ${
-                      panel === "library" ? "border-ink-100 bg-ink-100 text-ink-950" : "border-ink-700 text-ink-200 hover:border-ink-500"
+                    className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium shadow-xs transition-colors ${
+                      panel === "library"
+                        ? "border-ink-100 bg-ink-100 text-ink-950"
+                        : "border-ink-700 bg-ink-900 text-ink-200 hover:border-ink-600 hover:bg-ink-950"
                     }`}
                   >
                     <Plus className="h-3.5 w-3.5" />
@@ -568,8 +563,10 @@ function Builder() {
                   <button
                     type="button"
                     onClick={() => setPanel(panel === "custom" ? null : "custom")}
-                    className={`flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition-colors ${
-                      panel === "custom" ? "border-ink-100 bg-ink-100 text-ink-950" : "border-ink-700 text-ink-200 hover:border-ink-500"
+                    className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium shadow-xs transition-colors ${
+                      panel === "custom"
+                        ? "border-ink-100 bg-ink-100 text-ink-950"
+                        : "border-ink-700 bg-ink-900 text-ink-200 hover:border-ink-600 hover:bg-ink-950"
                     }`}
                   >
                     <PenLine className="h-3.5 w-3.5" />
@@ -579,15 +576,17 @@ function Builder() {
               )}
 
               {panel === "library" && (
-                <div className="mt-3 rounded-xl border border-ink-800 bg-ink-950/40 p-3">
+                <div className="mt-3 rounded-lg border border-ink-800 bg-ink-950 p-3">
                   <div className="flex flex-wrap items-center gap-1.5">
                     {(["Any", ...DIFFICULTIES] as const).map((option) => (
                       <button
                         key={option}
                         type="button"
                         onClick={() => setDifficulty(option)}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                          difficulty === option ? "border-ink-100 bg-ink-100 text-ink-950" : "border-ink-700 text-ink-300 hover:border-ink-500"
+                        className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                          difficulty === option
+                            ? "border-ink-100 bg-ink-100 text-ink-950"
+                            : "border-ink-800 bg-ink-900 text-ink-400 hover:border-ink-700 hover:text-ink-100"
                         }`}
                       >
                         {option}
@@ -596,7 +595,7 @@ function Builder() {
                     <button
                       type="button"
                       onClick={surprise}
-                      className="ml-auto flex items-center gap-1 rounded-full border border-ink-700 px-2.5 py-1 text-[11px] font-medium text-ink-200 transition-colors hover:border-ink-500"
+                      className="ml-auto flex items-center gap-1 rounded-md border border-ink-700 bg-ink-900 px-2.5 py-1 text-[11px] font-medium text-ink-200 shadow-xs transition-colors hover:border-ink-600"
                     >
                       <Dices className="h-3.5 w-3.5" />
                       Surprise me
@@ -608,10 +607,10 @@ function Builder() {
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       placeholder="Search problems or topics"
-                      className="h-8 w-full rounded-lg border border-ink-800 bg-ink-950/60 pl-8 pr-3 text-xs text-ink-100 placeholder:text-ink-500 focus:border-ink-600 focus:outline-none"
+                      className="h-8 w-full rounded-lg border border-ink-700 bg-ink-900 pl-8 pr-3 text-xs text-ink-100 placeholder:text-ink-500 focus:border-ink-500 focus:outline-none"
                     />
                   </div>
-                  <ul className="mt-2 max-h-72 overflow-y-auto rounded-lg border border-ink-800">
+                  <ul className="mt-2 max-h-72 overflow-y-auto rounded-lg border border-ink-800 bg-ink-900">
                     {library.length === 0 && <li className="p-4 text-center text-xs text-ink-500">No problems match.</li>}
                     {library.map((problem) => {
                       const added = chosen.has(problem.slug);
@@ -638,7 +637,7 @@ function Builder() {
               )}
 
               {panel === "custom" && (
-                <div className="mt-3 space-y-3 rounded-xl border border-ink-800 bg-ink-950/40 p-3">
+                <div className="mt-3 space-y-3 rounded-lg border border-ink-800 bg-ink-950 p-3">
                   <input
                     value={custom.title}
                     onChange={(e) => setCustom((c) => ({ ...c, title: e.target.value.slice(0, 120) }))}
@@ -650,7 +649,7 @@ function Builder() {
                     onChange={(e) => setCustom((c) => ({ ...c, prompt: e.target.value.slice(0, 5000) }))}
                     rows={4}
                     placeholder="The question, as the candidate will see it."
-                    className="w-full resize-none rounded-xl border border-ink-700 bg-ink-950/60 px-3 py-2 text-sm leading-relaxed text-ink-100 placeholder:text-ink-500 focus:border-ink-500 focus:outline-none"
+                    className={ui.textarea}
                   />
                   <div className="space-y-1.5">
                     <p className="text-xs text-ink-400">Hints, in the order you&apos;d give them (optional)</p>
@@ -660,7 +659,7 @@ function Builder() {
                           value={hint}
                           onChange={(e) => setCustom((c) => ({ ...c, hints: c.hints.map((h, j) => (j === i ? e.target.value.slice(0, 500) : h)) }))}
                           placeholder={`Hint ${i + 1}`}
-                          className="h-9 min-w-0 flex-1 rounded-lg border border-ink-800 bg-ink-950/60 px-3 text-xs text-ink-100 placeholder:text-ink-500 focus:border-ink-600 focus:outline-none"
+                          className="h-9 min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 text-xs text-ink-100 shadow-xs placeholder:text-ink-500 focus:border-ink-500 focus:outline-none"
                         />
                         {custom.hints.length > 1 && (
                           <button type="button" onClick={() => setCustom((c) => ({ ...c, hints: c.hints.filter((_, j) => j !== i) }))} aria-label="Remove hint" className="px-1 text-ink-500 hover:text-ink-100">
@@ -680,10 +679,10 @@ function Builder() {
                     onChange={(e) => setCustom((c) => ({ ...c, answer: e.target.value.slice(0, 2000) }))}
                     rows={2}
                     placeholder="Answer key: the approach you're looking for (only interviewers see it; optional)"
-                    className="w-full resize-none rounded-xl border border-ink-700 bg-ink-950/60 px-3 py-2 text-xs leading-relaxed text-ink-100 placeholder:text-ink-500 focus:border-ink-500 focus:outline-none"
+                    className={`${ui.textarea} text-xs`}
                   />
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center rounded-lg border border-ink-800">
+                    <div className="flex items-center rounded-lg border border-ink-700 bg-ink-900 shadow-xs">
                       <button type="button" onClick={() => setCustom((c) => ({ ...c, minutes: Math.max(5, c.minutes - 5) }))} aria-label="5 minutes less" className="px-2 py-1.5 text-ink-400 hover:text-ink-100">
                         <Minus className="h-3 w-3" />
                       </button>
@@ -693,14 +692,14 @@ function Builder() {
                       </button>
                     </div>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => setPanel(null)} className="h-9 rounded-xl border border-ink-700 px-3 text-xs text-ink-300 hover:border-ink-500">
+                      <button type="button" onClick={() => setPanel(null)} className={ui.secondary}>
                         Cancel
                       </button>
                       <button
                         type="button"
                         onClick={addCustom}
                         disabled={!custom.title.trim() || !custom.prompt.trim()}
-                        className="h-9 rounded-xl bg-ink-100 px-4 text-xs font-semibold text-ink-950 transition-colors hover:bg-white disabled:opacity-40"
+                        className={ui.primary}
                       >
                         Add question
                       </button>
@@ -731,12 +730,12 @@ function Builder() {
                         aria-checked={on}
                         aria-label={setting.label}
                         onClick={() => setSettings((prev) => ({ ...prev, [setting.key]: !prev[setting.key] }))}
-                        className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full border transition-colors ${on ? "border-ink-100 bg-ink-100" : "border-ink-700 bg-ink-800"}`}
+                        className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors ${on ? "bg-ink-100" : "bg-ink-800 ring-1 ring-inset ring-ink-700"}`}
                       >
                         <motion.span
                           layout
                           transition={{ type: "spring", bounce: 0.25, duration: 0.3 }}
-                          className={`absolute top-0.5 h-4 w-4 rounded-full ${on ? "right-0.5 bg-ink-950" : "left-0.5 bg-ink-400"}`}
+                          className={`absolute top-0.5 h-5 w-5 rounded-full shadow-xs transition-colors ${on ? "right-0.5 bg-ink-950" : "left-0.5 bg-ink-500"}`}
                         />
                       </button>
                     </li>
@@ -748,7 +747,7 @@ function Builder() {
 
           {/* ---------- The summary ---------- */}
           <aside>
-            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-5 lg:sticky lg:top-24">
+            <div className={`${ui.card} p-5 lg:sticky lg:top-8`}>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-500">{solo ? "Mock interview" : "Interview"}</p>
               <p className="mt-1.5 truncate font-[family-name:var(--font-display)] text-lg font-semibold text-ink-100">
                 {title.trim() || "Untitled interview"}
@@ -802,7 +801,7 @@ function Builder() {
                 type="button"
                 onClick={create}
                 disabled={missing.length > 0 || busy}
-                className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-ink-100 text-sm font-semibold text-ink-950 shadow-[0_0_24px_-10px_rgba(255,255,255,0.6)] transition-all hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                className={`${ui.primary} mt-5 h-10 w-full`}
               >
                 {busy && <Loader2 className="h-4 w-4 animate-spin" />}
                 Create interview
@@ -813,8 +812,7 @@ function Builder() {
             </div>
           </aside>
         </div>
-      </div>
-    </main>
+    </PageContainer>
   );
 }
 

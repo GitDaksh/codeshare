@@ -116,12 +116,12 @@ export function ComplexityMeter({ meter }: { meter: ComplexityState }) {
         <div
           role="dialog"
           aria-label="Big-O complexity"
-          className="absolute bottom-full right-0 mb-2 w-[22rem] max-w-[calc(100vw-2rem)] rounded-xl border border-ink-700 bg-ink-900/95 p-4 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.9)] backdrop-blur"
+          className="absolute bottom-full right-0 mb-2 w-[22rem] max-w-[calc(100vw-2rem)] rounded-xl border border-ink-800 bg-ink-900/95 p-4 shadow-raised backdrop-blur"
         >
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <p className="text-xs font-semibold text-ink-100">Complexity</p>
-              <span className="rounded-full border border-ink-700 px-1.5 py-px text-[10px] text-ink-400">Measured</span>
+              <span className="rounded-md border border-ink-700 px-1.5 py-px text-[10px] text-ink-400">Measured</span>
             </div>
             <button
               type="button"
@@ -169,7 +169,7 @@ export function ComplexityMeter({ meter }: { meter: ComplexityState }) {
             </p>
           ) : failure ? (
             <p
-              className={`mt-3 text-xs leading-relaxed ${failure.status === "error" ? "text-red-300" : "text-ink-300"}`}
+              className={`mt-3 text-xs leading-relaxed ${failure.status === "error" ? "text-danger" : "text-ink-300"}`}
             >
               {failure.message}
             </p>
@@ -193,7 +193,7 @@ export function ComplexityMeter({ meter }: { meter: ComplexityState }) {
               type="button"
               onClick={meter.start}
               disabled={measuring}
-              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-ink-700 px-2.5 text-xs font-medium text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100 disabled:cursor-wait disabled:opacity-50"
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-2.5 text-xs font-medium text-ink-300 shadow-xs transition-colors hover:border-ink-600 hover:text-ink-100 disabled:cursor-wait disabled:opacity-50"
             >
               <RotateCw className={`h-3 w-3 ${measuring ? "animate-spin" : ""}`} aria-hidden="true" />
               Measure again
@@ -208,13 +208,13 @@ export function ComplexityMeter({ meter }: { meter: ComplexityState }) {
         aria-expanded={open}
         aria-label="Big-O complexity"
         title="Big-O: how your code's time and memory grow"
-        className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ink-700 bg-ink-900/90 px-2.5 font-mono text-[11px] text-ink-300 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.8)] backdrop-blur transition-colors hover:border-ink-500 hover:text-ink-100"
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-ink-700 bg-ink-900/90 px-2.5 font-mono text-[11px] text-ink-300 shadow-raised backdrop-blur transition-colors hover:border-ink-600 hover:text-ink-100"
       >
         {ok ? (
           <>
             <Timer className="h-3.5 w-3.5 text-ink-500" aria-hidden="true" />
             <span className={`text-ink-100 ${dim}`}>{shown(ok.time)}</span>
-            <span className="text-ink-700" aria-hidden="true">
+            <span className="text-ink-600" aria-hidden="true">
               ·
             </span>
             <MemoryStick className="h-3.5 w-3.5 text-ink-500" aria-hidden="true" />
@@ -230,7 +230,7 @@ export function ComplexityMeter({ meter }: { meter: ComplexityState }) {
           <>
             <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
             {failure.status === "too-slow" ? "Too slow" : "Big-O"}
-            {failure.status === "error" && <span className="h-1.5 w-1.5 rounded-full bg-red-500" aria-hidden="true" />}
+            {failure.status === "error" && <span className="h-1.5 w-1.5 rounded-full bg-danger-strong" aria-hidden="true" />}
           </>
         ) : (
           <>

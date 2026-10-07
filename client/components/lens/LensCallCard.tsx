@@ -5,7 +5,7 @@ import { Play, ScanEye } from "lucide-react";
 import { helperTip, type LensCallable } from "@/lib/lensCall";
 
 const SECONDARY =
-  "inline-flex h-8 items-center rounded-lg border border-ink-700 px-3 text-xs font-medium text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100";
+  "inline-flex h-8 items-center rounded-lg border border-ink-700 bg-ink-900 px-3 text-xs font-medium text-ink-300 shadow-xs transition-colors hover:border-ink-600 hover:text-ink-100";
 
 function listLabels(callables: LensCallable[]): string {
   const labels = callables.slice(0, 3).map((callable) => callable.label);
@@ -77,7 +77,7 @@ export function LensCallCard({
 
   return (
     <div
-      className="w-full max-w-lg rounded-2xl border border-ink-700 bg-ink-900 p-5 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.9)]"
+      className="w-full max-w-lg rounded-xl border border-ink-800 bg-ink-900 p-5 shadow-raised"
       onKeyDown={onKeyDown}
       role="dialog"
       aria-label="Nothing ran yet"
@@ -99,12 +99,12 @@ export function LensCallCard({
           aria-label="Call to visualize"
           spellCheck={false}
           autoComplete="off"
-          className="h-9 min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 font-mono text-sm text-ink-100 outline-none transition-colors placeholder:text-ink-600 focus:border-ink-500"
+          className="h-9 min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 font-mono text-sm text-ink-100 shadow-xs outline-none transition-colors placeholder:text-ink-500 focus:border-ink-500"
         />
         <button
           type="submit"
           disabled={busy || !call.trim()}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-ink-100 px-3 text-sm font-semibold text-ink-950 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-ink-100 px-3 text-sm font-semibold text-ink-950 transition-colors hover:bg-ink-200 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Play className="h-3.5 w-3.5" aria-hidden="true" />
           Visualize
@@ -112,7 +112,7 @@ export function LensCallCard({
       </form>
 
       {error && (
-        <p className="mt-2 whitespace-pre-wrap break-words border-l-2 border-red-500/70 pl-2 font-mono text-xs text-red-300">
+        <p className="mt-2 whitespace-pre-wrap break-words border-l-2 border-danger-strong/70 pl-2 font-mono text-xs text-danger">
           {error}
         </p>
       )}
@@ -125,7 +125,7 @@ export function LensCallCard({
               key={callable.label}
               type="button"
               onClick={() => choose(callable.template)}
-              className="max-w-full truncate rounded-full border border-ink-700 px-2 py-0.5 font-mono text-[11px] text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100"
+              className="max-w-full truncate rounded-md border border-ink-700 bg-ink-900 px-2 py-0.5 font-mono text-[11px] text-ink-300 transition-colors hover:border-ink-600 hover:text-ink-100"
             >
               {callable.label}
             </button>

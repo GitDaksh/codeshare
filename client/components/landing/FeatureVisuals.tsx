@@ -60,8 +60,8 @@ export function SyncVisual() {
       <MiniPane name="priya" avatar={DEMO_AVATARS.priya} text={SYNC_TEXT.slice(0, typed)} />
       <div className="flex shrink-0 flex-col items-center gap-1.5">
         <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ink-100 opacity-40" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-ink-100" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-strong opacity-40" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-success-strong" />
         </span>
         <span className="font-[family-name:var(--font-mono)] text-[9px] uppercase tracking-widest text-ink-600">
           live
@@ -104,7 +104,7 @@ export function PresenceVisual() {
         </AnimatePresence>
       </div>
       <p className="flex items-center gap-2 text-xs text-ink-400">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-100" />
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success-strong" />
         {count} people online
       </p>
     </div>
@@ -195,7 +195,7 @@ export function RunVisual() {
           <RunLine show={step >= 2} className="text-ink-100">
             [0, 1]
           </RunLine>
-          <RunLine show={step >= 3} className="text-ink-500">
+          <RunLine show={step >= 3} className="text-success">
             ✓ finished in 14ms
           </RunLine>
           <RunLine show={step >= 4} className="flex items-center gap-2 pt-1 text-ink-500">
@@ -226,7 +226,7 @@ export function PaletteVisual() {
 
   return (
     <div ref={ref} className="absolute inset-0 flex items-center justify-center px-5">
-      <div className="w-full max-w-xs overflow-hidden rounded-xl border border-ink-700 bg-ink-900 shadow-2xl">
+      <div className="w-full max-w-xs overflow-hidden rounded-xl border border-ink-700 bg-ink-900 shadow-raised">
         <div className="flex items-center gap-2 border-b border-ink-800 px-3 py-2">
           <kbd className="rounded border border-ink-700 px-1.5 font-[family-name:var(--font-mono)] text-[10px] text-ink-400">
             ⌘K
@@ -280,7 +280,7 @@ export function ShareVisual() {
           animate={{ scale: step === 1 ? 0.94 : 1 }}
           transition={{ duration: 0.12 }}
           className={`flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold transition-colors ${
-            copied ? "bg-ink-100 text-ink-950" : "bg-ink-800 text-ink-300"
+            copied ? "bg-success-soft text-success" : "bg-ink-800 text-ink-300"
           }`}
         >
           {copied ? (
@@ -301,7 +301,7 @@ export function ShareVisual() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.3 }}
-              className="flex items-center gap-2 rounded-full border border-ink-800 bg-ink-900 py-1 pl-1 pr-3 text-xs text-ink-300"
+              className="flex items-center gap-2 rounded-md border border-ink-800 bg-ink-900 py-1 pl-1 pr-3 text-xs text-ink-300"
             >
               <AvatarIcon avatarId={DEMO_AVATARS.sam} className="h-6 w-6 rounded-full" />
               sam joined the room

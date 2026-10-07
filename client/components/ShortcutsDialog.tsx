@@ -117,7 +117,7 @@ export function ShortcutsDialog() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm"
           onClick={() => setOpen(false)}
         >
           <motion.div
@@ -129,11 +129,11 @@ export function ShortcutsDialog() {
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ duration: 0.2, ease: [0.21, 0.47, 0.32, 0.98] }}
             onClick={(e) => e.stopPropagation()}
-            className="max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-ink-700 bg-ink-900 shadow-2xl shadow-black/70"
+            className="max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-xl border border-ink-800 bg-ink-900 shadow-raised"
           >
             <div className="flex items-start justify-between gap-4 border-b border-ink-800 px-6 pb-4 pt-5">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-ink-700 bg-ink-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-ink-700 bg-ink-800 shadow-xs">
                   <Keyboard className="h-4 w-4 text-ink-100" />
                 </div>
                 <div>
@@ -175,7 +175,7 @@ export function ShortcutsDialog() {
                           {item.keys.map((key) => (
                             <kbd
                               key={key}
-                              className="min-w-[1.5rem] rounded-md border border-ink-700 bg-ink-950 px-1.5 py-0.5 text-center font-[family-name:var(--font-mono)] text-[11px] text-ink-100 shadow-[inset_0_-1px_0_rgba(255,255,255,0.06)]"
+                              className="min-w-[1.5rem] rounded-md border border-ink-700 bg-ink-950 px-1.5 py-0.5 text-center font-[family-name:var(--font-mono)] text-[11px] text-ink-100 shadow-xs"
                             >
                               {key}
                             </kbd>

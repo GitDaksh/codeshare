@@ -26,7 +26,7 @@ const ICONS: Record<ToastType, ElementType> = {
 
 const COLORS: Record<ToastType, string> = {
   success: "text-ink-100",
-  error: "text-red-400",
+  error: "text-danger",
   info: "text-ink-400",
 };
 

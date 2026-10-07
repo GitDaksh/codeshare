@@ -4,8 +4,8 @@ import { Skeleton } from "@/components/Skeleton";
 // phones) so there's no jump when the room finishes loading.
 export function RoomSkeleton() {
   return (
-    <main className="flex h-dvh flex-col bg-ink-950 md:h-[calc(100dvh-56px)]">
-      <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-ink-800 px-2 sm:px-3 md:border-transparent">
+    <main className="flex h-dvh flex-col bg-ink-950">
+      <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-ink-800 px-2 sm:px-3 md:border-transparent">
         <div className="flex items-center gap-2">
           <Skeleton className="h-8 w-8 rounded-lg" />
           <Skeleton className="h-4 w-28 sm:w-36" />

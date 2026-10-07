@@ -111,13 +111,13 @@ export default function LensDemo() {
       </div>
 
       {/* The line that's running */}
-      <div className="border-b border-ink-800 bg-black/30 py-1.5 font-[family-name:var(--font-mono)] text-[11px] leading-5">
+      <div className="border-b border-ink-800 bg-ink-950 py-1.5 font-[family-name:var(--font-mono)] text-[11px] leading-5">
         {excerpt.map(({ number, text }) => (
           <div
             key={number}
             className={cx(
               "flex gap-3 whitespace-pre px-3 transition-colors duration-200",
-              number === current ? "bg-white/[0.07] text-ink-100" : "text-ink-500",
+              number === current ? "bg-ink-100/[0.08] text-ink-100" : "text-ink-500",
             )}
           >
             <span className="w-5 shrink-0 select-none text-right text-ink-600">{number}</span>
@@ -158,7 +158,7 @@ export default function LensDemo() {
           onClick={() => setPlaying((p) => !p)}
           disabled={!!reduce}
           aria-label={playing && !reduce ? "Pause" : "Play"}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ink-100 text-ink-950 transition-colors hover:bg-white disabled:opacity-40"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ink-100 text-ink-950 transition-colors hover:bg-ink-200 disabled:opacity-40"
         >
           {playing && !reduce ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
         </button>

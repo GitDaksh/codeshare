@@ -243,7 +243,7 @@ export function ChatPanel({
       >
         {messages.length === 0 ? (
           <div className="m-auto flex flex-col items-center gap-2 px-4 py-10 text-center">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-ink-700 bg-ink-800">
+            <div className="grid h-10 w-10 place-items-center rounded-xl border border-ink-800 bg-ink-950">
               <MessageSquare className="h-4 w-4 text-ink-300" />
             </div>
             <p className="text-sm font-medium text-ink-100">No messages yet</p>
@@ -285,7 +285,7 @@ export function ChatPanel({
                   } ${isGrouped ? "" : "mt-2.5"}`}
                 >
                   <div
-                    className={`absolute -top-3 right-2 z-10 flex gap-0.5 rounded-lg border border-ink-700 bg-ink-800 p-0.5 shadow-lg shadow-black/40 transition-opacity ${
+                    className={`absolute -top-3 right-2 z-10 flex gap-0.5 rounded-lg border border-ink-700 bg-ink-800 p-0.5 shadow-raised transition-opacity ${
                       isActive
                         ? "pointer-events-auto opacity-100"
                         : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100"
@@ -336,7 +336,7 @@ export function ChatPanel({
                             <button
                               key={emoji}
                               onClick={(e) => handleReactClick(e, msg._id, emoji)}
-                              className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition-colors ${
+                              className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs transition-colors ${
                                 reacted
                                   ? "border-ink-300 bg-ink-100/10 text-ink-100"
                                   : "border-ink-700 bg-ink-800/60 text-ink-300 hover:border-ink-500"
@@ -364,7 +364,7 @@ export function ChatPanel({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             onClick={scrollToBottom}
-            className="absolute bottom-32 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-ink-600 bg-ink-800 px-3 py-1.5 text-xs font-medium text-ink-100 shadow-lg shadow-black/50"
+            className="absolute bottom-32 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs font-medium text-ink-100 shadow-raised"
           >
             <ArrowDown className="h-3 w-3" />
             New messages
@@ -386,7 +386,7 @@ export function ChatPanel({
 
       {/* Message box: one rounded field with an inline send button */}
       <div className="border-t border-ink-800 p-3">
-        <div className="flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-950/70 py-1 pl-3.5 pr-1 transition-colors focus-within:border-ink-500">
+        <div className="flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 py-1 pl-3.5 pr-1 shadow-xs transition-colors focus-within:border-ink-500 focus-within:ring-4 focus-within:ring-ink-100/[0.06]">
           <input
             value={draft}
             onChange={(e) => handleDraftChange(e.target.value)}
@@ -400,7 +400,7 @@ export function ChatPanel({
             onClick={handleSend}
             disabled={!canSend}
             aria-label="Send message"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-950 transition-all hover:bg-white active:scale-95 disabled:cursor-not-allowed disabled:bg-ink-800 disabled:text-ink-500"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-ink-100 text-ink-950 transition-all hover:bg-ink-200 active:scale-95 disabled:cursor-not-allowed disabled:bg-ink-800 disabled:text-ink-500"
           >
             <ArrowUp className="h-4 w-4" />
           </button>

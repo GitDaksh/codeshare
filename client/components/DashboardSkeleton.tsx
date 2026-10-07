@@ -1,53 +1,44 @@
 import { Skeleton } from "@/components/Skeleton";
+import { PageContainer } from "@/components/PageHeader";
 
-export function RoomCardSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-ink-700 bg-ink-900">
-      <div className="h-32 space-y-2.5 border-b border-ink-800 bg-black/50 p-4">
-        <Skeleton className="h-2.5 w-3/4" />
-        <Skeleton className="h-2.5 w-1/2" />
-        <Skeleton className="h-2.5 w-5/6" />
-        <Skeleton className="h-2.5 w-2/5" />
-      </div>
-      <div className="space-y-3 p-4">
-        <Skeleton className="h-4 w-2/3" />
-        <Skeleton className="h-3 w-1/3" />
-      </div>
-    </div>
-  );
-}
-
-// Mirrors the real dashboard layout (including its background) so there's no
-// jump when data arrives.
+// Mirrors the dashboard's layout (header, rooms list, summary column), so
+// nothing jumps when the data arrives.
 export function DashboardSkeleton() {
   return (
-    <main className="relative overflow-hidden">
-      <div className="hero-grid pointer-events-none absolute inset-x-0 top-0 h-[520px] opacity-70" />
-      <div className="relative mx-auto max-w-6xl px-4 py-8 sm:py-12">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-12 w-12 rounded-full sm:h-14 sm:w-14" />
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-7 w-48" />
-          </div>
+    <PageContainer>
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-56" />
+          <Skeleton className="h-4 w-72 max-w-full" />
         </div>
-        <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-8">
-          <div className="min-w-0">
-            <div className="h-12 w-full rounded-2xl border border-ink-700 bg-ink-900" />
-            <Skeleton className="mt-10 h-6 w-32" />
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              {[...Array(4)].map((_, i) => (
-                <RoomCardSkeleton key={i} />
-              ))}
-            </div>
-          </div>
-          <div className="grid content-start gap-3 md:grid-cols-2 lg:grid-cols-1">
-            <div className="h-[320px] rounded-2xl border border-ink-700 bg-ink-900" />
-            <div className="h-[305px] rounded-2xl border border-ink-700 bg-ink-900" />
-            <div className="h-[303px] rounded-2xl border border-ink-700 bg-ink-900 md:col-span-2 lg:col-span-1" />
-          </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-32 rounded-lg" />
+          <Skeleton className="h-9 w-28 rounded-lg" />
         </div>
       </div>
-    </main>
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <Skeleton className="h-9 w-64 max-w-full rounded-lg" />
+            <Skeleton className="hidden h-9 w-56 rounded-lg sm:block" />
+          </div>
+          <div className="divide-y divide-ink-800 overflow-hidden rounded-xl border border-ink-800 bg-ink-900 shadow-xs">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-3.5 px-5 py-3">
+                <Skeleton className="h-9 w-9 rounded-lg" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3 w-40" />
+                  <Skeleton className="h-2.5 w-28" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div className="h-[300px] rounded-xl border border-ink-800 bg-ink-900 shadow-xs" />
+          <div className="h-[280px] rounded-xl border border-ink-800 bg-ink-900 shadow-xs" />
+        </div>
+      </div>
+    </PageContainer>
   );
 }

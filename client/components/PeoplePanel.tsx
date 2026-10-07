@@ -94,7 +94,7 @@ function PersonMenu({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.12 }}
-            className="absolute right-0 top-7 z-20 w-48 rounded-lg border border-ink-700 bg-ink-900 p-1 shadow-xl"
+            className="absolute right-0 top-7 z-20 w-48 rounded-xl border border-ink-800 bg-ink-900 p-1 shadow-raised"
           >
             <button
               role="menuitem"
@@ -120,7 +120,7 @@ function PersonMenu({
                 onRemove();
               }}
               className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
-                confirming ? "bg-ink-100 text-ink-950" : "text-ink-200 hover:bg-ink-800"
+                confirming ? "bg-danger-soft text-danger" : "text-ink-200 hover:bg-ink-800"
               }`}
             >
               <UserMinus className="h-3.5 w-3.5" />
@@ -194,7 +194,7 @@ export function PeoplePanel({
               type="button"
               onClick={onAskToEdit}
               disabled={asked}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md bg-ink-100 px-2 py-1.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-white disabled:bg-ink-800 disabled:text-ink-400"
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md bg-ink-100 px-2 py-1.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-ink-200 disabled:bg-ink-800 disabled:text-ink-400"
             >
               {asked ? <Check className="h-3.5 w-3.5" /> : <PencilLine className="h-3.5 w-3.5" />}
               {asked ? "Asked the owner" : "Ask to edit"}
@@ -216,7 +216,7 @@ export function PeoplePanel({
               <button
                 type="button"
                 onClick={() => onAllow?.(request.userId)}
-                className="shrink-0 rounded-md bg-ink-100 px-2.5 py-1 text-[11px] font-semibold text-ink-950 transition-colors hover:bg-white"
+                className="shrink-0 rounded-md bg-ink-100 px-2.5 py-1 text-[11px] font-semibold text-ink-950 transition-colors hover:bg-ink-200"
               >
                 Allow
               </button>
@@ -250,7 +250,7 @@ export function PeoplePanel({
                   className={`h-8 w-8 rounded-full md:h-7 md:w-7 ${live ? "" : "opacity-50"}`}
                 />
                 {live && (
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-900 bg-ink-100" />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-900 bg-success-strong" />
                 )}
               </span>
               <span className={`min-w-0 flex-1 truncate text-sm font-medium ${live ? "text-ink-100" : "text-ink-400"}`}>
@@ -272,7 +272,7 @@ export function PeoplePanel({
                   className={`shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
                     following === person.userId
                       ? "border-ink-100 bg-ink-100 text-ink-950"
-                      : "border-ink-700 text-ink-300 hover:border-ink-500 hover:text-ink-100"
+                      : "border-ink-700 bg-ink-900 text-ink-300 hover:border-ink-600 hover:text-ink-100"
                   }`}
                 >
                   {following === person.userId ? "Following" : "Follow"}
@@ -302,7 +302,7 @@ export function PeoplePanel({
               void onLeave();
             }}
             className={`flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-              leaving ? "bg-ink-100 text-ink-950" : "text-ink-400 hover:bg-ink-800 hover:text-ink-100"
+              leaving ? "bg-danger-soft text-danger" : "text-ink-400 hover:bg-ink-800 hover:text-ink-100"
             }`}
           >
             <LogOut className="h-3.5 w-3.5" />

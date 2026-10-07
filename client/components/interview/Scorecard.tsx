@@ -1,8 +1,10 @@
 "use client";
 
+import { useEscape } from "@/lib/useEscape";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, X } from "lucide-react";
+import { ui } from "@/lib/ui";
 import {
   INTERVIEW_CRITERIA,
   INTERVIEW_VERDICTS,
@@ -78,7 +80,7 @@ function ScorecardCard({ interview, canShare, initial, onClose, onSave }: Omit<S
       exit={{ opacity: 0, y: 24 }}
       transition={{ duration: 0.2 }}
       onClick={(e) => e.stopPropagation()}
-      className="flex max-h-[92dvh] w-full flex-col rounded-t-2xl border border-ink-700 bg-ink-900 shadow-2xl sm:max-w-lg sm:rounded-2xl"
+      className="flex max-h-[92dvh] w-full flex-col rounded-t-xl border border-ink-800 bg-ink-900 shadow-raised sm:max-w-lg sm:rounded-xl"
     >
       <div className="flex items-start justify-between gap-4 border-b border-ink-800 px-5 pb-4 pt-5">
         <div>
@@ -93,7 +95,11 @@ function ScorecardCard({ interview, canShare, initial, onClose, onSave }: Omit<S
                 : "Rate each area, then make the call."}
           </p>
         </div>
-        <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-ink-400 transition-colors hover:text-ink-100">
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100"
+        >
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -106,7 +112,7 @@ function ScorecardCard({ interview, canShare, initial, onClose, onSave }: Omit<S
             ["Passing", `${passing}/${interview.questions.length}`],
             [solo ? "Hints" : "Flags", solo ? String(hints) : String(flags)],
           ].map(([label, value]) => (
-            <div key={label} className="rounded-xl border border-ink-800 bg-ink-950/60 px-2.5 py-2">
+            <div key={label} className="rounded-lg border border-ink-800 bg-ink-950/60 px-2.5 py-2">
               <p className="text-[10px] uppercase tracking-wider text-ink-500">{label}</p>
               <p className="truncate font-[family-name:var(--font-mono)] text-sm tabular-nums text-ink-100">{value}</p>
             </div>
@@ -132,7 +138,7 @@ function ScorecardCard({ interview, canShare, initial, onClose, onSave }: Omit<S
                       className={`rounded-lg border py-1.5 text-[11px] font-medium transition-colors ${
                         selected
                           ? "border-ink-100 bg-ink-100 text-ink-950"
-                          : "border-ink-800 text-ink-400 hover:border-ink-600 hover:text-ink-100"
+                          : "border-ink-800 bg-ink-900 text-ink-400 hover:border-ink-600 hover:text-ink-100"
                       }`}
                     >
                       {label}
@@ -152,10 +158,13 @@ function ScorecardCard({ interview, canShare, initial, onClose, onSave }: Omit<S
                 key={option.id}
                 type="button"
                 onClick={() => setVerdict(option.id)}
+                aria-pressed={verdict === option.id}
                 className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
                   verdict === option.id
-                    ? "border-ink-100 bg-ink-100 text-ink-950"
-                    : "border-ink-800 text-ink-300 hover:border-ink-600 hover:text-ink-100"
+                    ? option.score >= 3
+                      ? "border-success-line bg-success-soft text-success"
+                      : "border-danger-line bg-danger-soft text-danger"
+                    : "border-ink-800 bg-ink-900 text-ink-300 hover:border-ink-600 hover:text-ink-100"
                 }`}
               >
                 {option.label}
@@ -171,7 +180,7 @@ function ScorecardCard({ interview, canShare, initial, onClose, onSave }: Omit<S
             onChange={(e) => setFeedback(e.target.value.slice(0, 4000))}
             rows={4}
             placeholder={solo ? "What to practice next…" : "What went well, and what to work on…"}
-            className="w-full resize-none rounded-lg border border-ink-800 bg-ink-950/60 px-3 py-2 text-sm leading-relaxed text-ink-100 placeholder:text-ink-500 focus:border-ink-600 focus:outline-none"
+            className={ui.textarea}
           />
         </div>
 
@@ -181,7 +190,7 @@ function ScorecardCard({ interview, canShare, initial, onClose, onSave }: Omit<S
               type="checkbox"
               checked={shared}
               onChange={(e) => setShared(e.target.checked)}
-              className="mt-0.5 h-3.5 w-3.5 accent-white"
+              className="mt-0.5 h-3.5 w-3.5 accent-ink-100"
             />
             <span>
               Let {interview.candidate?.name ?? "the candidate"} read the report
@@ -199,7 +208,7 @@ function ScorecardCard({ interview, canShare, initial, onClose, onSave }: Omit<S
           type="button"
           onClick={save}
           disabled={!complete || busy}
-          className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-ink-100 px-5 text-sm font-semibold text-ink-950 transition-all hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-10 shrink-0 items-center gap-2 rounded-lg bg-ink-100 px-5 text-sm font-semibold text-ink-950 transition-all hover:bg-ink-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy && <Loader2 className="h-4 w-4 animate-spin" />}
           Save and see the report
@@ -210,6 +219,7 @@ function ScorecardCard({ interview, canShare, initial, onClose, onSave }: Omit<S
 }
 
 export function Scorecard({ open, ...props }: ScorecardProps) {
+  useEscape(open, props.onClose);
   return (
     <AnimatePresence>
       {open && (
@@ -217,7 +227,7 @@ export function Scorecard({ open, ...props }: ScorecardProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[56] flex items-end justify-center bg-black/60 sm:items-center sm:px-4"
+          className="fixed inset-0 z-[56] flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:px-4"
           onClick={props.onClose}
         >
           <ScorecardCard {...props} />

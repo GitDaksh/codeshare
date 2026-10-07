@@ -9,6 +9,8 @@ import { ChevronDown, LayoutDashboard, LogOut, ScanEye, Settings, Target, User, 
 import { useApi } from "@/lib/api";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { clerkAppearance, currentTheme } from "@/lib/theme";
 import type { Profile } from "@/types/profile";
 
 const ITEM_CLASS =
@@ -109,7 +111,7 @@ export function AccountMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"
-        className={`flex items-center gap-2 rounded-full border py-1 pl-1 pr-2 transition-colors sm:pr-2.5 ${
+        className={`flex items-center gap-2 rounded-lg border py-1 pl-1 pr-2 transition-colors sm:pr-2.5 ${
           open ? "border-ink-600 bg-ink-900" : "border-ink-800 bg-ink-900/60 hover:border-ink-600"
         }`}
       >
@@ -133,7 +135,7 @@ export function AccountMenu() {
             exit={{ opacity: 0, scale: 0.96, y: -4 }}
             transition={{ duration: 0.15 }}
             style={{ transformOrigin: "top right" }}
-            className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-ink-800 bg-ink-900/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl"
+            className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-ink-800 bg-ink-900/95 p-1.5 shadow-raised backdrop-blur-xl"
           >
             <div className="flex items-center gap-3 px-2.5 py-2.5">
               <AvatarIcon avatarId={avatarId} className="h-9 w-9 shrink-0 rounded-full" />
@@ -154,10 +156,12 @@ export function AccountMenu() {
               label="Account settings"
               onSelect={() => {
                 close();
-                openUserProfile();
+                openUserProfile({ appearance: clerkAppearance(currentTheme()) });
               }}
             />
 
+            <div className="my-1 h-px bg-ink-800" />
+            <ThemeSwitcher />
             <div className="my-1 h-px bg-ink-800" />
 
             <MenuButton

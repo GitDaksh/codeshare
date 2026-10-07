@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { SignUp } from "@clerk/nextjs";
+import { ThemedSignUp } from "@/components/ThemedAuth";
 import { AuthShell } from "@/components/AuthShell";
 
 export const metadata: Metadata = {
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <AuthShell>
-      <SignUp />
+      <ThemedSignUp />
     </AuthShell>
   );
 }

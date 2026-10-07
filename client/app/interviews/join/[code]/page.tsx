@@ -46,7 +46,7 @@ export default function JoinInterviewPage({ params }: { params: Promise<{ code: 
     <main className="flex min-h-[calc(100dvh-56px)] flex-col items-center justify-center gap-3 px-4 text-center">
       {error ? (
         <>
-          <div className="grid h-12 w-12 place-items-center rounded-2xl border border-ink-700 bg-ink-900">
+          <div className="grid h-12 w-12 place-items-center rounded-xl border border-ink-700 bg-ink-900">
             <Link2Off className="h-5 w-5 text-ink-300" />
           </div>
           <p className="font-semibold text-ink-100">{error}</p>
@@ -55,7 +55,7 @@ export default function JoinInterviewPage({ params }: { params: Promise<{ code: 
           </p>
           <Link
             href="/interviews"
-            className="mt-2 inline-flex h-9 items-center rounded-full border border-ink-700 bg-ink-900 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500"
+            className="mt-2 inline-flex h-9 items-center rounded-lg border border-ink-700 bg-ink-900 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500"
           >
             Go to Interviews
           </Link>

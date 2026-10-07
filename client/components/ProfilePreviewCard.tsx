@@ -71,7 +71,7 @@ export function ProfilePreviewCard({
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         style={reduce ? undefined : { rotateX, rotateY, transformPerspective: 1000 }}
-        className="group relative overflow-hidden rounded-3xl border border-ink-800 bg-ink-950 p-6 shadow-[0_30px_80px_-30px_rgba(255,255,255,0.15)]"
+        className="group relative overflow-hidden rounded-2xl border border-ink-800 bg-ink-900 p-6 shadow-raised"
       >
         <div className="hero-grid pointer-events-none absolute inset-0 opacity-60" />
         <div className="spotlight-fill pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
@@ -102,27 +102,27 @@ export function ProfilePreviewCard({
           </div>
 
           <p className="mt-6 truncate text-center font-[family-name:var(--font-display)] text-xl font-semibold tracking-tight text-ink-100">
-            {username ? `@${username}` : <span className="text-ink-700">@username</span>}
+            {username ? `@${username}` : <span className="text-ink-600">@username</span>}
           </p>
 
           <p className="mt-2 line-clamp-2 min-h-10 break-words text-center text-sm text-ink-400">
-            {bio.trim() ? bio : <span className="text-ink-700">Your bio will show up here.</span>}
+            {bio.trim() ? bio : <span className="text-ink-600">Your bio will show up here.</span>}
           </p>
 
           <div className="mt-6 flex min-h-7 flex-wrap items-center justify-center gap-2 text-xs">
             {favoriteLanguage && (
-              <span className="rounded-full border border-ink-800 bg-ink-900 px-2.5 py-1 text-ink-300">
+              <span className="rounded-md border border-ink-800 bg-ink-900 px-2.5 py-1 text-ink-300">
                 {languageLabel(favoriteLanguage)}
               </span>
             )}
             {trimmedGithub && (
-              <span className="flex max-w-full items-center gap-1.5 rounded-full border border-ink-800 bg-ink-900 px-2.5 py-1 text-ink-300">
+              <span className="flex max-w-full items-center gap-1.5 rounded-md border border-ink-800 bg-ink-900 px-2.5 py-1 text-ink-300">
                 <GithubIcon className="h-3 w-3 shrink-0" />
                 <span className="truncate">{trimmedGithub}</span>
               </span>
             )}
             {!favoriteLanguage && !trimmedGithub && (
-              <span className="text-ink-700">Language and GitHub appear here</span>
+              <span className="text-ink-600">Language and GitHub appear here</span>
             )}
           </div>
         </div>

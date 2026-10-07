@@ -8,7 +8,7 @@ import { LensTestPicker } from "@/components/lens/LensTestPicker";
 import type { RoomLensState } from "@/lib/useRoomLens";
 
 const ACTION =
-  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-ink-700 px-2 text-xs font-medium text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100";
+  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-2 text-xs font-medium text-ink-300 shadow-xs transition-colors hover:border-ink-600 hover:text-ink-100";
 
 function SessionActions({ lens }: { lens: RoomLensState }) {
   const { session } = lens;
@@ -121,7 +121,7 @@ export function RoomLens({ lens }: { lens: RoomLensState }) {
           : "A recording is open";
     return (
       <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-3">
-        <div className="pointer-events-auto flex max-w-full items-center gap-2.5 rounded-full border border-ink-700 bg-ink-900/95 py-1 pl-3 pr-1 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.9)] backdrop-blur">
+        <div className="pointer-events-auto flex max-w-full items-center gap-2.5 rounded-md border border-ink-700 bg-ink-900/95 py-1 pl-3 pr-1 shadow-raised backdrop-blur">
           <span className="relative flex h-2 w-2 shrink-0">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ink-100 opacity-40" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-ink-100" />
@@ -133,7 +133,7 @@ export function RoomLens({ lens }: { lens: RoomLensState }) {
           <button
             type="button"
             onClick={lens.show}
-            className="shrink-0 rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-950 transition-colors hover:bg-white"
+            className="shrink-0 rounded-lg bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-950 transition-colors hover:bg-ink-200"
           >
             {lens.isDriver ? "Open" : "Watch"}
           </button>

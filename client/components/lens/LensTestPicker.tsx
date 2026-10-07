@@ -6,14 +6,14 @@ import { choiceLabel, type LensChoice } from "@/lib/lensPractice";
 import type { RoomLensPractice } from "@/lib/useRoomLens";
 
 const ACTION =
-  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-ink-700 px-2 text-xs font-medium text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100";
+  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-2 text-xs font-medium text-ink-300 shadow-xs transition-colors hover:border-ink-600 hover:text-ink-100";
 const ITEM =
   "flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-xs transition-colors hover:bg-ink-800 focus-visible:bg-ink-800 focus-visible:outline-none";
 
 function StatusMark({ status }: { status: string | null }) {
-  if (status === "passed") return <Check className="h-3 w-3 shrink-0 text-ink-400" aria-label="passed" />;
+  if (status === "passed") return <Check className="h-3 w-3 shrink-0 text-success" aria-label="passed" />;
   if (status === "failed" || status === "error") {
-    return <X className="h-3 w-3 shrink-0 text-red-400" aria-label="failed" />;
+    return <X className="h-3 w-3 shrink-0 text-danger" aria-label="failed" />;
   }
   return null;
 }
@@ -117,7 +117,7 @@ export function LensTestPicker({
       {open && (
         <div
           ref={menuRef}
-          className="absolute right-0 top-full z-30 mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-ink-700 bg-ink-900 p-1.5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.9)]"
+          className="absolute right-0 top-full z-30 mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-ink-800 bg-ink-900 p-1.5 shadow-raised"
         >
           {view === "menu" ? (
             <div role="menu" aria-label="What Lens runs">
@@ -164,9 +164,9 @@ export function LensTestPicker({
                     spellCheck={false}
                     autoComplete="off"
                     aria-invalid={!!errors[index]}
-                    className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-950 px-2 py-1.5 font-mono text-xs text-ink-100 outline-none transition-colors focus:border-ink-500"
+                    className="mt-1 w-full rounded-lg border border-ink-700 bg-ink-900 px-2 py-1.5 font-mono text-xs text-ink-100 shadow-xs outline-none transition-colors focus:border-ink-500"
                   />
-                  {errors[index] && <span className="mt-1 block text-[11px] text-red-300">{errors[index]}</span>}
+                  {errors[index] && <span className="mt-1 block text-[11px] text-danger">{errors[index]}</span>}
                 </label>
               ))}
               <p className="text-[11px] leading-relaxed text-ink-500">
@@ -178,7 +178,7 @@ export function LensTestPicker({
                 </button>
                 <button
                   type="submit"
-                  className="inline-flex h-7 items-center rounded-lg bg-ink-100 px-2.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-white"
+                  className="inline-flex h-7 items-center rounded-lg bg-ink-100 px-2.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-ink-200"
                 >
                   Visualize
                 </button>

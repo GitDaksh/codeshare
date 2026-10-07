@@ -35,7 +35,6 @@ import {
   Users,
   Ellipsis,
   WrapText,
-  Copy,
   ClipboardCopy,
   Download,
   Keyboard,
@@ -46,6 +45,8 @@ import {
   ScanEye,
   ClipboardList,
   Timer,
+  Sun,
+  Moon,
   type LucideIcon,
 } from "lucide-react";
 import { useApi } from "@/lib/api";
@@ -70,6 +71,8 @@ import { openShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ProblemPanel } from "@/components/ProblemPanel";
 import { RoomLens } from "@/components/lens/RoomLens";
 import { InterviewBar } from "@/components/interview/InterviewBar";
+import { Menu, type MenuEntry } from "@/components/Menu";
+import { useTheme } from "@/lib/theme";
 import { InterviewOverlays } from "@/components/interview/InterviewOverlays";
 import { InterviewLobby } from "@/components/interview/InterviewLobby";
 import { InterviewSetup, type InterviewSetupChoice } from "@/components/interview/InterviewSetup";
@@ -150,19 +153,15 @@ const MOBILE_TABS: { id: MobilePanel; label: string; icon: LucideIcon }[] = [
   { id: "interview", label: "Interview", icon: ClipboardList },
 ];
 
-const STATUS_META: Record<string, { label: string; dot: string; live: boolean }> = {
-  connected: { label: "Live", dot: "bg-ink-100", live: true },
-  connecting: { label: "Connecting", dot: "bg-ink-500", live: false },
-  disconnected: { label: "Offline", dot: "bg-red-500", live: false },
+const STATUS_META: Record<string, { label: string; dot: string; tone: string; live: boolean }> = {
+  connected: { label: "Live", dot: "bg-success-strong", tone: "border-success-line bg-success-soft text-success", live: true },
+  connecting: { label: "Connecting", dot: "bg-warning-strong", tone: "border-warning-line bg-warning-soft text-warning", live: false },
+  disconnected: { label: "Offline", dot: "bg-danger-strong", tone: "border-danger-line bg-danger-soft text-danger", live: false },
 };
 
 // Standalone icon buttons in the header (back, more).
 const ICON_BUTTON =
   "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100";
-
-// Buttons inside the grouped header toolbar.
-const TOOL_BUTTON =
-  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100";
 
 function languageLabel(value: string): string {
   return LANGUAGES.find((l) => l.value === value)?.label ?? value;
@@ -194,7 +193,8 @@ export default function RoomPage({
   const { toast } = useToast();
   const { checking, profile } = useOnboardingGate();
   const isDesktop = useMediaQuery("(min-width: 768px)");
-  const [editorTheme, setEditorTheme] = useEditorTheme();
+  const [editorTheme, setEditorTheme, editorThemeAuto] = useEditorTheme();
+  const appTheme = useTheme();
 
   const [room, setRoom] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
@@ -876,7 +876,7 @@ export default function RoomPage({
     }
   }
 
-  async function handleRenameRoom(newName: string) {
+    async function handleRenameRoom(newName: string) {
     try {
       const res = await api.patch<Room>(`/api/rooms/${id}`, { name: newName });
       setRoom(res.data);
@@ -1048,12 +1048,20 @@ export default function RoomPage({
       ]
     : [];
 
-  const themeCommands: Command[] = EDITOR_THEMES.map((theme) => ({
-    id: `theme-${theme.id}`,
-    label: `Editor theme: ${theme.label}${theme.id === editorTheme ? " (current)" : ""}`,
-    icon: Palette,
-    action: () => setEditorTheme(theme.id),
-  }));
+  const themeCommands: Command[] = [
+    {
+      id: "theme-auto",
+      label: `Editor theme: Match the app${editorThemeAuto ? " (current)" : ""}`,
+      icon: Palette,
+      action: () => setEditorTheme(null),
+    },
+    ...EDITOR_THEMES.map((theme) => ({
+      id: `theme-${theme.id}`,
+      label: `Editor theme: ${theme.label}${!editorThemeAuto && theme.id === editorTheme ? " (current)" : ""}`,
+      icon: Palette,
+      action: () => setEditorTheme(theme.id),
+    })),
+  ];
 
   const problemCommands: Command[] = problem
     ? [
@@ -1192,6 +1200,40 @@ export default function RoomPage({
     },
   ];
 
+  // The header's "More" menu: everything that isn't Share, Run or Visualize.
+  const roomMenu: MenuEntry[] = [
+    {
+      id: "output",
+      label: runPanelOpen ? "Hide output panel" : "Show output panel",
+      icon: Terminal,
+      onSelect: () => {
+        setMobilePanel("code");
+        setRunPanelOpen((o) => !o);
+      },
+    },
+    { id: "format", label: "Format code", icon: AlignLeft, onSelect: handleFormat, disabled: !isFormattable(language) || !canEdit },
+    { id: "copy", label: "Copy all code", icon: ClipboardCopy, onSelect: handleCopyCode },
+    { id: "download", label: "Download code", icon: Download, onSelect: handleDownloadCode },
+    ...(isDesktop
+      ? [{ id: "zen", label: zenMode ? "Exit focus mode" : "Focus mode", icon: zenMode ? Minimize2 : Maximize2, onSelect: handleToggleZen }]
+      : []),
+    { kind: "separator", id: "people" },
+    ...(canInvite ? [{ id: "invite", label: "Invite people", icon: UserPlus, onSelect: () => setShareOpen(true) }] : []),
+    ...(isOwner && !room?.interviewId
+      ? [{ id: "interview", label: "Start an interview", icon: Timer, onSelect: () => setSetupOpen(true), disabled: interviewOpen }]
+      : []),
+    ...(isOwner ? [{ id: "settings", label: "Room settings", icon: Settings, onSelect: () => setSettingsOpen(true) }] : []),
+    { kind: "separator", id: "help" },
+    {
+      id: "theme",
+      label: appTheme.theme === "dark" ? "Light theme" : "Dark theme",
+      icon: appTheme.theme === "dark" ? Sun : Moon,
+      onSelect: () => appTheme.choose(appTheme.theme === "dark" ? "light" : "dark"),
+    },
+    { id: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard, onSelect: openShortcutsDialog },
+    { id: "commands", label: "All commands", icon: Search, onSelect: () => setCommandPaletteOpen(true), hint: "⌘K" },
+  ];
+
   if (checking || loading) {
     return <RoomSkeleton />;
   }
@@ -1199,8 +1241,8 @@ export default function RoomPage({
   // The room couldn't be opened: deleted, or the link is wrong or was reset.
   if (notFound || !room || initialCode === null) {
     return (
-      <main className="flex h-dvh flex-col items-center justify-center gap-3 px-4 text-center md:h-[calc(100dvh-56px)]">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-ink-700 bg-ink-900">
+      <main className="flex h-dvh flex-col items-center justify-center gap-3 px-4 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-ink-700 bg-ink-900">
           <Code2 className="h-5 w-5 text-ink-300" />
         </div>
         <p className="font-semibold text-ink-100">This room doesn&apos;t exist</p>
@@ -1210,7 +1252,7 @@ export default function RoomPage({
         </p>
         <Link
           href="/dashboard"
-          className="mt-2 inline-flex h-9 items-center rounded-full border border-ink-700 bg-ink-900 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500"
+          className="mt-2 inline-flex h-9 items-center rounded-lg border border-ink-700 bg-ink-900 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500"
         >
           Back to dashboard
         </Link>
@@ -1218,61 +1260,57 @@ export default function RoomPage({
     );
   }
 
-  const shortRoomId = `${room._id.slice(0, 6)}…${room._id.slice(-4)}`;
-
   return (
-    <main className="flex h-dvh flex-col bg-ink-950 md:h-[calc(100dvh-56px)]">
+    <main className="flex h-dvh flex-col bg-ink-950">
       {/* ---------- Header ---------- */}
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-ink-800 bg-ink-950 px-2 sm:gap-3 sm:px-3 md:border-transparent">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-ink-800 bg-ink-950 px-2 sm:gap-3 sm:px-3 md:border-transparent">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <Link href="/dashboard" aria-label="Back to dashboard" title="Back to dashboard" className={ICON_BUTTON}>
             <ArrowLeft className="h-4 w-4" />
           </Link>
 
           <div className="flex min-w-0 items-center gap-1">
-            <span className="truncate font-[family-name:var(--font-display)] text-sm font-semibold tracking-tight text-ink-100">
-              {room.name}
-            </span>
+            <span className="truncate text-sm font-semibold tracking-tight text-ink-100">{room.name}</span>
             {isOwner && (
               <button
                 onClick={() => setSettingsOpen(true)}
                 aria-label="Room settings"
                 title="Room settings"
-                className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 sm:flex"
+                className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-500 transition-colors hover:bg-ink-800 hover:text-ink-100 sm:flex"
               >
                 <Settings className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
-          {problem && !interview && (
-            <Link
-              href={`/practice/${problem.slug}`}
-              title={`${problem.difficulty} practice problem`}
-              className="hidden shrink-0 items-center gap-1 rounded-full border border-ink-700 bg-ink-900 px-2 py-0.5 text-[11px] font-medium text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100 lg:inline-flex"
-            >
-              <BookOpen className="h-3 w-3" />
-              Practice
-            </Link>
-          )}
-
           <span
             title={statusMeta.label}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-ink-700 bg-ink-900 px-2 py-0.5 text-[11px] font-medium text-ink-300"
+            className={`flex shrink-0 items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${statusMeta.tone}`}
           >
             <span className="relative flex h-1.5 w-1.5">
               {statusMeta.live && (
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ink-100 opacity-40" />
+                <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${statusMeta.dot}`} />
               )}
               <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
             </span>
             <span className="hidden sm:inline">{statusMeta.label}</span>
           </span>
 
+          {problem && !interview && (
+            <Link
+              href={`/practice/${problem.slug}`}
+              title={`${problem.difficulty} practice problem`}
+              className="hidden shrink-0 items-center gap-1 rounded-md border border-ink-800 bg-ink-900 px-1.5 py-0.5 text-[11px] font-medium text-ink-400 transition-colors hover:border-ink-700 hover:text-ink-100 lg:inline-flex"
+            >
+              <BookOpen className="h-3 w-3" />
+              Practice
+            </Link>
+          )}
+
           {!canEdit && (
             <span
               title={VIEW_ONLY}
-              className="flex shrink-0 items-center gap-1 rounded-full border border-ink-700 bg-ink-900 px-2 py-0.5 text-[11px] font-medium text-ink-300"
+              className="flex shrink-0 items-center gap-1 rounded-md border border-ink-800 bg-ink-900 px-1.5 py-0.5 text-[11px] font-medium text-ink-400"
             >
               <Eye className="h-3 w-3" />
               <span className="hidden sm:inline">View only</span>
@@ -1285,20 +1323,9 @@ export default function RoomPage({
               onClick={handleAskToEdit}
               disabled={asked}
               title={asked ? "You've asked the owner for edit access" : "Ask the owner for edit access"}
-              className="hidden shrink-0 items-center rounded-full bg-ink-100 px-2.5 py-0.5 text-[11px] font-semibold text-ink-950 transition-colors hover:bg-white disabled:bg-ink-800 disabled:text-ink-400 sm:flex"
+              className="hidden h-7 shrink-0 items-center rounded-md bg-ink-100 px-2.5 text-xs font-medium text-ink-950 transition-colors hover:bg-ink-200 disabled:bg-ink-800 disabled:text-ink-500 sm:flex"
             >
               {asked ? "Asked" : "Ask to edit"}
-            </button>
-          )}
-
-          {canInvite && (
-            <button
-              onClick={() => setShareOpen(true)}
-              title="Invite people"
-              className="hidden items-center gap-1.5 rounded-md px-1.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 lg:flex"
-            >
-              {shortRoomId}
-              <Copy className="h-3 w-3" />
             </button>
           )}
         </div>
@@ -1308,28 +1335,16 @@ export default function RoomPage({
             <PresenceStack users={onlineUsers} currentUserId={currentUserId ?? null} />
           </div>
 
-          <button
-            onClick={() => setCommandPaletteOpen(true)}
-            aria-label="Open command palette"
-            title="Command palette (⌘K)"
-            className="hidden h-8 items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 px-2.5 text-xs text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100 md:flex"
-          >
-            <Search className="h-3.5 w-3.5" />
-            <span className="hidden xl:inline">Commands</span>
-            <kbd className="rounded border border-ink-700 bg-ink-950 px-1 font-[family-name:var(--font-mono)] text-[10px] text-ink-400">
-              ⌘K
-            </kbd>
-          </button>
-
-          {isOwner && !room.interviewId && !interviewOpen && (
+          {canInvite && (
             <button
               type="button"
-              onClick={() => setSetupOpen(true)}
-              title="Start a timed mock interview"
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-2.5 text-xs font-medium text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100"
+              onClick={() => setShareOpen(true)}
+              title="Invite people"
+              aria-label="Invite people"
+              className="hidden h-8 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-2.5 text-xs font-medium text-ink-200 shadow-xs transition-colors hover:border-ink-600 hover:bg-ink-950 hover:text-ink-100 sm:flex"
             >
-              <Timer className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Interview</span>
+              <UserPlus className="h-3.5 w-3.5" />
+              Share
             </button>
           )}
 
@@ -1346,18 +1361,16 @@ export default function RoomPage({
             title={
               !canEdit ? VIEW_ONLY : runnable ? "Run (⌘↵)" : `Running ${languageLabel(language)} isn't supported yet`
             }
-            className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold shadow-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
               runnable
-                ? "bg-ink-100 text-ink-950 shadow-[0_0_20px_-6px_rgba(255,255,255,0.5)] hover:bg-white"
-                : "border border-ink-700 bg-ink-900 text-ink-400 hover:border-ink-500"
+                ? "bg-ink-100 text-ink-950 hover:bg-ink-200"
+                : "border border-ink-700 bg-ink-900 text-ink-400 hover:border-ink-600"
             }`}
           >
             {isSelfRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
             Run
             {runnable && (
-              <kbd className="ml-0.5 hidden rounded bg-ink-950/10 px-1 font-[family-name:var(--font-mono)] text-[10px] text-ink-950/60 lg:inline">
-                ⌘↵
-              </kbd>
+              <kbd className="ml-0.5 hidden font-[family-name:var(--font-mono)] text-[10px] text-ink-950/60 lg:inline">⌘↵</kbd>
             )}
           </button>
 
@@ -1369,18 +1382,18 @@ export default function RoomPage({
               lensLocked
                 ? "Lens is off for this interview"
                 : !canEdit
-                ? VIEW_ONLY
-                : !lensReady
-                  ? "Lens visualizes Python, JavaScript and TypeScript"
-                  : lens.practice
-                    ? `Visualize ${lens.practice.next} with Lens`
-                    : "Visualize with Lens: watch the code run, step by step"
+                  ? VIEW_ONLY
+                  : !lensReady
+                    ? "Lens visualizes Python, JavaScript and TypeScript"
+                    : lens.practice
+                      ? `Visualize ${lens.practice.next} with Lens`
+                      : "Visualize with Lens: watch the code run, step by step"
             }
-            className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+            className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium shadow-xs transition-colors disabled:opacity-60 ${
               canEdit ? "disabled:cursor-wait" : "disabled:cursor-not-allowed"
             } ${
               lensReady
-                ? "border-ink-700 bg-ink-900 text-ink-300 hover:border-ink-500 hover:text-ink-100"
+                ? "border-ink-700 bg-ink-900 text-ink-200 hover:border-ink-600 hover:bg-ink-950 hover:text-ink-100"
                 : "border-ink-800 bg-ink-900 text-ink-500 hover:border-ink-700"
             }`}
           >
@@ -1388,61 +1401,12 @@ export default function RoomPage({
             <span className="hidden lg:inline">Visualize</span>
           </button>
 
-          {/* Grouped toolbar */}
-          <div className="hidden items-center gap-0.5 rounded-lg border border-ink-800 bg-ink-900 p-0.5 sm:flex">
-            <button
-              onClick={() => setRunPanelOpen((o) => !o)}
-              aria-label={runPanelOpen ? "Hide output panel" : "Show output panel"}
-              title={runPanelOpen ? "Hide output" : "Show output"}
-              className={`${TOOL_BUTTON} ${runPanelOpen ? "bg-ink-800 text-ink-100" : ""}`}
-            >
-              <Terminal className="h-4 w-4" />
-            </button>
-            <button
-              onClick={handleFormat}
-              disabled={!isFormattable(language) || !canEdit}
-              aria-label="Format code"
-              title={
-                !canEdit
-                  ? VIEW_ONLY
-                  : isFormattable(language)
-                    ? "Format code"
-                    : "Formatting not supported for this language"
-              }
-              className={`${TOOL_BUTTON} disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent`}
-            >
-              <AlignLeft className="h-4 w-4" />
-            </button>
-            <button onClick={handleDownloadCode} aria-label="Download code" title="Download code" className={TOOL_BUTTON}>
-              <Download className="h-4 w-4" />
-            </button>
-            {canInvite && (
-              <button
-                onClick={() => setShareOpen(true)}
-                aria-label="Invite people"
-                title="Invite people"
-                className={TOOL_BUTTON}
-              >
-                <LinkIcon className="h-4 w-4" />
-              </button>
-            )}
-            <button
-              onClick={handleToggleZen}
-              aria-label={zenMode ? "Show sidebar" : "Enter focus mode"}
-              title={zenMode ? "Show sidebar" : "Focus mode"}
-              className={`${TOOL_BUTTON} hidden md:flex ${zenMode ? "bg-ink-800 text-ink-100" : ""}`}
-            >
-              {zenMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </button>
-          </div>
-
-          <button
-            onClick={() => setCommandPaletteOpen(true)}
-            aria-label="More actions"
-            className={`${ICON_BUTTON} sm:hidden`}
-          >
-            <Ellipsis className="h-5 w-5" />
-          </button>
+          <Menu
+            label="More actions"
+            icon={<Ellipsis className="h-4 w-4" />}
+            entries={roomMenu}
+            triggerClassName="flex h-8 w-8 items-center justify-center rounded-lg border border-ink-700 bg-ink-900 text-ink-400 shadow-xs transition-colors hover:border-ink-600 hover:bg-ink-950 hover:text-ink-100"
+          />
         </div>
       </header>
 
@@ -1488,7 +1452,7 @@ export default function RoomPage({
             />
             {followed && (
               <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
-                <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-ink-700 bg-ink-900/95 py-1 pl-1.5 pr-1 text-xs text-ink-300 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.8)] backdrop-blur">
+                <div className="pointer-events-auto flex items-center gap-2 rounded-md border border-ink-700 bg-ink-900/95 py-1 pl-1.5 pr-1 text-xs text-ink-300 shadow-raised backdrop-blur">
                   <AvatarIcon avatarId={followed.avatarId} className="h-5 w-5 rounded-full" />
                   <span>
                     Following <span className="font-semibold text-ink-100">{followed.name}</span>
@@ -1496,7 +1460,7 @@ export default function RoomPage({
                   <button
                     type="button"
                     onClick={() => setFollowing(null)}
-                    className="rounded-full px-2 py-0.5 font-medium text-ink-100 transition-colors hover:bg-ink-800"
+                    className="rounded-md px-2 py-0.5 font-medium text-ink-100 transition-colors hover:bg-ink-800"
                   >
                     Stop
                   </button>
@@ -1541,7 +1505,7 @@ export default function RoomPage({
               className={`${mobilePanel === "code" ? "hidden" : "flex"} w-full min-w-0 flex-col bg-ink-900 md:flex md:w-[var(--sidebar-width)] md:shrink-0 md:overflow-hidden md:rounded-xl md:border md:border-ink-800`}
             >
               <div className="hidden p-2 md:block">
-                <div className="relative flex rounded-lg border border-ink-800 bg-ink-950/60 p-1">
+                <div className="relative flex rounded-lg border border-ink-800 bg-ink-950 p-0.5">
                   {sidebarTabs.map((tab) => {
                     const active = activeTab === tab;
                     return (
@@ -1553,13 +1517,13 @@ export default function RoomPage({
                         {active && (
                           <motion.div
                             layoutId="sidebar-tab-pill"
-                            className="absolute inset-0 rounded-md bg-ink-800 shadow-sm ring-1 ring-ink-700"
+                            className="absolute inset-0 rounded-md bg-ink-900 shadow-xs ring-1 ring-ink-800"
                             transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
                           />
                         )}
                         <span
                           className={`relative z-10 inline-flex items-center justify-center gap-1.5 transition-colors ${
-                            active ? "text-ink-100" : "text-ink-400 hover:text-ink-100"
+                            active ? "text-ink-100" : "text-ink-500 hover:text-ink-100"
                           }`}
                         >
                           {SIDEBAR_TAB_LABELS[tab]}
@@ -1576,7 +1540,7 @@ export default function RoomPage({
                             />
                           )}
                           {tab === "chat" && unreadCount > 0 && !active && (
-                            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-md bg-danger-strong px-1 text-[9px] font-bold text-white">
                               {unreadCount > 9 ? "9+" : unreadCount}
                             </span>
                           )}
@@ -1651,7 +1615,7 @@ export default function RoomPage({
                       <button
                         type="button"
                         onClick={() => setShareOpen(true)}
-                        className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full bg-ink-100 px-3.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-white active:scale-[0.98]"
+                        className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink-100 px-3.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-ink-200 active:scale-[0.98]"
                       >
                         <UserPlus className="h-3.5 w-3.5" />
                         Invite people
@@ -1701,7 +1665,7 @@ export default function RoomPage({
               <span className="relative">
                 <Icon className={`h-5 w-5 transition-colors ${active ? "text-ink-100" : "text-ink-400"}`} />
                 {tabId === "chat" && unreadCount > 0 && (
-                  <span className="absolute -right-2.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                  <span className="absolute -right-2.5 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-md bg-danger-strong px-1 text-[9px] font-bold text-white">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}

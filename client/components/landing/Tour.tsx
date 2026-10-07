@@ -235,7 +235,6 @@ export function Tour() {
               </div>
 
               <div className="relative h-[min(34rem,calc(100vh-10rem))]">
-                <div className="pointer-events-none absolute -inset-10 rounded-[3rem] bg-white/[0.04] blur-3xl" />
                 {/* Opacity and position only: a scale would throw off Lens's arrows. */}
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div

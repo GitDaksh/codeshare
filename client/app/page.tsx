@@ -10,10 +10,10 @@ import { LandingFooter } from "@/components/landing/LandingFooter";
 
 export default function Home() {
   return (
-    <main className="grain relative">
+    <main className="relative">
       <SmoothScroll />
       <Hero />
-      <section className="border-y border-ink-900 py-8">
+      <section className="border-y border-ink-800 bg-ink-900 py-8">
         <p className="mb-5 text-center font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.25em] text-ink-600">
           Everything in one room
         </p>

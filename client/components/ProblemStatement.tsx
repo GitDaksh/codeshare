@@ -14,7 +14,7 @@ export function renderRichText(text: string): ReactNode[] {
       return (
         <code
           key={i}
-          className="rounded border border-ink-700 bg-ink-800 px-1 py-0.5 font-[family-name:var(--font-mono)] text-[0.85em] text-ink-100"
+          className="rounded-md border border-ink-800 bg-ink-950 px-1 py-0.5 font-[family-name:var(--font-mono)] text-[0.85em] text-ink-100"
         >
           {part.slice(1, -1)}
         </code>
@@ -49,11 +49,11 @@ export function ProblemStatement({ problem, compact = false }: ProblemStatementP
       </div>
 
       <section>
-        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Examples</h3>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-500">Examples</h3>
         <div className="space-y-3">
           {examples.map((example, i) => (
-            <div key={i} className="overflow-hidden rounded-xl border border-ink-700 bg-ink-950/60">
-              <div className="border-b border-ink-800 px-3.5 py-2 text-[11px] font-medium text-ink-400">
+            <div key={i} className="overflow-hidden rounded-lg border border-ink-800 bg-ink-950">
+              <div className="border-b border-ink-800 px-3.5 py-2 text-xs font-medium text-ink-500">
                 Example {i + 1}
               </div>
               <dl className="space-y-1.5 px-3.5 py-3 font-[family-name:var(--font-mono)] text-[12px] leading-5">
@@ -78,7 +78,7 @@ export function ProblemStatement({ problem, compact = false }: ProblemStatementP
       </section>
 
       <section>
-        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Constraints</h3>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-500">Constraints</h3>
         <ul className="space-y-1.5">
           {problem.constraints.map((constraint, i) => (
             <li key={i} className="flex gap-2.5">
@@ -94,7 +94,7 @@ export function ProblemStatement({ problem, compact = false }: ProblemStatementP
           type="button"
           onClick={() => setShowHint((s) => !s)}
           aria-expanded={showHint}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-800 px-3 py-1.5 text-xs font-medium text-ink-100 transition-colors hover:border-ink-500"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-3 text-xs font-medium text-ink-100 shadow-xs transition-colors hover:border-ink-600 hover:bg-ink-950"
         >
           <Lightbulb className="h-3.5 w-3.5" />
           {showHint ? "Hide hint" : "Show a hint"}
@@ -108,7 +108,7 @@ export function ProblemStatement({ problem, compact = false }: ProblemStatementP
               transition={{ duration: 0.22 }}
               className="overflow-hidden"
             >
-              <p className="mt-3 rounded-xl border border-dashed border-ink-700 bg-ink-950/50 px-3.5 py-3 text-ink-300">
+              <p className="mt-3 rounded-lg border border-warning-line bg-warning-soft px-3.5 py-3 text-warning">
                 {renderRichText(problem.hint)}
               </p>
             </motion.div>
