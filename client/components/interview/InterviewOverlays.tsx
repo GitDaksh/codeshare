@@ -77,7 +77,7 @@ export function InterviewOverlays({ interview, skew, me, hints, onControl }: Int
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: 0.4 } }}
-            className="fixed inset-0 z-[60] grid place-items-center bg-ink-950/80 backdrop-blur-md"
+            className="fixed inset-0 z-[60] grid place-items-center bg-ink-950/90 backdrop-blur-sm"
           >
             <div className="flex flex-col items-center gap-6 text-center">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-ink-400">
@@ -86,11 +86,11 @@ export function InterviewOverlays({ interview, skew, me, hints, onControl }: Int
               <AnimatePresence mode="popLayout">
                 <motion.span
                   key={countdown > 0 ? Math.ceil(countdown / 1000) : "go"}
-                  initial={{ scale: 0.4, opacity: 0, filter: "blur(12px)" }}
-                  animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
-                  exit={{ scale: 1.8, opacity: 0, filter: "blur(8px)" }}
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 1.6, opacity: 0 }}
                   transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                  className="font-[family-name:var(--font-display)] text-[9rem] font-bold leading-none text-ink-100 drop-shadow-[0_0_40px_rgba(255,255,255,0.35)]"
+                  className="font-[family-name:var(--font-display)] text-[9rem] font-bold leading-none text-ink-100"
                 >
                   {countdown > 0 ? Math.min(3, Math.ceil(countdown / 1000)) : "Go"}
                 </motion.span>
@@ -116,7 +116,7 @@ export function InterviewOverlays({ interview, skew, me, hints, onControl }: Int
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 1.04 }}
             transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
-            className="pointer-events-none fixed inset-x-0 top-1/3 z-50 mx-auto w-fit rounded-2xl border border-ink-600 bg-ink-900/95 px-8 py-5 text-center shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9),0_0_40px_-10px_rgba(255,255,255,0.25)] backdrop-blur"
+            className="pointer-events-none fixed inset-x-0 top-1/3 z-50 mx-auto w-fit rounded-xl border border-ink-700 bg-ink-900/95 px-8 py-5 text-center shadow-raised backdrop-blur"
             role="status"
           >
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-ink-400">
@@ -139,19 +139,19 @@ export function InterviewOverlays({ interview, skew, me, hints, onControl }: Int
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -12, scale: 0.98 }}
             transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
-            className="fixed right-4 top-28 z-50 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-ink-600 bg-ink-900/95 p-4 shadow-[0_20px_60px_-20px_rgba(0,0,0,0.9),0_0_30px_-10px_rgba(255,255,255,0.25)] backdrop-blur"
+            className="fixed right-4 top-28 z-50 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-warning-line bg-ink-900/95 p-4 shadow-raised backdrop-blur"
             role="status"
           >
             <div className="mb-2 flex items-center justify-between">
               <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-300">
-                <Lightbulb className="h-4 w-4 text-ink-100" />
+                <Lightbulb className="h-4 w-4 text-warning" />
                 Hint {hintIndex}
               </span>
               <button
                 type="button"
                 onClick={() => setDismissedHint(hintKey)}
                 aria-label="Close"
-                className="rounded-md p-1 text-ink-500 transition-colors hover:text-ink-100"
+                className="rounded-md p-1 text-ink-500 transition-colors hover:bg-ink-800 hover:text-ink-100"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -169,31 +169,31 @@ export function InterviewOverlays({ interview, skew, me, hints, onControl }: Int
             initial={{ opacity: 0, y: -24 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
-            className="fixed left-1/2 top-20 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-ink-500 bg-ink-100 py-1.5 pl-4 pr-1.5 text-ink-950 shadow-[0_0_40px_-6px_rgba(255,255,255,0.6)]"
+            className="fixed left-1/2 top-20 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-danger-line bg-ink-900 py-1.5 pl-4 pr-1.5 text-ink-100 shadow-raised"
             role="alert"
           >
-            <Clock className="h-4 w-4" />
-            <span className="text-sm font-semibold">Time&apos;s up</span>
+            <Clock className="h-4 w-4 text-danger" />
+            <span className="text-sm font-semibold text-danger">Time&apos;s up</span>
             {staff ? (
               <span className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => onControl("extend")}
-                  className="flex items-center gap-1 rounded-full bg-ink-950/10 px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-ink-950/20"
+                  className="flex items-center gap-1 rounded-md border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs font-semibold text-ink-100 transition-colors hover:border-ink-600"
                 >
                   <Plus className="h-3 w-3" />5 min
                 </button>
                 <button
                   type="button"
                   onClick={() => onControl("end")}
-                  className="flex items-center gap-1 rounded-full bg-ink-950 px-2.5 py-1 text-xs font-semibold text-ink-100 transition-colors hover:bg-ink-800"
+                  className="flex items-center gap-1 rounded-md bg-danger-strong px-2.5 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90"
                 >
                   <Square className="h-3 w-3" />
                   End
                 </button>
               </span>
             ) : (
-              <span className="pr-2.5 text-xs text-ink-700">Wrap up your thoughts</span>
+              <span className="pr-2.5 text-xs text-ink-400">Wrap up your thoughts</span>
             )}
           </motion.div>
         )}
@@ -213,10 +213,10 @@ export function InterviewOverlays({ interview, skew, me, hints, onControl }: Int
               initial={{ y: 24, scale: 0.96 }}
               animate={{ y: 0, scale: 1 }}
               transition={{ type: "spring", bounce: 0.3, duration: 0.6 }}
-              className="w-full max-w-sm rounded-2xl border border-ink-700 bg-ink-900 p-6 text-center shadow-2xl"
+              className="w-full max-w-sm rounded-xl border border-ink-800 bg-ink-900 p-6 text-center shadow-raised"
             >
-              <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-ink-700 bg-ink-950">
-                <PartyPopper className="h-5 w-5 text-ink-100" />
+              <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl border border-ink-700 bg-ink-950">
+                <PartyPopper className="h-5 w-5 text-success" />
               </div>
               <p className="font-[family-name:var(--font-display)] text-lg font-semibold text-ink-100">
                 {candidate ? "Interview complete" : "The interview is over"}
@@ -232,7 +232,7 @@ export function InterviewOverlays({ interview, skew, me, hints, onControl }: Int
                   ["Questions", `${interview.questions.filter((q) => q.status !== "pending").length}/${total}`],
                   ["Hints", String(interview.questions.reduce((sum, q) => sum + q.hintsGiven, 0))],
                 ].map(([label, value]) => (
-                  <div key={label} className="rounded-xl border border-ink-800 bg-ink-950/60 px-3 py-2">
+                  <div key={label} className="rounded-lg border border-ink-800 bg-ink-950/60 px-3 py-2">
                     <p className="text-[10px] uppercase tracking-wider text-ink-500">{label}</p>
                     <p className="font-[family-name:var(--font-mono)] text-sm tabular-nums text-ink-100">{value}</p>
                   </div>
@@ -241,7 +241,7 @@ export function InterviewOverlays({ interview, skew, me, hints, onControl }: Int
               <button
                 type="button"
                 onClick={() => setDismissedEnd(interview.id)}
-                className="mt-5 h-9 w-full rounded-full bg-ink-100 text-sm font-semibold text-ink-950 transition-colors hover:bg-white"
+                className="mt-5 h-9 w-full rounded-lg bg-ink-100 text-sm font-semibold text-ink-950 transition-colors hover:bg-ink-200"
               >
                 Back to the room
               </button>

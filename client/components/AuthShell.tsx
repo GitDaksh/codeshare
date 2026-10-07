@@ -12,8 +12,6 @@ export function AuthShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="relative flex min-h-[calc(100dvh-56px)] items-center justify-center overflow-hidden px-4 py-10">
-      <div className="hero-grid pointer-events-none absolute inset-0" />
-      <div className="pointer-events-none absolute left-1/2 top-[-12rem] h-[28rem] w-[48rem] max-w-[140vw] -translate-x-1/2 rounded-full bg-white/[0.06] blur-[120px]" />
       <motion.div
         initial={reduce ? false : { opacity: 0, y: 16, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}

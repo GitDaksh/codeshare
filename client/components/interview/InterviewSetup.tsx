@@ -1,9 +1,12 @@
 "use client";
 
+import { useEscape } from "@/lib/useEscape";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Copy, Dices, Loader2, PenLine, Search, User, Users, X } from "lucide-react";
 import { AvatarIcon } from "@/components/AvatarIcon";
+import { DifficultyBadge } from "@/components/DifficultyBadge";
+import { ui } from "@/lib/ui";
 import { DIFFICULTIES, PROBLEMS, isTestableLanguage, type Difficulty } from "@/lib/problems";
 import type { RoomPerson } from "@/types/room";
 
@@ -31,8 +34,13 @@ type InterviewSetupProps = {
 
 const LENGTHS = [15, 30, 45, 60];
 
+// The same segmented look as every other toggle in the app.
 const SEGMENT =
   "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors";
+const SEGMENT_ON = "bg-ink-900 text-ink-100 shadow-xs ring-1 ring-ink-800";
+const SEGMENT_OFF = "text-ink-500 hover:text-ink-100";
+const CHIP_ON = "border-ink-100 bg-ink-100 text-ink-950";
+const CHIP_OFF = "border-ink-800 bg-ink-900 text-ink-400 hover:border-ink-700 hover:text-ink-100";
 
 function Label({ children }: { children: React.ReactNode }) {
   return <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500">{children}</p>;
@@ -109,7 +117,7 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
       exit={{ opacity: 0, y: 24 }}
       transition={{ duration: 0.2 }}
       onClick={(e) => e.stopPropagation()}
-      className="flex max-h-[92dvh] w-full flex-col rounded-t-2xl border border-ink-700 bg-ink-900 shadow-2xl sm:max-w-xl sm:rounded-2xl"
+      className="flex max-h-[92dvh] w-full flex-col rounded-t-xl border border-ink-800 bg-ink-900 shadow-raised sm:max-w-xl sm:rounded-xl"
     >
       <div className="flex items-start justify-between gap-4 border-b border-ink-800 px-5 pb-4 pt-5">
         <div>
@@ -118,7 +126,11 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
             A timed mock interview: hints, notes, live test results, and a report at the end.
           </p>
         </div>
-        <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-ink-400 transition-colors hover:text-ink-100">
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100"
+        >
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -127,11 +139,11 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
         {/* Who */}
         <section>
           <Label>Who</Label>
-          <div className="mb-3 flex rounded-lg border border-ink-800 bg-ink-950/60 p-1">
+          <div className="mb-3 flex rounded-lg border border-ink-800 bg-ink-950 p-0.5">
             <button
               type="button"
               onClick={() => setMode("live")}
-              className={`${SEGMENT} ${mode === "live" ? "bg-ink-800 text-ink-100" : "text-ink-400 hover:text-ink-100"}`}
+              className={`${SEGMENT} ${mode === "live" ? SEGMENT_ON : SEGMENT_OFF}`}
             >
               <Users className="h-3.5 w-3.5" />
               Interview someone
@@ -139,7 +151,7 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
             <button
               type="button"
               onClick={() => setMode("solo")}
-              className={`${SEGMENT} ${mode === "solo" ? "bg-ink-800 text-ink-100" : "text-ink-400 hover:text-ink-100"}`}
+              className={`${SEGMENT} ${mode === "solo" ? SEGMENT_ON : SEGMENT_OFF}`}
             >
               <User className="h-3.5 w-3.5" />
               Practice by myself
@@ -156,14 +168,14 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
                       key={person.userId}
                       type="button"
                       onClick={() => setCandidateId(person.userId)}
-                      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors ${
-                        selected ? "border-ink-300 bg-ink-800" : "border-ink-800 hover:border-ink-600"
+                      className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors ${
+                        selected ? "border-ink-100 bg-ink-800 ring-1 ring-ink-100" : "border-ink-800 bg-ink-900 hover:border-ink-600"
                       }`}
                     >
                       <span className="relative shrink-0">
                         <AvatarIcon avatarId={person.avatarId ?? "codeshare"} className="h-7 w-7 rounded-full" />
                         {online && (
-                          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-900 bg-ink-100" />
+                          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-900 bg-success-strong" />
                         )}
                       </span>
                       <span className="min-w-0 flex-1">
@@ -190,7 +202,7 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1600);
                     }}
-                    className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full bg-ink-100 px-3.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-white"
+                    className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink-100 px-3.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-ink-200"
                   >
                     {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                     {copied ? "Copied" : "Copy edit link"}
@@ -209,18 +221,18 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
         {/* What */}
         <section>
           <Label>Question</Label>
-          <div className="mb-3 flex rounded-lg border border-ink-800 bg-ink-950/60 p-1">
+          <div className="mb-3 flex rounded-lg border border-ink-800 bg-ink-950 p-0.5">
             <button
               type="button"
               onClick={() => setSource("problem")}
-              className={`${SEGMENT} ${source === "problem" ? "bg-ink-800 text-ink-100" : "text-ink-400 hover:text-ink-100"}`}
+              className={`${SEGMENT} ${source === "problem" ? SEGMENT_ON : SEGMENT_OFF}`}
             >
               Practice problem
             </button>
             <button
               type="button"
               onClick={() => setSource("custom")}
-              className={`${SEGMENT} ${source === "custom" ? "bg-ink-800 text-ink-100" : "text-ink-400 hover:text-ink-100"}`}
+              className={`${SEGMENT} ${source === "custom" ? SEGMENT_ON : SEGMENT_OFF}`}
             >
               <PenLine className="h-3.5 w-3.5" />
               My own question
@@ -235,10 +247,8 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
                     key={level}
                     type="button"
                     onClick={() => setDifficulty(level)}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                      difficulty === level
-                        ? "border-ink-100 bg-ink-100 text-ink-950"
-                        : "border-ink-700 text-ink-300 hover:border-ink-500"
+                    className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      difficulty === level ? CHIP_ON : CHIP_OFF
                     }`}
                   >
                     {level}
@@ -247,7 +257,7 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
                 <button
                   type="button"
                   onClick={surprise}
-                  className="ml-auto flex items-center gap-1 rounded-full border border-ink-700 px-2.5 py-1 text-[11px] font-medium text-ink-200 transition-colors hover:border-ink-500 hover:text-ink-100"
+                  className="ml-auto flex items-center gap-1 rounded-md border border-ink-700 bg-ink-900 px-2.5 py-1 text-[11px] font-medium text-ink-200 shadow-xs transition-colors hover:border-ink-600 hover:text-ink-100"
                 >
                   <Dices className="h-3.5 w-3.5" />
                   Surprise me
@@ -259,10 +269,10 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search problems or topics"
-                  className="h-8 w-full rounded-lg border border-ink-800 bg-ink-950/60 pl-8 pr-3 text-xs text-ink-100 placeholder:text-ink-500 focus:border-ink-600 focus:outline-none"
+                  className="h-8 w-full rounded-lg border border-ink-700 bg-ink-900 pl-8 pr-3 text-xs text-ink-100 shadow-xs placeholder:text-ink-500 focus:border-ink-500 focus:outline-none"
                 />
               </div>
-              <div className="max-h-52 overflow-y-auto rounded-xl border border-ink-800">
+              <div className="max-h-52 overflow-y-auto rounded-lg border border-ink-800 bg-ink-900">
                 {filtered.length === 0 && <p className="p-4 text-center text-xs text-ink-500">No problems match.</p>}
                 {filtered.map((problem) => {
                   const selected = problem.slug === problemSlug;
@@ -280,9 +290,7 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
                         <span className="block truncate text-sm text-ink-100">{problem.title}</span>
                         <span className="block truncate text-[11px] text-ink-500">{problem.topics.join(" · ")}</span>
                       </span>
-                      <span className="shrink-0 rounded border border-ink-700 px-1.5 py-px text-[10px] text-ink-400">
-                        {problem.difficulty}
-                      </span>
+                      <DifficultyBadge difficulty={problem.difficulty} />
                       {selected && <Check className="h-4 w-4 shrink-0 text-ink-100" />}
                     </button>
                   );
@@ -300,14 +308,14 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
                 value={customTitle}
                 onChange={(e) => setCustomTitle(e.target.value.slice(0, 120))}
                 placeholder="Title, like “Design an LRU cache”"
-                className="h-9 w-full rounded-lg border border-ink-800 bg-ink-950/60 px-3 text-sm text-ink-100 placeholder:text-ink-500 focus:border-ink-600 focus:outline-none"
+                className={ui.input}
               />
               <textarea
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value.slice(0, 5000))}
                 rows={5}
                 placeholder="The question. Your candidate sees it when the countdown ends. You can write hints for it during the interview."
-                className="w-full resize-none rounded-lg border border-ink-800 bg-ink-950/60 px-3 py-2 text-sm leading-relaxed text-ink-100 placeholder:text-ink-500 focus:border-ink-600 focus:outline-none"
+                className={ui.textarea}
               />
             </div>
           )}
@@ -325,7 +333,7 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
                 className={`flex-1 rounded-lg border py-2 text-sm font-medium tabular-nums transition-colors ${
                   durationMin === minutes
                     ? "border-ink-100 bg-ink-100 text-ink-950"
-                    : "border-ink-800 text-ink-300 hover:border-ink-600"
+                    : "border-ink-800 bg-ink-900 text-ink-300 hover:border-ink-600"
                 }`}
               >
                 {minutes} min
@@ -337,7 +345,7 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
               type="checkbox"
               checked={cleanStart}
               onChange={(e) => setCleanStart(e.target.checked)}
-              className="mt-0.5 h-3.5 w-3.5 accent-white"
+              className="mt-0.5 h-3.5 w-3.5 accent-ink-100"
             />
             <span>
               Start from a clean editor
@@ -357,7 +365,7 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
           type="button"
           onClick={start}
           disabled={!ready || busy}
-          className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-ink-100 px-5 text-sm font-semibold text-ink-950 transition-all hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-10 shrink-0 items-center gap-2 rounded-lg bg-ink-100 px-5 text-sm font-semibold text-ink-950 transition-all hover:bg-ink-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy && <Loader2 className="h-4 w-4 animate-spin" />}
           Start interview
@@ -368,6 +376,7 @@ function SetupCard({ onClose, me, language, people, onlineIds, editLink, onStart
 }
 
 export function InterviewSetup({ open, ...props }: InterviewSetupProps) {
+  useEscape(open, props.onClose);
   return (
     <AnimatePresence>
       {open && (
@@ -375,7 +384,7 @@ export function InterviewSetup({ open, ...props }: InterviewSetupProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:px-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:px-4"
           onClick={props.onClose}
         >
           <SetupCard {...props} />

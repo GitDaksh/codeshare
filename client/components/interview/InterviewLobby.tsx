@@ -54,7 +54,9 @@ function LinkRow({ label, detail, code }: { label: string; detail: string; code:
           setCopied(true);
           setTimeout(() => setCopied(false), 1600);
         }}
-        className="flex h-7 shrink-0 items-center gap-1 rounded-lg border border-ink-700 px-2.5 text-[11px] font-medium text-ink-200 transition-colors hover:border-ink-500 hover:text-ink-100"
+        className={`flex h-7 shrink-0 items-center gap-1 rounded-lg border bg-ink-900 px-2.5 text-[11px] font-medium shadow-xs transition-colors ${
+          copied ? "border-success-line text-success" : "border-ink-700 text-ink-200 hover:border-ink-600 hover:text-ink-100"
+        }`}
       >
         {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
         {copied ? "Copied" : "Copy link"}
@@ -120,13 +122,13 @@ export function InterviewLobby({ interview, me, onlineIds, onStart, onConsent }:
         </h1>
         <p className="mt-2 text-sm text-ink-400">
           {[interview.position, interview.level, language].filter(Boolean).join(" · ")}
-          <span className="text-ink-700"> · </span>
+          <span className="text-ink-600"> · </span>
           {when(interview.scheduledFor)}
         </p>
 
         <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
           {/* People */}
-          <section className="rounded-2xl border border-ink-800 bg-ink-900 p-4">
+          <section className="rounded-xl border border-ink-800 bg-ink-900 p-4">
             <h2 className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500">
               <Users className="h-3.5 w-3.5" />
               Who&apos;s here
@@ -137,7 +139,7 @@ export function InterviewLobby({ interview, me, onlineIds, onStart, onConsent }:
                   <span className="relative">
                     <AvatarIcon avatarId={person.avatarId} className="h-7 w-7 rounded-full" />
                     {onlineIds.has(person.userId) && (
-                      <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-900 bg-ink-100" />
+                      <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-900 bg-success-strong" />
                     )}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm text-ink-100">
@@ -152,7 +154,7 @@ export function InterviewLobby({ interview, me, onlineIds, onStart, onConsent }:
                     <span className="relative">
                       <AvatarIcon avatarId={interview.candidate.avatarId} className="h-7 w-7 rounded-full" />
                       {candidateHere && (
-                        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-900 bg-ink-100" />
+                        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-ink-900 bg-success-strong" />
                       )}
                     </span>
                   ) : (
@@ -172,7 +174,7 @@ export function InterviewLobby({ interview, me, onlineIds, onStart, onConsent }:
           </section>
 
           {/* The plan */}
-          <section className="rounded-2xl border border-ink-800 bg-ink-900 p-4">
+          <section className="rounded-xl border border-ink-800 bg-ink-900 p-4">
             <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500">
               {interview.questions.length} question{interview.questions.length === 1 ? "" : "s"} · {formatDuration(total)}
             </h2>
@@ -198,7 +200,7 @@ export function InterviewLobby({ interview, me, onlineIds, onStart, onConsent }:
               {SETTING_LABELS.filter((setting) => !(solo && setting.key === "monitoring")).map((setting) => (
                 <span
                   key={setting.key}
-                  className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                  className={`rounded-md border px-2 py-0.5 text-[10px] font-medium ${
                     interview.settings[setting.key] ? "border-ink-600 text-ink-200" : "border-ink-800 text-ink-500"
                   }`}
                 >
@@ -211,7 +213,7 @@ export function InterviewLobby({ interview, me, onlineIds, onStart, onConsent }:
 
         {/* What monitoring records, said plainly to the candidate */}
         {candidate && !staff && interview.settings.monitoring && (
-          <section className="mt-4 rounded-2xl border border-ink-700 bg-ink-900 p-4">
+          <section className="mt-4 rounded-xl border border-ink-700 bg-ink-900 p-4">
             <div className="flex items-start gap-3">
               <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-ink-200" />
               <div className="min-w-0 flex-1">
@@ -229,7 +231,7 @@ export function InterviewLobby({ interview, me, onlineIds, onStart, onConsent }:
                   setConsented(true);
                   onConsent();
                 }}
-                className="h-8 shrink-0 rounded-full bg-ink-100 px-3.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-white disabled:bg-ink-800 disabled:text-ink-300"
+                className="h-8 shrink-0 rounded-lg bg-ink-100 px-3.5 text-xs font-semibold text-ink-950 transition-colors hover:bg-ink-200 disabled:cursor-default disabled:bg-success-soft disabled:text-success"
               >
                 {consented ? "✓ Understood" : "I understand"}
               </button>
@@ -252,7 +254,7 @@ export function InterviewLobby({ interview, me, onlineIds, onStart, onConsent }:
                 type="button"
                 onClick={start}
                 disabled={starting || (!solo && !interview.candidate)}
-                className="flex h-12 items-center gap-2 rounded-full bg-ink-100 px-7 text-sm font-semibold text-ink-950 shadow-[0_0_32px_-8px_rgba(255,255,255,0.6)] transition-all hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-12 items-center gap-2 rounded-lg bg-ink-100 px-7 text-sm font-semibold text-ink-950 shadow-xs transition-all hover:bg-ink-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 Start the interview

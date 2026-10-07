@@ -49,7 +49,7 @@ export function AvatarPicker({ value, onChange, batchSize = 23 }: AvatarPickerPr
               type="button"
               onClick={() => handleStyleChange(s.id)}
               aria-pressed={active}
-              className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full border text-xs transition-colors ${
+              className={`flex h-8 shrink-0 items-center gap-1.5 rounded-lg border text-xs transition-colors ${
                 s.id === "all" ? "px-3" : "pl-1 pr-3"
               } ${
                 active

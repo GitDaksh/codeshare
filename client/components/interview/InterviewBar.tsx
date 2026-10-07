@@ -53,8 +53,10 @@ const CHIP =
 // stylesheet, not the class order, decide which wins).
 const CONTROL_BASE =
   "flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
-const CONTROL = `${CONTROL_BASE} border-ink-700 bg-ink-900 text-ink-200 hover:border-ink-500 hover:text-ink-100`;
-const PRIMARY = `${CONTROL_BASE} border-ink-100 bg-ink-100 font-semibold text-ink-950 hover:bg-white`;
+const CONTROL = `${CONTROL_BASE} border-ink-700 bg-ink-900 text-ink-200 hover:border-ink-600 hover:text-ink-100`;
+const PRIMARY = `${CONTROL_BASE} border-ink-100 bg-ink-100 font-semibold text-ink-950 hover:bg-ink-200`;
+// Ending the interview is final for everyone, so its confirmation is red.
+const DANGER = `${CONTROL_BASE} border-danger-line bg-danger-soft font-semibold text-danger`;
 
 // The live strip under the room header: the questions, the clocks, what's
 // happened so far, and the controls for whoever may use them.
@@ -103,11 +105,11 @@ export function InterviewBar({ interview, skew, me, hintCount, onControl, onDone
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <span className="relative flex h-2.5 w-2.5 shrink-0">
             {!ended && !paused && !scheduled && (
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ink-100 opacity-50" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-strong opacity-50" />
             )}
             <span
               className={`relative inline-flex h-2.5 w-2.5 rounded-full ${
-                ended || scheduled ? "bg-ink-500" : paused ? "bg-ink-400" : "bg-ink-100"
+                ended || scheduled ? "bg-ink-500" : paused ? "bg-warning-strong" : "bg-success-strong"
               }`}
             />
           </span>
@@ -169,7 +171,10 @@ export function InterviewBar({ interview, skew, me, hintCount, onControl, onDone
                 {question?.problemSlug ? `${question.hintsGiven}/${hintCount}` : (question?.hintsGiven ?? 0)}
               </span>
             )}
-            <span className={CHIP} title={tests ? `Last test run at ${formatClock(tests.at)}` : "No test runs yet"}>
+            <span
+              className={`${CHIP} ${tests && tests.total > 0 && tests.passed === tests.total ? "border-success-line bg-success-soft text-success" : ""}`}
+              title={tests ? `Last test run at ${formatClock(tests.at)}` : "No test runs yet"}
+            >
               <FlaskConical className="h-3.5 w-3.5" />
               {tests ? `${tests.passed}/${tests.total}` : "–"}
             </span>
@@ -181,7 +186,7 @@ export function InterviewBar({ interview, skew, me, hintCount, onControl, onDone
             )}
             {integrity && (
               <span
-                className={`${CHIP} ${integrity.flags.length ? "border-ink-500 text-ink-100" : ""}`}
+                className={`${CHIP} ${integrity.flags.length ? "border-warning-line bg-warning-soft text-warning" : ""}`}
                 title={`Integrity: ${integrity.tabSwitches} tab switches, ${integrity.pastes} pastes, ${integrity.inserts} large insertions`}
               >
                 {integrity.flags.length ? <ShieldAlert className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
@@ -202,7 +207,7 @@ export function InterviewBar({ interview, skew, me, hintCount, onControl, onDone
           <div className="flex shrink-0 items-end gap-3">
             {interview.questions.length > 1 && !ended && (
               <div className="hidden flex-col items-end leading-none sm:flex" title="Time on this question / its budget">
-                <span className={`font-[family-name:var(--font-mono)] text-sm tabular-nums ${questionOver ? "text-ink-100" : "text-ink-400"}`}>
+                <span className={`font-[family-name:var(--font-mono)] text-sm tabular-nums ${questionOver ? "text-warning" : "text-ink-400"}`}>
                   {formatClock(onQuestion)}
                   <span className="text-ink-600"> / {formatClock(questionBudget)}</span>
                 </span>
@@ -212,12 +217,12 @@ export function InterviewBar({ interview, skew, me, hintCount, onControl, onDone
             <div className="flex flex-col items-end leading-none">
               <span
                 className={`font-[family-name:var(--font-mono)] text-xl font-semibold tabular-nums ${
-                  overtime ? "text-ink-100 drop-shadow-[0_0_10px_rgba(255,255,255,0.45)]" : "text-ink-200"
+                  overtime ? "text-danger" : "text-ink-200"
                 } ${paused ? "animate-pulse" : ""}`}
               >
                 {ended ? formatClock(elapsed) : starting ? formatClock(total) : overtime ? `+${formatClock(remaining)}` : formatClock(remaining)}
               </span>
-              <span className="mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-ink-500">
+              <span className={`mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] ${overtime ? "text-danger" : "text-ink-500"}`}>
                 {ended ? "used" : paused ? "paused" : overtime ? "overtime" : starting ? "get ready" : "left"}
               </span>
             </div>
@@ -259,7 +264,7 @@ export function InterviewBar({ interview, skew, me, hintCount, onControl, onDone
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
               )}
-              <button type="button" onClick={handleEnd} className={confirmEnd ? PRIMARY : CONTROL} title="End the interview">
+              <button type="button" onClick={handleEnd} className={confirmEnd ? DANGER : CONTROL} title="End the interview">
                 <Square className="h-3 w-3" />
                 {confirmEnd ? "Click again" : "End"}
               </button>
@@ -292,7 +297,7 @@ export function InterviewBar({ interview, skew, me, hintCount, onControl, onDone
       {!scheduled && (
         <div className="relative h-1 bg-ink-800">
           <motion.div
-            className={`absolute inset-y-0 left-0 ${overtime ? "animate-pulse bg-ink-100" : "bg-ink-300"}`}
+            className={`absolute inset-y-0 left-0 ${overtime ? "animate-pulse bg-danger-strong" : "bg-ink-300"}`}
             animate={{ width: `${starting ? 0 : progress}%` }}
             transition={{ duration: 0.25, ease: "linear" }}
           />

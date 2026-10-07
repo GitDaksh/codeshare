@@ -12,16 +12,18 @@ import { UsernameInput } from "@/components/UsernameInput";
 import { ProfilePreviewCard } from "@/components/ProfilePreviewCard";
 import { DEFAULT_AVATAR_ID } from "@/lib/avatars";
 import { LANGUAGES } from "@/lib/languages";
+import { ui } from "@/lib/ui";
 import type { Profile } from "@/types/profile";
 
 const STEPS = ["Welcome", "Username", "Avatar", "About you", "Review"] as const;
 const EASE: [number, number, number, number] = [0.21, 0.47, 0.32, 0.98];
 
-// Direction-aware slide: forward steps enter from the right, "Back" from the left.
+// Direction-aware slide: forward steps enter from the right, "Back" from the
+// left. Opacity and movement only, so it stays smooth on any device.
 const SLIDE = {
-  enter: (direction: number) => ({ opacity: 0, x: direction * 28, filter: "blur(4px)" }),
-  center: { opacity: 1, x: 0, filter: "blur(0px)" },
-  exit: (direction: number) => ({ opacity: 0, x: direction * -28, filter: "blur(4px)" }),
+  enter: (direction: number) => ({ opacity: 0, x: direction * 28 }),
+  center: { opacity: 1, x: 0 },
+  exit: (direction: number) => ({ opacity: 0, x: direction * -28 }),
 };
 
 const WELCOME_ITEMS = [
@@ -55,7 +57,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <span className="text-xs font-medium text-ink-300">{label}</span>
-        {hint && <span className="text-[11px] text-ink-600">{hint}</span>}
+        {hint && <span className="text-[11px] text-ink-500">{hint}</span>}
       </div>
       {children}
     </div>
@@ -177,9 +179,9 @@ export default function OnboardingPage() {
                   initial={reduce ? false : { opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.15 + i * 0.08, ease: EASE }}
-                  className="flex items-start gap-3 rounded-xl border border-ink-800 bg-ink-950/60 p-3.5"
+                  className="flex items-start gap-3 rounded-xl border border-ink-800 bg-ink-900 p-3.5 shadow-xs"
                 >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-900 font-[family-name:var(--font-mono)] text-[11px] text-ink-400">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-ink-800 bg-ink-950 font-[family-name:var(--font-mono)] text-[11px] text-ink-400">
                     {i + 1}
                   </span>
                   <div>
@@ -199,7 +201,7 @@ export default function OnboardingPage() {
             <div className="mt-8">
               <UsernameInput value={username} onChange={setUsername} onValidityChange={setUsernameValid} />
             </div>
-            <p className="mt-4 flex items-center gap-1.5 text-xs text-ink-600">
+            <p className="mt-4 flex items-center gap-1.5 text-xs text-ink-500">
               <Sparkles className="h-3 w-3" />
               Don&apos;t overthink it. You can always change it later.
             </p>
@@ -223,7 +225,7 @@ export default function OnboardingPage() {
                 </motion.div>
               </AnimatePresence>
             </div>
-            <div className="mt-6 rounded-2xl border border-ink-800 bg-ink-950/60 p-4">
+            <div className="mt-6 rounded-xl border border-ink-800 bg-ink-900 p-4 shadow-xs">
               <AvatarPicker value={avatarId} onChange={setAvatarId} />
             </div>
           </div>
@@ -244,10 +246,10 @@ export default function OnboardingPage() {
                         type="button"
                         onClick={() => setFavoriteLanguage(lang.value)}
                         aria-pressed={active}
-                        className={`h-8 rounded-full border px-3 text-xs transition-colors ${
+                        className={`h-7 rounded-md border px-2.5 text-xs font-medium transition-colors ${
                           active
                             ? "border-ink-100 bg-ink-100 text-ink-950"
-                            : "border-ink-800 text-ink-400 hover:border-ink-600 hover:text-ink-100"
+                            : "border-ink-800 bg-ink-900 text-ink-400 hover:border-ink-700 hover:text-ink-100"
                         }`}
                       >
                         {lang.label}
@@ -258,8 +260,8 @@ export default function OnboardingPage() {
               </Field>
 
               <Field label="GitHub">
-                <div className="flex h-11 items-center rounded-xl border border-ink-800 bg-ink-950 transition-colors focus-within:border-ink-500">
-                  <span className="pl-3.5 text-sm text-ink-600">github.com/</span>
+                <div className="flex h-10 items-center rounded-lg border border-ink-700 bg-ink-900 shadow-xs transition-colors focus-within:border-ink-500 focus-within:ring-4 focus-within:ring-ink-100/[0.06]">
+                  <span className="pl-3.5 text-sm text-ink-500">github.com/</span>
                   <input
                     value={githubUsername}
                     onChange={(e) => setGithubUsername(e.target.value)}
@@ -268,7 +270,7 @@ export default function OnboardingPage() {
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
-                    className="h-full min-w-0 flex-1 bg-transparent pr-3 text-sm text-ink-100 placeholder:text-ink-700 focus:outline-none"
+                    className="h-full min-w-0 flex-1 bg-transparent pr-3 text-sm text-ink-100 placeholder:text-ink-500 focus:outline-none"
                   />
                 </div>
               </Field>
@@ -279,7 +281,7 @@ export default function OnboardingPage() {
                   onChange={(e) => setBio(e.target.value.slice(0, 160))}
                   placeholder="Building things, learning as I go."
                   rows={3}
-                  className="w-full resize-none rounded-xl border border-ink-800 bg-ink-950 px-3.5 py-3 text-sm text-ink-100 placeholder:text-ink-700 transition-colors focus:border-ink-500 focus:outline-none"
+                  className={ui.textarea}
                 />
               </Field>
             </div>
@@ -323,7 +325,7 @@ export default function OnboardingPage() {
                 githubUsername={githubUsername}
               />
             </div>
-            <div className="mt-6 divide-y divide-ink-900 overflow-hidden rounded-2xl border border-ink-800 bg-ink-950/60">
+            <div className="mt-6 divide-y divide-ink-800 overflow-hidden rounded-xl border border-ink-800 bg-ink-900 shadow-xs">
               {rows.map((row) => (
                 <div key={row.label} className="flex items-center gap-4 px-4 py-3">
                   <span className="w-20 shrink-0 text-xs text-ink-500">{row.label}</span>
@@ -332,7 +334,7 @@ export default function OnboardingPage() {
                     type="button"
                     onClick={() => goTo(row.editStep)}
                     aria-label={`Edit ${row.label.toLowerCase()}`}
-                    className="flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-ink-500 transition-colors hover:bg-ink-900 hover:text-ink-100"
+                    className="flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-ink-500 transition-colors hover:bg-ink-800 hover:text-ink-100"
                   >
                     <Pencil className="h-3 w-3" />
                     Edit
@@ -348,8 +350,6 @@ export default function OnboardingPage() {
 
   return (
     <main className="relative min-h-[calc(100dvh-56px)] overflow-hidden">
-      <div className="hero-grid pointer-events-none absolute inset-0" />
-      <div className="pointer-events-none absolute left-1/2 top-[-14rem] h-[30rem] w-[52rem] max-w-[140vw] -translate-x-1/2 rounded-full bg-white/[0.05] blur-[130px]" />
 
       <div className="relative mx-auto grid max-w-5xl gap-12 px-4 py-8 sm:py-12 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center lg:gap-16 lg:py-16">
         <div className="mx-auto w-full max-w-md lg:mx-0">
@@ -405,7 +405,7 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={() => goTo(step - 1)}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-sm text-ink-500 transition-colors hover:text-ink-100"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm text-ink-500 transition-colors hover:text-ink-100"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   Back
@@ -417,7 +417,7 @@ export default function OnboardingPage() {
               <button
                 type="submit"
                 disabled={isLastStep ? submitting : !canGoNext}
-                className="group inline-flex h-10 items-center gap-2 rounded-full bg-ink-100 px-5 text-sm font-semibold text-ink-950 shadow-[0_0_30px_-8px_rgba(255,255,255,0.6)] transition-all hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                className="group inline-flex h-10 items-center gap-2 rounded-lg bg-ink-100 px-5 text-sm font-semibold text-ink-950 shadow-xs transition-all hover:bg-ink-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
               >
                 {isLastStep ? (
                   submitting ? (

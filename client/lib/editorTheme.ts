@@ -1,4 +1,7 @@
 import type { Monaco } from "@monaco-editor/react";
+// Every editor defines its themes from here, so this is also where the
+// pinned Monaco version is set (see lib/monaco.ts).
+import "@/lib/monaco";
 
 type ThemeData = Parameters<Monaco["editor"]["defineTheme"]>[1];
 
@@ -26,16 +29,53 @@ export type EditorThemeOption = {
   description: string;
   swatches: string[];
   palette: Palette;
+  // Light themes get light editor chrome (the dark ones keep the dark).
+  light?: boolean;
 };
 
 // Monaco can't read CSS variables, so the editor chrome is set here directly.
-// BACKGROUND must equal --color-ink-900 in globals.css, so the editor blends
-// seamlessly into its panel. Every theme shares it; switching themes only
-// recolors the code.
-const BACKGROUND = "#141414";
-const LINE_HIGHLIGHT = "#1a1a1a";
-const WIDGET_BACKGROUND = "#171717";
-const WIDGET_BORDER = "#2e2e2e";
+// Each chrome's background equals --ink-900 of its app theme in globals.css,
+// so the editor blends seamlessly into its panel.
+type Chrome = {
+  background: string;
+  lineHighlight: string;
+  widgetBackground: string;
+  widgetBorder: string;
+  lineNumber: string;
+  indentGuide: string;
+  activeIndentGuide: string;
+  whitespace: string;
+  selectedSuggestion: string;
+  // The subtle overlays (find matches, bracket matches, scrollbars).
+  overlay: string;
+};
+
+// Equals --ink-900 in the dark theme, so the editor blends into its panel.
+const DARK_CHROME: Chrome = {
+  background: "#1b1b1f",
+  lineHighlight: "#222227",
+  widgetBackground: "#202025",
+  widgetBorder: "#36363d",
+  lineNumber: "#4d4d55",
+  indentGuide: "#27272c",
+  activeIndentGuide: "#4d4d55",
+  whitespace: "#3a3a41",
+  selectedSuggestion: "#2c2c32",
+  overlay: "ffffff",
+};
+
+const LIGHT_CHROME: Chrome = {
+  background: "#ffffff",
+  lineHighlight: "#f6f6f8",
+  widgetBackground: "#ffffff",
+  widgetBorder: "#dfdfe4",
+  lineNumber: "#b4b4bc",
+  indentGuide: "#efeff2",
+  activeIndentGuide: "#c8c8cf",
+  whitespace: "#d4d4da",
+  selectedSuggestion: "#ececf0",
+  overlay: "18181b",
+};
 
 export const EDITOR_THEMES: EditorThemeOption[] = [
   {
@@ -57,6 +97,49 @@ export const EDITOR_THEMES: EditorThemeOption[] = [
       cursor: "ffffff",
       selection: "ffffff26",
       activeLineNumber: "cfcfcf",
+    },
+  },
+  {
+    id: "codeshare-light",
+    label: "CodeShare Light",
+    description: "Crisp and readable, matches the app",
+    swatches: ["#cf222e", "#0a3069", "#0550ae", "#8250df"],
+    light: true,
+    palette: {
+      foreground: "1f2328",
+      keyword: "cf222e",
+      string: "0a3069",
+      number: "0550ae",
+      type: "8250df",
+      regexp: "116329",
+      comment: "6e7781",
+      delimiter: "57606a",
+      operator: "57606a",
+      cursor: "18181b",
+      selection: "0969da2e",
+      activeLineNumber: "18181b",
+    },
+  },
+  {
+    id: "codeshare-paper",
+    label: "Paper",
+    description: "Quiet monochrome on white",
+    swatches: ["#18181b", "#52525b", "#71717a", "#a1a1aa"],
+    light: true,
+    palette: {
+      foreground: "27272a",
+      keyword: "09090b",
+      keywordBold: true,
+      string: "52525b",
+      number: "3f3f46",
+      type: "18181b",
+      regexp: "52525b",
+      comment: "a1a1aa",
+      delimiter: "71717a",
+      operator: "71717a",
+      cursor: "18181b",
+      selection: "18181b1f",
+      activeLineNumber: "18181b",
     },
   },
   {
@@ -162,15 +245,19 @@ export const EDITOR_THEMES: EditorThemeOption[] = [
   },
 ];
 
-export const DEFAULT_EDITOR_THEME = EDITOR_THEMES[0].id;
+// Until you pick one, the editor follows the app's theme.
+export const DEFAULT_EDITOR_THEME = "codeshare-dark";
+export const DEFAULT_LIGHT_EDITOR_THEME = "codeshare-light";
 
 export function isEditorTheme(id: string): boolean {
   return EDITOR_THEMES.some((theme) => theme.id === id);
 }
 
-function buildTheme(p: Palette): ThemeData {
+function buildTheme(theme: EditorThemeOption): ThemeData {
+  const p = theme.palette;
+  const c = theme.light ? LIGHT_CHROME : DARK_CHROME;
   return {
-    base: "vs-dark",
+    base: theme.light ? "vs" : "vs-dark",
     inherit: true,
     rules: [
       { token: "", foreground: p.foreground },
@@ -198,42 +285,42 @@ function buildTheme(p: Palette): ThemeData {
       { token: "attribute.value", foreground: p.string },
     ],
     colors: {
-      "editor.background": BACKGROUND,
+      "editor.background": c.background,
       "editor.foreground": `#${p.foreground}`,
-      "editorGutter.background": BACKGROUND,
-      "editorLineNumber.foreground": "#474747",
+      "editorGutter.background": c.background,
+      "editorLineNumber.foreground": c.lineNumber,
       "editorLineNumber.activeForeground": `#${p.activeLineNumber}`,
-      "editor.lineHighlightBackground": LINE_HIGHLIGHT,
+      "editor.lineHighlightBackground": c.lineHighlight,
       "editor.lineHighlightBorder": "#00000000",
       "editor.selectionBackground": `#${p.selection}`,
-      "editor.inactiveSelectionBackground": "#ffffff14",
-      "editor.selectionHighlightBackground": "#ffffff12",
-      "editor.wordHighlightBackground": "#ffffff10",
-      "editor.findMatchBackground": "#ffffff33",
-      "editor.findMatchHighlightBackground": "#ffffff1a",
+      "editor.inactiveSelectionBackground": `#${c.overlay}14`,
+      "editor.selectionHighlightBackground": `#${c.overlay}12`,
+      "editor.wordHighlightBackground": `#${c.overlay}10`,
+      "editor.findMatchBackground": `#${c.overlay}33`,
+      "editor.findMatchHighlightBackground": `#${c.overlay}1a`,
       "editorCursor.foreground": `#${p.cursor}`,
-      "editorWhitespace.foreground": "#333333",
-      "editorIndentGuide.background": "#222222",
-      "editorIndentGuide.activeBackground": "#474747",
-      "editorIndentGuide.background1": "#222222",
-      "editorIndentGuide.activeBackground1": "#474747",
-      "editorBracketMatch.background": "#ffffff14",
-      "editorBracketMatch.border": "#ffffff40",
-      "editorWidget.background": WIDGET_BACKGROUND,
-      "editorWidget.border": WIDGET_BORDER,
-      "editorSuggestWidget.background": WIDGET_BACKGROUND,
-      "editorSuggestWidget.border": WIDGET_BORDER,
+      "editorWhitespace.foreground": c.whitespace,
+      "editorIndentGuide.background": c.indentGuide,
+      "editorIndentGuide.activeBackground": c.activeIndentGuide,
+      "editorIndentGuide.background1": c.indentGuide,
+      "editorIndentGuide.activeBackground1": c.activeIndentGuide,
+      "editorBracketMatch.background": `#${c.overlay}14`,
+      "editorBracketMatch.border": `#${c.overlay}40`,
+      "editorWidget.background": c.widgetBackground,
+      "editorWidget.border": c.widgetBorder,
+      "editorSuggestWidget.background": c.widgetBackground,
+      "editorSuggestWidget.border": c.widgetBorder,
       "editorSuggestWidget.foreground": `#${p.foreground}`,
       "editorSuggestWidget.highlightForeground": `#${p.keyword}`,
-      "editorSuggestWidget.selectedBackground": "#262626",
-      "editorHoverWidget.background": WIDGET_BACKGROUND,
-      "editorHoverWidget.border": WIDGET_BORDER,
+      "editorSuggestWidget.selectedBackground": c.selectedSuggestion,
+      "editorHoverWidget.background": c.widgetBackground,
+      "editorHoverWidget.border": c.widgetBorder,
       "editorOverviewRuler.border": "#00000000",
       "scrollbar.shadow": "#00000000",
-      "scrollbarSlider.background": "#ffffff14",
-      "scrollbarSlider.hoverBackground": "#ffffff24",
-      "scrollbarSlider.activeBackground": "#ffffff33",
-      "minimap.background": BACKGROUND,
+      "scrollbarSlider.background": `#${c.overlay}14`,
+      "scrollbarSlider.hoverBackground": `#${c.overlay}24`,
+      "scrollbarSlider.activeBackground": `#${c.overlay}33`,
+      "minimap.background": c.background,
       focusBorder: "#00000000",
     },
   };
@@ -242,6 +329,6 @@ function buildTheme(p: Palette): ThemeData {
 // Registers every theme with Monaco. Called once, before the editor mounts.
 export function defineEditorThemes(monaco: Monaco) {
   for (const theme of EDITOR_THEMES) {
-    monaco.editor.defineTheme(theme.id, buildTheme(theme.palette));
+    monaco.editor.defineTheme(theme.id, buildTheme(theme));
   }
 }

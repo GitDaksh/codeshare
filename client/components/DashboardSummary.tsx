@@ -27,6 +27,8 @@ const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
 // Busier days are brighter, in four steps.
 const LEVEL_CLASS = ["bg-ink-800", "bg-ink-600", "bg-ink-500", "bg-ink-300", "bg-ink-100"];
 const DASH = "—";
+// The same colors as the Practice page's progress bars.
+const BAR: Record<string, string> = { Easy: "bg-success-strong", Medium: "bg-warning-strong", Hard: "bg-danger-strong" };
 
 function cx(...names: (string | false | null | undefined)[]) {
   return names.filter(Boolean).join(" ");
@@ -119,7 +121,7 @@ function Card({
     <section
       aria-label={title}
       className={cx(
-        "flex flex-col rounded-2xl border border-ink-700 bg-ink-900 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
+        "flex flex-col rounded-xl border border-ink-800 bg-ink-900 p-5 shadow-xs",
         className,
       )}
     >
@@ -292,7 +294,7 @@ export function DashboardSummary({
                 </div>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-ink-800">
                   <motion.div
-                    className="h-full rounded-full bg-ink-300"
+                    className={`h-full rounded-full ${BAR[difficulty] ?? "bg-ink-300"}`}
                     initial={{ width: 0 }}
                     animate={{ width: `${profile && total > 0 ? (solved / total) * 100 : 0}%` }}
                     transition={{ duration: 0.8, delay: 0.1, ease: EASE }}

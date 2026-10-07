@@ -24,9 +24,12 @@ import { AvatarPicker } from "@/components/AvatarPicker";
 import { GithubIcon } from "@/components/GithubIcon";
 import { UsernameInput } from "@/components/UsernameInput";
 import { ProfilePreviewCard } from "@/components/ProfilePreviewCard";
-import { RoomCard } from "@/components/RoomCard";
+import { RoomRow } from "@/components/RoomRow";
+import { PageContainer, PageHeader } from "@/components/PageHeader";
+import { ui } from "@/lib/ui";
 import { Skeleton } from "@/components/Skeleton";
 import { LANGUAGES } from "@/lib/languages";
+import { clerkAppearance, currentTheme } from "@/lib/theme";
 import type { Profile } from "@/types/profile";
 import type { Room } from "@/types/room";
 
@@ -75,7 +78,7 @@ function Section({
       initial={reduce ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay, ease: EASE }}
-      className="overflow-hidden rounded-2xl border border-ink-700 bg-ink-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+      className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900 shadow-xs"
     >
       <div className="flex items-start justify-between gap-4 border-b border-ink-800 px-5 py-4">
         <div className="min-w-0">
@@ -110,11 +113,7 @@ function Expand({ open, children }: { open: boolean; children: ReactNode }) {
 
 function EditButton({ onClick, label = "Edit" }: { onClick: () => void; label?: string }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-800 px-3 text-xs text-ink-100 transition-colors hover:border-ink-500"
-    >
+    <button type="button" onClick={onClick} className={ui.secondarySm}>
       <Pencil className="h-3 w-3" />
       {label}
     </button>
@@ -139,7 +138,7 @@ function SaveBar({
       <button
         type="button"
         onClick={onCancel}
-        className="h-9 rounded-full px-4 text-sm text-ink-400 transition-colors hover:text-ink-100"
+        className="h-9 rounded-lg px-4 text-sm text-ink-400 transition-colors hover:text-ink-100"
       >
         Cancel
       </button>
@@ -147,7 +146,7 @@ function SaveBar({
         type="button"
         onClick={onSave}
         disabled={disabled || saving}
-        className="inline-flex h-9 items-center gap-1.5 rounded-full bg-ink-100 px-4 text-sm font-semibold text-ink-950 transition-all hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink-100 px-4 text-sm font-semibold text-ink-950 transition-all hover:bg-ink-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
       >
         {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
         {saving ? "Saving…" : saveLabel}
@@ -169,21 +168,23 @@ function Muted({ children }: { children: ReactNode }) {
   return <span className="text-ink-500">{children}</span>;
 }
 
+// Mirrors the page (header, member card, sections), so nothing jumps.
 function ProfileSkeleton() {
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-      <Skeleton className="h-3 w-16" />
-      <Skeleton className="mt-3 h-9 w-56" />
-      <Skeleton className="mt-3 h-4 w-72" />
-      <div className="mt-10 grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-10">
-        <Skeleton className="h-[380px] w-full rounded-3xl" />
+    <PageContainer>
+      <div className="mb-6 space-y-2 sm:mb-8">
+        <Skeleton className="h-7 w-32" />
+        <Skeleton className="h-4 w-80 max-w-full" />
+      </div>
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-10">
+        <Skeleton className="h-[380px] w-full rounded-2xl" />
         <div className="space-y-6">
-          <Skeleton className="h-44 w-full rounded-2xl" />
-          <Skeleton className="h-56 w-full rounded-2xl" />
-          <Skeleton className="h-32 w-full rounded-2xl" />
+          <Skeleton className="h-44 w-full rounded-xl" />
+          <Skeleton className="h-56 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-xl" />
         </div>
       </div>
-    </main>
+    </PageContainer>
   );
 }
 
@@ -306,11 +307,7 @@ export default function ProfilePage() {
       <main className="flex min-h-[calc(100dvh-56px)] flex-col items-center justify-center gap-3 px-4 text-center">
         <p className="font-medium text-ink-100">Couldn&apos;t load your profile</p>
         <p className="max-w-xs text-sm text-ink-400">Check your connection and try again.</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-2 inline-flex h-9 items-center rounded-full border border-ink-700 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500"
-        >
+        <button type="button" onClick={() => window.location.reload()} className={`${ui.secondary} mt-2`}>
           Try again
         </button>
       </main>
@@ -339,32 +336,12 @@ export default function ProfilePage() {
   ];
 
   return (
-    <main className="relative overflow-hidden">
-      <div className="hero-grid pointer-events-none absolute inset-x-0 top-0 h-[520px] opacity-70" />
-      <div className="pointer-events-none absolute left-1/2 top-[-14rem] h-[28rem] w-[56rem] max-w-[140vw] -translate-x-1/2 rounded-full bg-white/[0.05] blur-[130px]" />
+    <PageContainer>
+      <PageHeader title="Profile" description="How you show up in rooms, in chat and next to your cursor. Changes save as you go." />
 
-      <div className="relative mx-auto max-w-6xl px-4 py-8 sm:py-12">
-        {/* ---------- Header ---------- */}
-        <motion.div
-          initial={reduce ? false : { opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: EASE }}
-          className="mb-8 sm:mb-10"
-        >
-          <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.25em] text-ink-400">
-            Profile
-          </p>
-          <h1 className="text-gradient mt-2 pb-1 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight sm:text-4xl">
-            Your profile
-          </h1>
-          <p className="mt-2 text-sm text-ink-400">
-            This is how you show up in rooms, in chat, and next to your cursor.
-          </p>
-        </motion.div>
-
-        <div className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-10">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-10">
           {/* ---------- Live member card ---------- */}
-          <aside className="lg:sticky lg:top-24 lg:self-start">
+          <aside className="lg:sticky lg:top-8 lg:self-start">
             <motion.div
               initial={reduce ? false : { opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -398,7 +375,7 @@ export default function ProfilePage() {
                 </div>
                 <Expand open={avatarDraft !== null}>
                   <div className="pt-5">
-                    <div className="rounded-xl border border-ink-700 bg-black/40 p-4">
+                    <div className="rounded-xl border border-ink-800 bg-ink-950 p-4">
                       <AvatarPicker value={avatarDraft ?? profile.avatarId} onChange={setAvatarDraft} />
                     </div>
                     <div className="mt-4">
@@ -465,7 +442,7 @@ export default function ProfilePage() {
                   <DetailRow label="Bio">{profile.bio || <Muted>No bio yet</Muted>}</DetailRow>
                   <DetailRow label="Favorite language">
                     {profile.favoriteLanguage ? (
-                      <span className="inline-block rounded-full border border-ink-700 bg-ink-800 px-2.5 py-0.5 text-xs text-ink-100">
+                      <span className="inline-block rounded-md border border-ink-700 bg-ink-800 px-2.5 py-0.5 text-xs text-ink-100">
                         {languageLabel(profile.favoriteLanguage)}
                       </span>
                     ) : (
@@ -478,7 +455,7 @@ export default function ProfilePage() {
                         href={`https://github.com/${profile.githubUsername}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group inline-flex max-w-full items-center gap-1.5 text-ink-100 transition-colors hover:text-white"
+                        className="group inline-flex max-w-full items-center gap-1.5 text-ink-100 transition-colors hover:text-ink-50"
                       >
                         <GithubIcon className="h-3.5 w-3.5 shrink-0 text-ink-400" />
                         <span className="truncate">{profile.githubUsername}</span>
@@ -507,10 +484,10 @@ export default function ProfilePage() {
                             type="button"
                             onClick={() => setLanguageDraft(lang.value)}
                             aria-pressed={active}
-                            className={`h-8 rounded-full border px-3 text-xs transition-colors ${
+                            className={`h-7 rounded-md border px-2.5 text-xs font-medium transition-colors ${
                               active
                                 ? "border-ink-100 bg-ink-100 text-ink-950"
-                                : "border-ink-700 bg-ink-800 text-ink-300 hover:border-ink-500 hover:text-ink-100"
+                                : "border-ink-800 bg-ink-900 text-ink-400 hover:border-ink-700 hover:text-ink-100"
                             }`}
                           >
                             {lang.label}
@@ -522,7 +499,7 @@ export default function ProfilePage() {
 
                   <div>
                     <span className="mb-2 block text-xs font-medium text-ink-300">GitHub</span>
-                    <div className="flex h-11 items-center rounded-xl border border-ink-700 bg-black/40 transition-colors focus-within:border-ink-500">
+                    <div className="flex h-10 items-center rounded-lg border border-ink-700 bg-ink-900 shadow-xs transition-colors focus-within:border-ink-500 focus-within:ring-4 focus-within:ring-ink-100/[0.06]">
                       <span className="pl-3.5 text-sm text-ink-500">github.com/</span>
                       <input
                         value={githubDraft}
@@ -532,7 +509,7 @@ export default function ProfilePage() {
                         autoCapitalize="none"
                         autoCorrect="off"
                         spellCheck={false}
-                        className="h-full min-w-0 flex-1 bg-transparent pr-3 text-sm text-ink-100 placeholder:text-ink-600 focus:outline-none"
+                        className="h-full min-w-0 flex-1 bg-transparent pr-3 text-sm text-ink-100 placeholder:text-ink-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -547,7 +524,7 @@ export default function ProfilePage() {
                       onChange={(e) => setBioDraft(e.target.value.slice(0, 160))}
                       placeholder="Building things, learning as I go."
                       rows={3}
-                      className="w-full resize-none rounded-xl border border-ink-700 bg-black/40 px-3.5 py-3 text-sm text-ink-100 placeholder:text-ink-600 transition-colors focus:border-ink-500 focus:outline-none"
+                      className={ui.textarea}
                     />
                   </div>
 
@@ -601,25 +578,15 @@ export default function ProfilePage() {
             >
               {sortedRooms.length === 0 ? (
                 <div className="flex flex-col items-center px-5 py-10 text-center">
-                  <p className="text-sm text-ink-300">No rooms yet.</p>
-                  <Link
-                    href="/dashboard"
-                    className="mt-3 text-sm text-ink-100 underline underline-offset-4 transition-colors hover:text-ink-300"
-                  >
+                  <p className="text-sm text-ink-500">No rooms yet.</p>
+                  <Link href="/dashboard" className={`${ui.secondarySm} mt-3`}>
                     Create one from your dashboard
                   </Link>
                 </div>
               ) : (
-                <div className="grid gap-4 p-5 sm:grid-cols-2">
+                <div className="divide-y divide-ink-800">
                   {sortedRooms.slice(0, ROOMS_PREVIEW_COUNT).map((room) => (
-                    <RoomCard
-                      key={room._id}
-                      room={room}
-                      updatedLabel={`updated ${timeAgo(room.updatedAt)}`}
-                      canDelete={false}
-                      confirmingDelete={false}
-                      onRequestDelete={() => {}}
-                    />
+                    <RoomRow key={room._id} room={room} meta={`Updated ${timeAgo(room.updatedAt)}`} />
                   ))}
                 </div>
               )}
@@ -639,8 +606,8 @@ export default function ProfilePage() {
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => openUserProfile()}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full border border-ink-700 bg-ink-800 px-4 text-sm text-ink-100 transition-colors hover:border-ink-500"
+                    onClick={() => openUserProfile({ appearance: clerkAppearance(currentTheme()) })}
+                    className={ui.secondary}
                   >
                     <Settings className="h-3.5 w-3.5" />
                     Manage account
@@ -648,7 +615,7 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     onClick={() => void signOut({ redirectUrl: "/" })}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm text-ink-300 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg px-4 text-sm text-ink-300 transition-colors hover:bg-danger-soft hover:text-danger"
                   >
                     <LogOut className="h-3.5 w-3.5" />
                     Sign out
@@ -658,7 +625,6 @@ export default function ProfilePage() {
             </Section>
           </div>
         </div>
-      </div>
-    </main>
+    </PageContainer>
   );
 }

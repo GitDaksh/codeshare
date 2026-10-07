@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
 import { motion } from "framer-motion";
-import { ArrowDown, ArrowRight, Loader2, Play, ScanEye, Search } from "lucide-react";
+import { ArrowDown, Loader2, Play, ScanEye, Search } from "lucide-react";
 import { LensCallCard } from "@/components/lens/LensCallCard";
 import { LensPlayer } from "@/components/lens/LensPlayer";
 import { useToast } from "@/components/ToastProvider";
 import { useApi } from "@/lib/api";
+import { PageContainer, PageHeader } from "@/components/PageHeader";
+import { Segmented } from "@/components/Segmented";
+import { ui } from "@/lib/ui";
 import { defineEditorThemes } from "@/lib/editorTheme";
 import { traceCode } from "@/lib/execution";
 import { LENS_MAX_STEPS, type LensTrace } from "@/lib/lens";
@@ -63,10 +66,10 @@ function ConceptCard({ concept, selected, onOpen }: { concept: LensConcept; sele
       onClick={onOpen}
       aria-pressed={selected}
       className={cx(
-        "group flex h-full flex-col rounded-xl border p-4 text-left transition-colors",
+        "group flex h-full flex-col rounded-xl border bg-ink-900 p-4 text-left transition-all",
         selected
-          ? "border-ink-300 bg-ink-900"
-          : "border-ink-800 bg-ink-950 hover:border-ink-600 hover:bg-ink-900/60",
+          ? "border-ink-100 ring-1 ring-ink-100"
+          : "border-ink-800 shadow-xs hover:border-ink-700 hover:shadow-card",
       )}
     >
       <span className="text-sm font-semibold text-ink-100">{concept.title}</span>
@@ -97,7 +100,7 @@ function ConceptGrid({
   onOpen: (concept: LensConcept) => void;
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((item) => (
         <ConceptCard key={item.id} concept={item} selected={item.id === selectedId} onOpen={() => onOpen(item)} />
       ))}
@@ -302,62 +305,34 @@ export default function LensPage() {
   }, []);
 
   return (
-    <main className="relative min-h-[calc(100dvh-56px)] overflow-hidden">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[linear-gradient(to_right,rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]"
-      />
-
-      <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-10 sm:pt-14">
-        <div className="max-w-2xl">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-ink-400">Lens</p>
-          <h1 className="mt-3 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-ink-100 sm:text-4xl">
-            Watch your code run
-          </h1>
-          <p className="mt-3 text-sm leading-relaxed text-ink-400 sm:text-base">
-            Step through Python, JavaScript or TypeScript one line at a time and see every variable, array, table,
-            linked list and tree drawn as it changes, with markers for every index and arrows for every pointer.
-          </p>
-        </div>
-
-        {/* ---------- Lens in rooms ---------- */}
-        <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-ink-800 bg-ink-900/60 p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-ink-700 bg-ink-800">
-              <ScanEye className="h-4 w-4 text-ink-100" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-ink-100">Lens is built into every room</p>
-              <p className="mt-1 max-w-xl text-sm leading-relaxed text-ink-400">
-                Write any code in a room and click Visualize. Everyone in the room watches it run together, step by
-                step, and anyone can take over.
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2 md:justify-end">
-            <button
-              type="button"
-              onClick={() => void tryInRoom()}
-              disabled={creating}
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-ink-100 px-4 text-sm font-semibold text-ink-950 transition-colors hover:bg-white disabled:cursor-wait disabled:opacity-70"
-            >
-              {creating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-              {creating ? "Opening room…" : isLoaded && !isSignedIn ? "Sign in to try it" : "Try it in a room"}
-              {!creating && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
-            </button>
+    <PageContainer>
+      <PageHeader
+        title="Lens"
+        description="Watch code run one line at a time: every variable, array, table, linked list and tree drawn as it changes. It's built into every room, too: write any code and press Visualize."
+        actions={
+          <>
             <button
               type="button"
               onClick={() => libraryRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "start" })}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-ink-700 px-4 text-sm font-medium text-ink-100 transition-colors hover:border-ink-500"
+              className={ui.secondary}
             >
               <ArrowDown className="h-4 w-4" aria-hidden="true" />
-              Browse all {LENS_CONCEPTS.length} concepts
+              Browse {LENS_CONCEPTS.length} concepts
             </button>
-          </div>
-        </div>
+            <button type="button" onClick={() => void tryInRoom()} disabled={creating} className={ui.primary}>
+              {creating ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <ScanEye className="h-4 w-4" aria-hidden="true" />
+              )}
+              {creating ? "Opening room…" : isLoaded && !isSignedIn ? "Sign in to try it" : "Try it in a room"}
+            </button>
+          </>
+        }
+      />
 
         {/* ---------- Popular ---------- */}
-        <div className="mt-8 flex flex-wrap items-center gap-2" role="group" aria-label="Popular concepts">
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Popular concepts">
           <span className="mr-1 text-xs text-ink-500">Popular</span>
           {POPULAR.map((id) => findConcept(id))
             .filter((item): item is LensConcept => !!item)
@@ -369,8 +344,8 @@ export default function LensPage() {
                 aria-pressed={conceptId === item.id}
                 className={
                   conceptId === item.id
-                    ? "rounded-full border border-ink-300 bg-ink-100 px-3 py-1 text-xs font-medium text-ink-950"
-                    : "rounded-full border border-ink-800 px-3 py-1 text-xs font-medium text-ink-400 transition-colors hover:border-ink-600 hover:text-ink-100"
+                    ? "h-7 rounded-md border border-ink-100 bg-ink-100 px-2.5 text-xs font-medium text-ink-950"
+                    : "h-7 rounded-md border border-ink-800 bg-ink-900 px-2.5 text-xs font-medium text-ink-400 transition-colors hover:border-ink-700 hover:text-ink-100"
                 }
               >
                 {item.title}
@@ -379,7 +354,7 @@ export default function LensPage() {
         </div>
 
         {/* ---------- Playground ---------- */}
-        <div ref={playgroundRef} className="mt-7 scroll-mt-20">
+        <div ref={playgroundRef} className="mt-6 scroll-mt-20">
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-500">
@@ -393,23 +368,13 @@ export default function LensPage() {
               </h2>
               <p className="mt-0.5 max-w-2xl text-sm text-ink-400">{concept.summary}</p>
             </div>
-            <div className="flex rounded-lg border border-ink-800 p-0.5" role="group" aria-label="Language">
-              {LANGUAGES.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => pickLanguage(option.id)}
-                  aria-pressed={language === option.id}
-                  className={
-                    language === option.id
-                      ? "rounded-md bg-ink-800 px-2.5 py-1 text-xs font-medium text-ink-100"
-                      : "rounded-md px-2.5 py-1 text-xs font-medium text-ink-500 transition-colors hover:text-ink-300"
-                  }
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              id="lens-language"
+              size="sm"
+              value={language}
+              onChange={pickLanguage}
+              options={LANGUAGES.map((option) => ({ value: option.id, label: option.label }))}
+            />
           </div>
 
           <motion.div
@@ -421,7 +386,7 @@ export default function LensPage() {
             {mode === "play" && trace ? (
               <LensPlayer key={runId} code={tracedCode} trace={trace} onEdit={() => setMode("edit")} />
             ) : mode === "idle" && idle ? (
-              <div className="grid min-h-[480px] grid-cols-1 place-items-center rounded-2xl border border-ink-800 bg-ink-950 p-4">
+              <div className="grid min-h-[480px] grid-cols-1 place-items-center rounded-xl border border-ink-800 bg-ink-950 p-4">
                 <LensCallCard
                   key={idle.defaultCall}
                   language={language}
@@ -444,7 +409,7 @@ export default function LensPage() {
                 />
               </div>
             ) : (
-              <div className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-950">
+              <div className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900 shadow-xs">
                 <div className="flex items-center justify-between gap-3 border-b border-ink-800 px-4 py-2.5">
                   <p className="hidden text-xs text-ink-500 sm:block">
                     Change anything you like, then press Visualize
@@ -455,7 +420,7 @@ export default function LensPage() {
                     onClick={() => void visualize()}
                     disabled={running}
                     title="Visualize (⌘ or Ctrl + Enter)"
-                    className="ml-auto inline-flex h-9 items-center gap-2 rounded-lg bg-ink-100 px-4 text-sm font-semibold text-ink-950 transition-colors hover:bg-white disabled:cursor-wait disabled:opacity-70"
+                    className={`${ui.primary} ml-auto disabled:cursor-wait`}
                   >
                     {running ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -485,7 +450,7 @@ export default function LensPage() {
                       automaticLayout: true,
                       tabSize: language === "python" ? 4 : 2,
                       renderLineHighlight: "line",
-                      // Same as the room editor: no colored brackets (the app is strictly monochrome).
+                      // Same as the room editor: no colored brackets (they add noise to the code).
                       bracketPairColorization: { enabled: false },
                       guides: { indentation: true, highlightActiveIndentation: true, bracketPairs: false },
                       smoothScrolling: true,
@@ -506,7 +471,7 @@ export default function LensPage() {
                 </div>
                 {error && (
                   <div className="border-t border-ink-800 px-4 py-3">
-                    <pre className="whitespace-pre-wrap break-words border-l-2 border-red-500/70 pl-3 font-mono text-xs text-red-300">
+                    <pre className="whitespace-pre-wrap break-words border-l-2 border-danger-strong/70 pl-3 font-mono text-xs text-danger">
                       {error}
                     </pre>
                   </div>
@@ -517,7 +482,7 @@ export default function LensPage() {
 
           {hint && (mode === "play" || error) && <p className="mt-3 text-xs text-ink-400">Tip: {hint}</p>}
 
-          <p className="mt-3 text-xs text-ink-600">
+          <p className="mt-3 text-xs text-ink-500">
             Lens records up to {LENS_MAX_STEPS.toLocaleString()} steps.
             {language === "python" && " The first Python run downloads Python, which takes a few seconds."}
           </p>
@@ -527,10 +492,8 @@ export default function LensPage() {
         <section ref={libraryRef} id="library" aria-label="Concept library" className="mt-16 scroll-mt-20">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-ink-100">
-                Concept library
-              </h2>
-              <p className="mt-1 text-sm text-ink-400">
+              <h2 className="text-lg font-semibold tracking-tight text-ink-100">Concept library</h2>
+              <p className="mt-1 text-sm text-ink-500">
                 {LENS_CONCEPTS.length} classic algorithms and data structures, each ready to watch in Python, JavaScript
                 or TypeScript.
               </p>
@@ -546,7 +509,7 @@ export default function LensPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search: heap, recursion, grid…"
-                className="h-9 w-full rounded-lg border border-ink-800 bg-ink-950 pl-9 pr-3 text-sm text-ink-100 placeholder:text-ink-600 focus:border-ink-500 focus:outline-none"
+                className={`${ui.input} pl-9`}
               />
             </label>
           </div>
@@ -559,14 +522,14 @@ export default function LensPage() {
                 onClick={() => setCategory(option.id)}
                 aria-pressed={category === option.id}
                 className={cx(
-                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors",
                   category === option.id
-                    ? "border-ink-300 bg-ink-100 text-ink-950"
-                    : "border-ink-800 text-ink-400 hover:border-ink-600 hover:text-ink-100",
+                    ? "border-ink-100 bg-ink-100 text-ink-950"
+                    : "border-ink-800 bg-ink-900 text-ink-400 hover:border-ink-700 hover:text-ink-100",
                 )}
               >
                 {option.label}
-                <span className="tabular-nums text-ink-600">
+                <span className="tabular-nums opacity-60">
                   {option.id === "all" ? LENS_CONCEPTS.length : (counts.get(option.id) ?? 0)}
                 </span>
               </button>
@@ -581,7 +544,7 @@ export default function LensPage() {
                   if (items.length === 0) return null;
                   return (
                     <div key={section.id}>
-                      <h3 className="mb-3 text-xs font-medium uppercase tracking-[0.16em] text-ink-500">
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-500">
                         {section.label}
                       </h3>
                       <ConceptGrid items={items} selectedId={conceptId} onOpen={(item) => openConcept(item, true)} />
@@ -592,7 +555,7 @@ export default function LensPage() {
             ) : matches.length > 0 ? (
               <ConceptGrid items={matches} selectedId={conceptId} onOpen={(item) => openConcept(item, true)} />
             ) : (
-              <div className="rounded-2xl border border-dashed border-ink-800 px-6 py-12 text-center">
+              <div className="rounded-xl border border-dashed border-ink-800 px-6 py-12 text-center">
                 <p className="text-sm text-ink-300">No concepts match &ldquo;{query.trim()}&rdquo;.</p>
                 <button
                   type="button"
@@ -600,7 +563,7 @@ export default function LensPage() {
                     setQuery("");
                     setCategory("all");
                   }}
-                  className="mt-3 text-sm text-ink-100 underline underline-offset-4 transition-colors hover:text-ink-300"
+                  className={`${ui.secondarySm} mt-3`}
                 >
                   Show all concepts
                 </button>
@@ -608,7 +571,6 @@ export default function LensPage() {
             )}
           </div>
         </section>
-      </div>
-    </main>
+    </PageContainer>
   );
 }

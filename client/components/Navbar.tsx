@@ -9,6 +9,7 @@ import { ArrowRight, Menu, X } from "lucide-react";
 import { AccountMenu } from "@/components/AccountMenu";
 import { GithubIcon } from "@/components/GithubIcon";
 import { LogoMark } from "@/components/LogoMark";
+import { ThemeToggleButton } from "@/components/ThemeSwitcher";
 
 const GITHUB_URL = "https://github.com/GitDaksh/codeshare";
 const EASE: [number, number, number, number] = [0.21, 0.47, 0.32, 0.98];
@@ -93,7 +94,7 @@ export function Navbar() {
 
     const className =
       variant === "desktop"
-        ? `relative rounded-full px-3 py-1.5 text-sm transition-colors ${
+        ? `relative rounded-lg px-3 py-1.5 text-sm transition-colors ${
             active ? "text-ink-100" : "text-ink-400 hover:text-ink-100"
           }`
         : `flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm transition-colors ${
@@ -106,7 +107,7 @@ export function Navbar() {
           {hovered === item.href && (
             <motion.span
               layoutId="nav-hover-pill"
-              className="absolute inset-0 rounded-full bg-ink-800/70"
+              className="absolute inset-0 rounded-lg bg-ink-800/70"
               transition={{ type: "spring", stiffness: 500, damping: 38 }}
             />
           )}
@@ -175,15 +176,16 @@ export function Navbar() {
                 <AccountMenu />
               ) : (
                 <>
+                  <ThemeToggleButton className="rounded-lg p-2 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100" />
                   <Link
                     href="/sign-in"
-                    className="hidden rounded-full px-3 py-1.5 text-sm text-ink-400 transition-colors hover:text-ink-100 md:inline-flex"
+                    className="hidden rounded-lg px-3 py-1.5 text-sm text-ink-400 transition-colors hover:text-ink-100 md:inline-flex"
                   >
                     Sign in
                   </Link>
                   <Link
                     href="/sign-up"
-                    className="group inline-flex items-center gap-1.5 rounded-full bg-ink-100 px-4 py-1.5 text-sm font-semibold text-ink-950 shadow-[0_0_24px_-8px_rgba(255,255,255,0.6)] transition-all hover:bg-white hover:shadow-[0_0_32px_-6px_rgba(255,255,255,0.75)]"
+                    className="group inline-flex items-center gap-1.5 rounded-lg bg-ink-100 px-4 py-1.5 text-sm font-semibold text-ink-950 shadow-xs transition-all hover:bg-ink-200 hover:shadow-card"
                   >
                     Get started
                     <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -193,7 +195,7 @@ export function Navbar() {
                     onClick={() => setMobileOpen((o) => !o)}
                     aria-label={mobileOpen ? "Close menu" : "Open menu"}
                     aria-expanded={mobileOpen}
-                    className="rounded-full p-2 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 md:hidden"
+                    className="rounded-md p-2 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 md:hidden"
                   >
                     {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
                   </button>

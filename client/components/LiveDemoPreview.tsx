@@ -50,7 +50,7 @@ export function LiveDemoPreview() {
   );
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-ink-700 bg-ink-900 text-left shadow-2xl shadow-black/40">
+    <div className="w-full overflow-hidden rounded-xl border border-ink-700 bg-ink-900 text-left shadow-raised">
       <div className="flex items-center justify-between gap-3 border-b border-ink-700 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-ink-700" />

@@ -34,10 +34,10 @@ export function SpotlightCard({
     <div
       ref={ref}
       onMouseMove={handleMouseMove}
-      className={`group relative rounded-2xl p-px ${borderClassName} ${className}`}
+      className={`group relative rounded-xl p-px ${borderClassName} ${className}`}
     >
-      <div className="spotlight-border pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-      <div className={`relative h-full overflow-hidden rounded-[15px] ${surfaceClassName}`}>
+      <div className="spotlight-border pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+      <div className={`relative h-full overflow-hidden rounded-[11px] ${surfaceClassName}`}>
         <div className="spotlight-fill pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
         <div className="relative h-full">{children}</div>
       </div>

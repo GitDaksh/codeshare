@@ -141,7 +141,7 @@ function Cursor({ author, active }: { author: Author; active: boolean }) {
         className={`absolute left-0 top-0 h-full w-[2px] rounded-full ${person.cursor} ${active ? "" : "opacity-50"}`}
       />
       <span
-        className={`absolute bottom-full left-0 mb-0.5 flex items-center gap-1 whitespace-nowrap rounded-full py-px pl-px pr-1.5 text-[9px] font-semibold leading-3 transition-opacity duration-200 ${person.flag} ${
+        className={`absolute bottom-full left-0 mb-0.5 flex items-center gap-1 whitespace-nowrap rounded-md py-px pl-px pr-1.5 text-[9px] font-semibold leading-3 transition-opacity duration-200 ${person.flag} ${
           active ? "opacity-100" : "opacity-0"
         }`}
       >
@@ -210,7 +210,7 @@ export function HeroMockup() {
   return (
     <div
       ref={ref}
-      className="overflow-hidden rounded-2xl border border-ink-700/80 bg-ink-900/90 text-left shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_40px_120px_-30px_rgba(255,255,255,0.18)] backdrop-blur"
+      className="overflow-hidden rounded-xl border border-ink-700/80 bg-ink-900/90 text-left shadow-raised backdrop-blur"
     >
       {/* Title bar */}
       <div className="flex items-center justify-between gap-3 border-b border-ink-800 px-3 py-2.5 sm:px-4">
@@ -232,7 +232,7 @@ export function HeroMockup() {
             ))}
           </div>
           <span className="hidden items-center gap-1.5 text-[10px] text-ink-500 sm:flex">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-100" />3 online
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success-strong" />3 online
           </span>
           <motion.span
             animate={{ scale: pressing ? 0.9 : 1 }}
@@ -259,9 +259,9 @@ export function HeroMockup() {
               return (
                 <div
                   key={i}
-                  className={`flex h-5 items-center sm:h-6 ${isActiveLine ? "bg-white/[0.03]" : ""}`}
+                  className={`flex h-5 items-center sm:h-6 ${isActiveLine ? "bg-ink-100/[0.05]" : ""}`}
                 >
-                  <span className="w-8 shrink-0 select-none pr-3 text-right text-ink-700 sm:w-10">{i + 1}</span>
+                  <span className="w-8 shrink-0 select-none pr-3 text-right text-ink-600 sm:w-10">{i + 1}</span>
                   <span className="whitespace-pre">
                     {renderTokens(line.tokens, visible)}
                     {(["priya", "arjun"] as const).map((author) => {
@@ -321,7 +321,7 @@ export function HeroMockup() {
             Ln {focusCursor ? focusCursor.line + 1 : 1}, Col {focusCursor ? focusCursor.column + 1 : 1}
           </span>
           <span className="flex items-center gap-1.5">
-            <span className={`h-1.5 w-1.5 rounded-full ${saving ? "animate-pulse bg-ink-500" : "bg-ink-100"}`} />
+            <span className={`h-1.5 w-1.5 rounded-full ${saving ? "animate-pulse bg-ink-500" : "bg-success-strong"}`} />
             {saving ? "Saving…" : "Saved"}
           </span>
         </span>

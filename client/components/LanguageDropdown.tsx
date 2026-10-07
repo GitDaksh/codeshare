@@ -75,7 +75,7 @@ export function LanguageDropdown({ value, onChange, disabled = false, disabledRe
             exit={{ opacity: 0, y: -4, scale: 0.97 }}
             transition={{ duration: 0.12 }}
             style={{ transformOrigin: "top right" }}
-            className="absolute right-0 top-full z-30 mt-1.5 w-48 overflow-hidden rounded-xl border border-ink-700 bg-ink-900/95 p-1 shadow-2xl shadow-black/60 backdrop-blur-xl"
+            className="absolute right-0 top-full z-30 mt-1.5 w-48 overflow-hidden rounded-xl border border-ink-800 bg-ink-900/95 p-1 shadow-raised backdrop-blur-xl"
           >
             {LANGUAGES.map((lang) => {
               const selected = lang.value === value;

@@ -41,7 +41,7 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
                 Output
               </span>
               {runner && (
-                <span className="flex min-w-0 items-center gap-1.5 rounded-full border border-ink-700 bg-ink-900 py-0.5 pl-0.5 pr-2 text-[11px] text-ink-400">
+                <span className="flex min-w-0 items-center gap-1.5 rounded-md border border-ink-700 bg-ink-900 py-0.5 pl-0.5 pr-2 text-[11px] text-ink-400">
                   <AvatarIcon avatarId={runner.avatarId} className="h-4 w-4 shrink-0 rounded-full" />
                   <span className="truncate font-medium text-ink-100">{runner.isSelf ? "You" : runner.name}</span>
                   <span className="shrink-0">{status === "running" ? "running" : "ran"}</span>
@@ -65,7 +65,7 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
               <button
                 onClick={onRun}
                 disabled={!canRun || selfRunning}
-                className="flex h-7 items-center gap-1.5 rounded-lg bg-ink-100 px-2.5 text-xs font-semibold text-ink-950 transition-all hover:bg-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-7 items-center gap-1.5 rounded-lg bg-ink-100 px-2.5 text-xs font-semibold text-ink-950 transition-all hover:bg-ink-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {selfRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
                 Run
@@ -93,7 +93,7 @@ export function RunPanel({ open, onClose, onRun, onClear, runState, language }: 
               <div className="space-y-2">
                 {result.output && <pre className="whitespace-pre-wrap break-words text-ink-100">{result.output}</pre>}
                 {result.error && (
-                  <pre className="whitespace-pre-wrap break-words border-l-2 border-red-500/70 pl-3 text-red-300">
+                  <pre className="whitespace-pre-wrap break-words border-l-2 border-danger-strong/70 pl-3 text-danger">
                     {result.error}
                   </pre>
                 )}
