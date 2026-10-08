@@ -47,6 +47,7 @@ import {
   Timer,
   Sun,
   Moon,
+  Flame,
   type LucideIcon,
 } from "lucide-react";
 import { useApi } from "@/lib/api";
@@ -73,6 +74,10 @@ import { RoomLens } from "@/components/lens/RoomLens";
 import { InterviewBar } from "@/components/interview/InterviewBar";
 import { Menu, type MenuEntry } from "@/components/Menu";
 import { useTheme } from "@/lib/theme";
+import { useHotspots } from "@/lib/useHotspots";
+import { HotspotsBar } from "@/components/hotspots/HotspotsBar";
+import { HOTSPOTS_LANE_WIDTH, HotspotsLane } from "@/components/hotspots/HotspotsLane";
+import { revealLine, useEditorHeat } from "@/components/hotspots/useEditorHeat";
 import { InterviewOverlays } from "@/components/interview/InterviewOverlays";
 import { InterviewLobby } from "@/components/interview/InterviewLobby";
 import { InterviewSetup, type InterviewSetupChoice } from "@/components/interview/InterviewSetup";
@@ -470,6 +475,12 @@ export default function RoomPage({
     meterChangedRef.current = meter.notifyChange;
   });
 
+  // Hotspots: how many times every line ran, painted into the editor (only
+  // on your own screen, so viewers can use it too).
+  const hotspots = useHotspots({ language, getCode: getLensCode, problem });
+  const getMonaco = useCallback(() => codeEditorRef.current?.getEditor() ?? null, []);
+  useEditorHeat(getMonaco, hotspots.open ? hotspots.result : null, hotspots.stale);
+
   // The candidate's Big-O readings go into the interview's record.
   const meterResult = meter.result;
   const meterStale = meter.stale;
@@ -602,6 +613,7 @@ export default function RoomPage({
   // Your own edits (they reach everyone through the shared document).
   function handleCodeChange() {
     meterChangedRef.current();
+    hotspots.notifyChange();
 
     setSaveStatus("saving");
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -876,7 +888,7 @@ export default function RoomPage({
     }
   }
 
-    async function handleRenameRoom(newName: string) {
+  async function handleRenameRoom(newName: string) {
     try {
       const res = await api.patch<Room>(`/api/rooms/${id}`, { name: newName });
       setRoom(res.data);
@@ -910,7 +922,7 @@ export default function RoomPage({
     return (problem ? getProblemStarterCode(problem, lang) : null) ?? getStarterCode(lang);
   }
 
-  async function recordSolved(solvedProblem: Problem, solvedLanguage: string) {
+    async function recordSolved(solvedProblem: Problem, solvedLanguage: string) {
     if (solvedSlugs.has(solvedProblem.slug)) {
       toast("All tests passed!");
       return;
@@ -1024,6 +1036,33 @@ export default function RoomPage({
     void lens.run({ kind: "test", index });
   }
 
+  // What the Hotspots button does right now: show it, update stale heat, or hide it.
+  const hotspotsAction = !hotspots.open
+    ? "Show hotspots"
+    : hotspots.stale || hotspots.error
+      ? "Update hotspots"
+      : "Hide hotspots";
+
+  // Shows the heat (or refreshes it once the code changed), or hides it.
+  // It shows the same kind of thing as the Big-O meter, so an interview that
+  // turns the meter off turns this off too.
+  function handleHotspots() {
+    if (meterHidden) {
+      toast("Hotspots is off for this interview.", "info");
+      return;
+    }
+    if (!hotspots.supported) {
+      toast("Hotspots works with Python, JavaScript and TypeScript. Switch the room's language to try it.", "info");
+      return;
+    }
+    setMobilePanel("code");
+    if (hotspots.open && !hotspots.running && !hotspots.stale && !hotspots.error) {
+      hotspots.close();
+      return;
+    }
+    void hotspots.run();
+  }
+
   const isOwner = room?.ownerId === currentUserId;
   const isSelfRunning = runState.status === "running" && !!runState.runner?.isSelf;
   const showSidebar = !zenMode || !isDesktop;
@@ -1109,6 +1148,13 @@ export default function RoomPage({
       icon: ScanEye,
       action: handleVisualize,
       disabled: !lensReady || !canEdit || lensLocked,
+    },
+    {
+      id: "hotspots",
+      label: hotspotsAction,
+      icon: Flame,
+      action: handleHotspots,
+      disabled: !hotspots.supported || meterHidden,
     },
     ...problemCommands,
     {
@@ -1202,6 +1248,13 @@ export default function RoomPage({
 
   // The header's "More" menu: everything that isn't Share, Run or Visualize.
   const roomMenu: MenuEntry[] = [
+    {
+      id: "hotspots",
+      label: hotspots.open ? hotspotsAction : "Hotspots",
+      icon: Flame,
+      onSelect: handleHotspots,
+      disabled: !hotspots.supported || meterHidden,
+    },
     {
       id: "output",
       label: runPanelOpen ? "Hide output panel" : "Show output panel",
@@ -1375,6 +1428,33 @@ export default function RoomPage({
           </button>
 
           <button
+            type="button"
+            onClick={handleHotspots}
+            disabled={!hotspots.supported || meterHidden}
+            aria-label={hotspotsAction}
+            aria-pressed={hotspots.open}
+            title={
+              meterHidden
+                ? "Hotspots is off for this interview"
+                : !hotspots.supported
+                  ? "Hotspots works with Python, JavaScript and TypeScript"
+                  : hotspots.open
+                    ? hotspotsAction
+                    : "Hotspots: see how many times every line runs"
+            }
+            className={`hidden h-8 items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-900 px-2.5 text-xs font-medium text-ink-200 shadow-xs transition-colors hover:border-ink-600 hover:bg-ink-950 hover:text-ink-100 disabled:cursor-not-allowed disabled:opacity-50 sm:flex ${
+              hotspots.open ? "hs-active" : ""
+            }`}
+          >
+            {hotspots.running ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Flame className="h-3.5 w-3.5" style={hotspots.open ? { color: "var(--hs-7)" } : undefined} />
+            )}
+            <span className="hidden lg:inline">Hotspots</span>
+          </button>
+
+          <button
             onClick={handleVisualize}
             disabled={lens.recording || !canEdit || lensLocked}
             aria-label="Visualize with Lens"
@@ -1427,13 +1507,20 @@ export default function RoomPage({
         <div
           className={`${mobilePanel === "code" ? "flex" : "hidden"} min-w-0 flex-1 flex-col bg-ink-900 md:flex md:overflow-hidden md:rounded-xl md:border md:border-ink-800`}
         >
-          <div className="relative min-h-0 flex-1">
+          {hotspots.open && <HotspotsBar hotspots={hotspots} onReveal={(line) => revealLine(getMonaco(), line)} />}
+          <div
+            className="relative min-h-0 flex-1 transition-[padding] duration-300"
+            style={hotspots.open && hotspots.result && isDesktop ? { paddingRight: HOTSPOTS_LANE_WIDTH } : undefined}
+          >
             <CodeEditor
               handleRef={codeEditorRef}
               language={language}
               initialValue={initialCode}
               onChange={handleCodeChange}
-              onRemoteChange={() => meterChangedRef.current()}
+              onRemoteChange={() => {
+                meterChangedRef.current();
+                hotspots.notifyChange();
+              }}
               onRunShortcut={handleRun}
               onSendSelection={handleSendSelectionToChat}
               collab={collab.session}
@@ -1450,6 +1537,9 @@ export default function RoomPage({
               themeId={editorTheme}
               onThemeChange={setEditorTheme}
             />
+            {hotspots.open && hotspots.result && isDesktop && (
+              <HotspotsLane getEditor={getMonaco} result={hotspots.result} stale={hotspots.stale} />
+            )}
             {followed && (
               <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center">
                 <div className="pointer-events-auto flex items-center gap-2 rounded-md border border-ink-700 bg-ink-900/95 py-1 pl-1.5 pr-1 text-xs text-ink-300 shadow-raised backdrop-blur">
