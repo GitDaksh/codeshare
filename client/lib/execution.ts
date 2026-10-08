@@ -15,6 +15,7 @@ import {
 } from "@/lib/complexityDrivers";
 import { formatValue, valuesMatch, type CompareMode } from "@/lib/judge";
 import { buildTraceProgram, parseTraceOutput, type LensTrace } from "@/lib/lens";
+import { buildHotspotsPython, parseHotspotsOutput, prepareHotspots, type HotspotsOutcome } from "@/lib/hotspots";
 import { PROBLEMS, type Problem } from "@/lib/problems";
 import { JS_RUNNER_SOURCE, PYTHON_RUNNER_SOURCE, buildSandboxDocument } from "@/lib/sandboxRunners";
 
@@ -103,6 +104,10 @@ const LIMITS = {
   // The complexity meter runs a function many times on growing inputs.
   jsMeter: { loadMs: 10000, runMs: 15000 },
   pyMeter: { loadMs: 90000, runMs: 25000 },
+  // Hotspots stop themselves at their own budget (see hotspots.ts); these
+  // are only a backstop.
+  jsHotspots: { loadMs: 10000, runMs: 15000 },
+  pyHotspots: { loadMs: 90000, runMs: 20000 },
 };
 
 export function isRunnable(language: string): boolean {
@@ -556,6 +561,62 @@ export async function traceJavaScript(
 export function traceCode(language: string, code: string, options: { setup?: string } = {}): Promise<TraceResult> {
   if (language === "python") return tracePython(code, options);
   return traceJavaScript(code, { ...options, typescript: language === "typescript" });
+}
+
+// ============================================================================
+// Hotspots: how many times every line ran (see hotspots.ts)
+// ============================================================================
+
+export async function profileCode(language: string, code: string, problem: Problem | null): Promise<HotspotsOutcome> {
+  if (!isLensLanguage(language)) {
+    return { ok: false, error: "Hotspots works with Python, JavaScript and TypeScript." };
+  }
+  const program = prepareHotspots(code, language, problem);
+  let outcome: SandboxOutcome;
+  if (language === "python") {
+    outcome = await runPython({ mode: "program", code: buildHotspotsPython(program) }, LIMITS.pyHotspots);
+  } else {
+    const { buildHotspotsJs } = await import("@/lib/hotspotsJs");
+    const built = await buildHotspotsJs(program, { typescript: language === "typescript" });
+    if ("error" in built) {
+      // Code that can't be read: no heat, just the error.
+      return {
+        ok: true,
+        result: {
+          counts: new Map(),
+          executable: [],
+          flows: [],
+          timeline: [],
+          total: 0,
+          hottest: 0,
+          truncated: false,
+          durationMs: 0,
+          error: built.error,
+          input: program.input,
+          lineCount: program.lastLine,
+        },
+      };
+    }
+    outcome = await runJavaScript({ mode: "program", code: built.program }, LIMITS.jsHotspots);
+  }
+
+  if (outcome.kind === "timeout") {
+    return {
+      ok: false,
+      error:
+        outcome.phase === "load"
+          ? language === "python"
+            ? "The Python runtime took too long to load. Check your connection and try again."
+            : "The code runner took too long to start. Try again."
+          : `Stopped after ${seconds(outcome.limitMs)}: a single step took too long.`,
+    };
+  }
+  if (outcome.kind === "fatal") return { ok: false, error: outcome.message };
+  const output = typeof outcome.data.output === "string" ? outcome.data.output : "";
+  const result = parseHotspotsOutput(output, program);
+  if (result) return { ok: true, result };
+  const error = typeof outcome.data.error === "string" && outcome.data.error ? outcome.data.error : null;
+  return { ok: false, error: error ?? "Hotspots couldn't read this run. Try again." };
 }
 
 // ============================================================================

@@ -24,6 +24,8 @@ export type CodeEditorHandle = {
   getValue: () => string;
   setValue: (value: string) => void;
   getSelection: () => EditorSelection | null;
+  // The Monaco editor itself, for features that draw on it (Hotspots).
+  getEditor: () => MonacoEditorInstance | null;
 };
 
 type MonacoEditorInstance = Parameters<OnMount>[0];
@@ -250,6 +252,7 @@ export function CodeEditor({
 
     handleRef.current = {
       getValue: () => editorRef.current?.getValue() ?? "",
+      getEditor: () => editorRef.current,
       // Changes only the part that differs, so it merges well with
       // teammates' edits (and can be undone like typing).
       setValue: (value: string) => {

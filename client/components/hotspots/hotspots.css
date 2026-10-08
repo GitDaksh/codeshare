@@ -1,0 +1,299 @@
+/* Hotspots' look: the heat colors, the glow on each line, the markers,
+   run counts and animations (see useEditorHeat.ts, HotspotsLane.tsx and
+   HotspotsBar.tsx). Imported by useEditorHeat.ts. */
+
+/* The heat scale, coldest to hottest: indigo, violet, magenta, rose, orange,
+   gold. The same colors in both themes; each use sets its own strength. */
+:root {
+  --hs-0: #5b5bf0;
+  --hs-1: #7457f2;
+  --hs-2: #8c50ef;
+  --hs-3: #a64ae6;
+  --hs-4: #c044d6;
+  --hs-5: #d83fbb;
+  --hs-6: #ec4796;
+  --hs-7: #f65a6c;
+  --hs-8: #fa7f3f;
+  --hs-9: #fbb72a;
+}
+
+.hs-h0 {
+  --hs: var(--hs-0);
+  --hs-glow: 7%;
+  --hs-glow-light: 5%;
+}
+.hs-h1 {
+  --hs: var(--hs-1);
+  --hs-glow: 10%;
+  --hs-glow-light: 7%;
+}
+.hs-h2 {
+  --hs: var(--hs-2);
+  --hs-glow: 12%;
+  --hs-glow-light: 9%;
+}
+.hs-h3 {
+  --hs: var(--hs-3);
+  --hs-glow: 15%;
+  --hs-glow-light: 11%;
+}
+.hs-h4 {
+  --hs: var(--hs-4);
+  --hs-glow: 17%;
+  --hs-glow-light: 13%;
+}
+.hs-h5 {
+  --hs: var(--hs-5);
+  --hs-glow: 20%;
+  --hs-glow-light: 14%;
+}
+.hs-h6 {
+  --hs: var(--hs-6);
+  --hs-glow: 23%;
+  --hs-glow-light: 16%;
+}
+.hs-h7 {
+  --hs: var(--hs-7);
+  --hs-glow: 25%;
+  --hs-glow-light: 18%;
+}
+.hs-h8 {
+  --hs: var(--hs-8);
+  --hs-glow: 28%;
+  --hs-glow-light: 20%;
+}
+.hs-h9 {
+  --hs: var(--hs-9);
+  --hs-glow: 30%;
+  --hs-glow-light: 22%;
+}
+
+/* Lines ignite one after another, top to bottom. */
+.hs-d0 {
+  --hs-delay: 0ms;
+}
+.hs-d1 {
+  --hs-delay: 22ms;
+}
+.hs-d2 {
+  --hs-delay: 44ms;
+}
+.hs-d3 {
+  --hs-delay: 66ms;
+}
+.hs-d4 {
+  --hs-delay: 88ms;
+}
+.hs-d5 {
+  --hs-delay: 110ms;
+}
+.hs-d6 {
+  --hs-delay: 132ms;
+}
+.hs-d7 {
+  --hs-delay: 154ms;
+}
+.hs-d8 {
+  --hs-delay: 176ms;
+}
+.hs-d9 {
+  --hs-delay: 198ms;
+}
+.hs-d10 {
+  --hs-delay: 220ms;
+}
+.hs-d11 {
+  --hs-delay: 242ms;
+}
+.hs-d12 {
+  --hs-delay: 264ms;
+}
+.hs-d13 {
+  --hs-delay: 286ms;
+}
+.hs-d14 {
+  --hs-delay: 308ms;
+}
+.hs-d15 {
+  --hs-delay: 330ms;
+}
+.hs-d16 {
+  --hs-delay: 352ms;
+}
+.hs-d17 {
+  --hs-delay: 374ms;
+}
+.hs-d18 {
+  --hs-delay: 396ms;
+}
+.hs-d19 {
+  --hs-delay: 418ms;
+}
+.hs-d20 {
+  --hs-delay: 440ms;
+}
+.hs-d21 {
+  --hs-delay: 462ms;
+}
+.hs-d22 {
+  --hs-delay: 484ms;
+}
+.hs-d23 {
+  --hs-delay: 506ms;
+}
+.hs-d24 {
+  --hs-delay: 528ms;
+}
+
+@keyframes hs-ignite {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes hs-breathe {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* A line glows from the left in its heat color: a faint tint when it ran
+   rarely, a strong glow when it's one of the busiest. */
+.monaco-editor .hs-line {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--hs) var(--hs-glow), transparent),
+    color-mix(in srgb, var(--hs) calc(var(--hs-glow) / 3), transparent) 40%,
+    transparent 78%
+  );
+  animation: hs-ignite 650ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: var(--hs-delay, 0ms);
+}
+
+.light .monaco-editor .hs-line {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--hs) var(--hs-glow-light), transparent),
+    color-mix(in srgb, var(--hs) calc(var(--hs-glow-light) / 3), transparent) 40%,
+    transparent 78%
+  );
+}
+
+/* The busiest line slowly breathes. */
+.monaco-editor .hs-line.hs-hottest {
+  animation:
+    hs-ignite 650ms cubic-bezier(0.16, 1, 0.3, 1) backwards,
+    hs-breathe 2.8s ease-in-out infinite;
+  animation-delay: var(--hs-delay, 0ms), 1.4s;
+}
+
+/* A glowing marker beside the line numbers. */
+.monaco-editor .hs-bar {
+  margin-left: 5px;
+  width: 3px !important;
+  border-radius: 2px;
+  background: var(--hs);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--hs) 75%, transparent);
+  animation: hs-ignite 650ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: var(--hs-delay, 0ms);
+}
+
+/* How many times the line ran, after its code. */
+.monaco-editor .hs-count {
+  color: var(--hs);
+  font-size: 0.8em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  animation: hs-ignite 650ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation-delay: var(--hs-delay, 0ms);
+}
+
+.light .monaco-editor .hs-count {
+  color: color-mix(in srgb, var(--hs) 72%, #000);
+}
+
+/* Lines that could have run but never did fade back. */
+.monaco-editor .hs-cold {
+  opacity: 0.38;
+}
+
+/* A line picked from the timeline or the hottest list flashes. */
+@keyframes hs-flash {
+  from {
+    background: color-mix(in srgb, var(--ink-100) 22%, transparent);
+  }
+}
+
+.monaco-editor .hs-flash {
+  animation: hs-flash 1.2s ease-out;
+}
+
+/* Once the code changes, the heat dims until it's run again. */
+.hs-stale .monaco-editor .hs-line,
+.hs-stale .monaco-editor .hs-bar,
+.hs-stale .monaco-editor .hs-count {
+  opacity: 0.32;
+  transition: opacity 300ms;
+}
+
+/* The Hotspots button while it's showing. */
+.hs-active {
+  border-color: color-mix(in srgb, var(--hs-6) 55%, transparent) !important;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--hs-2) 20%, var(--ink-900)),
+    color-mix(in srgb, var(--hs-8) 20%, var(--ink-900))
+  ) !important;
+  color: var(--ink-100) !important;
+}
+
+/* The flow lane's busiest line pulses. */
+@keyframes hs-pulse {
+  50% {
+    transform: scale(1.9);
+    opacity: 0.25;
+  }
+}
+
+.hs-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hs-pulse 2s ease-in-out infinite;
+}
+
+/* The timeline sweeps in, from the start of the run to the end. */
+@keyframes hs-sweep {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+
+.hs-sweep {
+  animation: hs-sweep 1.3s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* While counting, the timeline shimmers. */
+@keyframes hs-shimmer {
+  to {
+    background-position: 300% 0;
+  }
+}
+
+.hs-shimmer {
+  background: linear-gradient(90deg, var(--hs-0), var(--hs-4), var(--hs-9), var(--hs-4), var(--hs-0));
+  background-size: 300% 100%;
+  animation: hs-shimmer 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .monaco-editor .hs-line,
+  .monaco-editor .hs-line.hs-hottest,
+  .monaco-editor .hs-bar,
+  .monaco-editor .hs-count,
+  .monaco-editor .hs-flash,
+  .hs-pulse,
+  .hs-sweep,
+  .hs-shimmer {
+    animation: none !important;
+  }
+}
