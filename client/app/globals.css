@@ -417,6 +417,24 @@ a {
   animation-play-state: paused;
 }
 
+/* The games console's dock: the bar under the selected game fills up while
+   the console plays by itself, and the next game shows when it's full. */
+@keyframes landing-dock-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.landing-dock-progress {
+  transform-origin: left;
+  animation-name: landing-dock-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
 /* Very faint film grain over the landing page */
 .grain::before {
   content: "";

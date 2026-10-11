@@ -50,14 +50,14 @@ export function Hero() {
 
       <div className="relative mx-auto max-w-6xl px-4 pb-10 pt-16 text-center sm:pt-24 lg:pt-32">
         <motion.a
-          href="#tour"
+          href="#games"
           initial={reduce ? false : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: EASE }}
           className="group inline-flex items-center gap-2 rounded-lg border border-ink-800 bg-ink-900/60 py-1 pl-1 pr-3 text-xs text-ink-400 backdrop-blur transition-colors hover:border-ink-600 hover:text-ink-100"
         >
           <span className="rounded-md bg-ink-100 px-2 py-0.5 text-[10px] font-semibold text-ink-950">New</span>
-          Lens: watch your code run, step by step
+          Games: nine quick ones to play with friends
           <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
         </motion.a>
 
