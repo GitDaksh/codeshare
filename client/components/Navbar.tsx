@@ -69,6 +69,7 @@ export function Navbar() {
           { label: "Practice", href: "/practice", kind: "route" },
           { label: "Lens", href: "/lens", kind: "route" },
           { label: "Interviews", href: "/interviews", kind: "route" },
+          { label: "Games", href: "/games", kind: "route" },
           { label: "Profile", href: "/profile", kind: "route" },
         ]
       : [
@@ -78,6 +79,7 @@ export function Navbar() {
           { label: "Practice", href: "/practice", kind: "route" },
           { label: "Lens", href: "/lens", kind: "route" },
           { label: "Interviews", href: "/interviews", kind: "route" },
+          { label: "Games", href: "/games", kind: "route" },
           { label: "Source", href: GITHUB_URL, kind: "external" },
         ];
 

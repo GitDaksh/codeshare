@@ -1,0 +1,674 @@
+/* Games: the stage, overlays, card art and the shared code colors.
+   Imported by components/games/GameStage.tsx and GameArt.tsx. Every
+   animation moves only transform and opacity (smooth on any device), and
+   all of them stop for people who prefer reduced motion. */
+
+/* ---------- Code colors (the editor's CodeShare palette) ---------- */
+:root {
+  --syn-text: #d4d4d4;
+  --syn-keyword: #ffffff;
+  --syn-string: #a6d19b;
+  --syn-number: #e3b77e;
+  --syn-type: #8fc6db;
+  --syn-comment: #6b6b73;
+  --syn-punct: #8a8a8a;
+}
+.light {
+  --syn-text: #1f2328;
+  --syn-keyword: #cf222e;
+  --syn-string: #0a3069;
+  --syn-number: #0550ae;
+  --syn-type: #8250df;
+  --syn-comment: #6e7781;
+  --syn-punct: #57606a;
+}
+.syn-text { color: var(--syn-text); }
+.syn-keyword { color: var(--syn-keyword); font-weight: 600; }
+.syn-string { color: var(--syn-string); }
+.syn-number { color: var(--syn-number); }
+.syn-type { color: var(--syn-type); }
+.syn-comment { color: var(--syn-comment); font-style: italic; }
+.syn-punct { color: var(--syn-punct); }
+
+/* ---------- The stage: two soft glows in the game's colors, drifting ---------- */
+.gs-stage {
+  position: relative;
+  isolation: isolate;
+}
+.gs-glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.gs-glow::before,
+.gs-glow::after {
+  content: "";
+  position: absolute;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 9999px;
+  opacity: 0.16;
+  will-change: transform;
+}
+.gs-glow::before {
+  left: -25vmax;
+  top: -30vmax;
+  background: radial-gradient(circle, var(--g1) 0%, transparent 62%);
+  animation: gs-drift-a 22s ease-in-out infinite alternate;
+}
+.gs-glow::after {
+  right: -28vmax;
+  bottom: -38vmax;
+  background: radial-gradient(circle, var(--g2) 0%, transparent 62%);
+  animation: gs-drift-b 26s ease-in-out infinite alternate;
+}
+.light .gs-glow::before,
+.light .gs-glow::after {
+  opacity: 0.11;
+}
+@keyframes gs-drift-a {
+  to { transform: translate3d(12vmax, 8vmax, 0) scale(1.08); }
+}
+@keyframes gs-drift-b {
+  to { transform: translate3d(-10vmax, -6vmax, 0) scale(1.12); }
+}
+
+/* Gradient text in the game's colors. */
+.gs-gradient-text {
+  background: linear-gradient(120deg, var(--g1), var(--g2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- Countdown ---------- */
+@keyframes gs-count {
+  0% { transform: scale(1.6); opacity: 0; }
+  18% { transform: scale(1); opacity: 1; }
+  80% { transform: scale(0.94); opacity: 1; }
+  100% { transform: scale(0.8); opacity: 0; }
+}
+.gs-count {
+  animation: gs-count 1000ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes gs-ring {
+  from { transform: scale(0.6); opacity: 0.7; }
+  to { transform: scale(1.5); opacity: 0; }
+}
+.gs-ring {
+  animation: gs-ring 1000ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+/* ---------- Floating reactions ---------- */
+@keyframes gs-float {
+  0% { transform: translate3d(0, 0, 0) scale(0.6); opacity: 0; }
+  12% { transform: translate3d(0, -6vh, 0) scale(1.15); opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translate3d(var(--drift, 0px), -46vh, 0) scale(1); opacity: 0; }
+}
+.gs-float {
+  animation: gs-float 2600ms cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
+}
+
+/* ---------- Small helpers ---------- */
+@keyframes gs-rise {
+  from { transform: translate3d(0, 14px, 0); opacity: 0; }
+}
+.gs-rise {
+  animation: gs-rise 520ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+@keyframes gs-shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+.gs-shake {
+  animation: gs-shake 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@keyframes gs-pulse-soft {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.gs-pulse-soft {
+  animation: gs-pulse-soft 1.6s ease-in-out infinite;
+}
+@keyframes gs-bob {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -4px, 0); }
+}
+.gs-bob {
+  animation: gs-bob 2.4s ease-in-out infinite;
+}
+@keyframes gs-pop-in {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.gs-pop-in {
+  animation: gs-pop-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-glow::before,
+  .gs-glow::after,
+  .gs-pulse-soft,
+  .gs-bob {
+    animation: none;
+  }
+  .gs-count,
+  .gs-ring,
+  .gs-rise,
+  .gs-shake,
+  .gs-pop-in {
+    animation-duration: 1ms;
+  }
+  .gs-float {
+    animation-duration: 1200ms;
+  }
+}
+
+/* ---------- Card art (GameArt.tsx) ---------- */
+.ga {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(110% 130% at 0% 0%, color-mix(in srgb, var(--g1) 30%, transparent), transparent 58%),
+    radial-gradient(110% 130% at 100% 100%, color-mix(in srgb, var(--g2) 26%, transparent), transparent 62%),
+    var(--ink-950);
+}
+.ga::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(color-mix(in srgb, var(--ink-100) 9%, transparent) 1px, transparent 1px);
+  background-size: 14px 14px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+.ga-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* Code Racer: three racers lapping toward the flag. */
+@keyframes ga-race {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(var(--track, 220px), 0, 0); }
+}
+.ga-racer {
+  animation: ga-race var(--d, 3s) cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* Keyword: tiles flip over one by one. */
+@keyframes ga-tile {
+  0%, 12% { transform: rotateX(0deg); }
+  20% { transform: rotateX(90deg); }
+  28%, 100% { transform: rotateX(0deg); }
+}
+@keyframes ga-tile-color {
+  0%, 19% { opacity: 0; }
+  20%, 92% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.ga-tile {
+  animation: ga-tile 4.8s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+  transform-style: preserve-3d;
+}
+.ga-tile-color {
+  animation: ga-tile-color 4.8s step-end infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* Bit Flip: lamps switching on and off. */
+@keyframes ga-bit {
+  0%, 100% { opacity: var(--from, 0); }
+  50% { opacity: var(--to, 1); }
+}
+.ga-bit {
+  animation: ga-bit var(--d, 2.4s) steps(1, end) infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* Output Oracle: the output appears line by line. */
+@keyframes ga-reveal {
+  0%, 30% { opacity: 0; transform: translate3d(-6px, 0, 0); }
+  42%, 88% { opacity: 1; transform: translate3d(0, 0, 0); }
+  100% { opacity: 0; transform: translate3d(0, 0, 0); }
+}
+.ga-reveal {
+  animation: ga-reveal 4.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes ga-caret {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.ga-caret {
+  animation: ga-caret 1s steps(1, end) infinite;
+}
+
+/* Big-O Blitz: growth curves drawing themselves. */
+@keyframes ga-draw {
+  0% { stroke-dashoffset: 1; opacity: 1; }
+  45%, 85% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+.ga-curve {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: ga-draw 4.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* Bug Hunt: a bug crawling down the code, one line glowing red. */
+@keyframes ga-crawl {
+  0% { transform: translate3d(0, 0, 0) rotate(90deg); }
+  30% { transform: translate3d(150px, 0, 0) rotate(90deg); }
+  36% { transform: translate3d(150px, 0, 0) rotate(180deg); }
+  50% { transform: translate3d(150px, 34px, 0) rotate(180deg); }
+  56% { transform: translate3d(150px, 34px, 0) rotate(270deg); }
+  86% { transform: translate3d(0, 34px, 0) rotate(270deg); }
+  92% { transform: translate3d(0, 34px, 0) rotate(360deg); }
+  100% { transform: translate3d(0, 0, 0) rotate(360deg); }
+}
+.ga-crawl {
+  animation: ga-crawl 6s linear infinite;
+}
+@keyframes ga-flash {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.85; }
+}
+.ga-flash {
+  animation: ga-flash 1.4s ease-in-out infinite;
+}
+
+/* Four in a Row: discs dropping into the grid. Each disc's keyframes are
+   generated in GameArt.tsx (they all share one 6.4 s loop). */
+.ga-disc {
+  animation-duration: 6.4s;
+  animation-timing-function: cubic-bezier(0.33, 0, 0.67, 1);
+  animation-iteration-count: infinite;
+  opacity: 0;
+}
+@keyframes ga-win {
+  0%, 64% { opacity: 0; }
+  70%, 88% { opacity: 1; }
+  96%, 100% { opacity: 0; }
+}
+.ga-win {
+  animation: ga-win 6.4s ease-in-out infinite;
+}
+
+/* Pair Programming: two cards flip and match. */
+@keyframes ga-flip {
+  0%, 15% { transform: rotateY(0deg); }
+  25%, 80% { transform: rotateY(180deg); }
+  90%, 100% { transform: rotateY(0deg); }
+}
+.ga-card {
+  transform-style: preserve-3d;
+  animation: ga-flip 5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  animation-delay: var(--delay, 0s);
+}
+.ga-card-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.ga-card-back {
+  transform: rotateY(180deg);
+}
+
+/* Byte Snake: a pulse on the byte it's after. */
+@keyframes ga-byte {
+  0%, 100% { transform: scale(0.85); opacity: 0.7; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+.ga-byte {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ga-byte 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ga-racer,
+  .ga-tile,
+  .ga-tile-color,
+  .ga-bit,
+  .ga-reveal,
+  .ga-caret,
+  .ga-crawl,
+  .ga-flash,
+  .ga-win,
+  .ga-card,
+  .ga-byte {
+    animation: none;
+  }
+  .ga-curve {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .ga-disc,
+  .ga-tile-color,
+  .ga-reveal {
+    opacity: 1;
+  }
+  /* The discs' keyframes are set inline, so this needs !important. */
+  .ga-disc {
+    animation-name: none !important;
+  }
+}
+
+/* ---------- Keyword ---------- */
+:root {
+  --kw-hit: #16a34a;
+  --kw-near: #ca8a04;
+  --kw-miss: #3a3a42;
+  /* Keyboard: unused keys stand out, letters ruled out fade away. */
+  --kw-key: #4d4d55;
+  --kw-key-text: #f6f6f7;
+  --kw-key-out: #1f1f24;
+  --kw-key-out-text: #6b6b73;
+}
+.light {
+  --kw-miss: #8b8b94;
+  --kw-key: #dfdfe4;
+  --kw-key-text: #18181b;
+  --kw-key-out: #8b8b94;
+  --kw-key-out-text: #ffffff;
+}
+.kw-tile {
+  perspective: 700px;
+}
+.kw-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+.kw-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 0.5rem;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.kw-back {
+  transform: rotateX(180deg);
+}
+.kw-revealed .kw-inner {
+  transform: rotateX(180deg);
+}
+@keyframes kw-flip {
+  from { transform: rotateX(0deg); }
+  to { transform: rotateX(180deg); }
+}
+.kw-revealing .kw-inner {
+  animation: kw-flip 520ms cubic-bezier(0.45, 0, 0.55, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+@keyframes kw-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.kw-pop {
+  animation: kw-pop 150ms ease-out;
+}
+@keyframes kw-bounce {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  35% { transform: translate3d(0, -16px, 0); }
+  60% { transform: translate3d(0, 3px, 0); }
+}
+.kw-win {
+  animation: kw-bounce 620ms cubic-bezier(0.3, 0, 0.3, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .kw-revealing .kw-inner {
+    animation: none;
+    transform: rotateX(180deg);
+  }
+  .kw-pop,
+  .kw-win {
+    animation: none;
+  }
+}
+
+/* Code in games shows every character as typed: no ligatures (=> stays =>). */
+.gs-code {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+/* ---------- Four in a Row ---------- */
+/* The discs sit behind the board's front panel (an SVG with 42 round holes),
+   so a falling disc shows through the holes on its way down. Sizes come from
+   --cell, one space on the grid, set on the board. */
+.four-board {
+  --four-panel: #27272e;
+  --four-back: #0b0b0e;
+  --four-shade: #000000;
+  --four-shade-alpha: 0.62;
+  --four-top-alpha: 0.45;
+  --four-bevel: rgb(255 255 255 / 0.06);
+  --four-ring: rgb(255 255 255 / 0.07);
+}
+.light .four-board {
+  --four-panel: #ffffff;
+  --four-back: #e9e9ef;
+  --four-shade: #1b1b2a;
+  --four-shade-alpha: 0.2;
+  --four-top-alpha: 0.3;
+  --four-bevel: rgb(0 0 0 / 0.08);
+  --four-ring: rgb(0 0 0 / 0.08);
+}
+.four-frame {
+  background: var(--four-back);
+  border-radius: calc(var(--cell) * 0.3);
+  box-shadow: 0 0 0 1px var(--four-ring), 0 26px 50px -22px rgb(0 0 0 / 0.7);
+}
+.light .four-frame {
+  box-shadow: 0 0 0 1px var(--four-ring), 0 24px 44px -24px rgb(24 24 60 / 0.35);
+}
+.four-disc {
+  position: absolute;
+  inset: 9%;
+  border-radius: 9999px;
+}
+/* The raised ring on each disc. */
+.four-disc::after {
+  content: "";
+  position: absolute;
+  inset: 19%;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 calc(var(--cell) * 0.02) calc(var(--cell) * 0.04) rgb(0 0 0 / 0.25),
+    0 calc(var(--cell) * 0.015) 0 rgb(255 255 255 / 0.28);
+}
+.four-disc-1 {
+  background: radial-gradient(circle at 35% 30%, #fecdd3 0%, #fb7185 30%, #e11d48 100%);
+}
+.four-disc-2 {
+  background: radial-gradient(circle at 35% 30%, #fef9c3 0%, #facc15 32%, #ca8a04 100%);
+}
+/* A disc falls with gravity, bounces once and settles. */
+@keyframes four-drop {
+  0% {
+    transform: translate3d(0, var(--from), 0);
+    animation-timing-function: cubic-bezier(0.55, 0.085, 0.68, 0.53);
+  }
+  72% {
+    transform: translate3d(0, 0, 0);
+    animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  86% {
+    transform: translate3d(0, -10%, 0);
+    animation-timing-function: cubic-bezier(0.55, 0.085, 0.68, 0.53);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+.four-drop {
+  animation: four-drop var(--fall, 450ms) both;
+}
+/* The winning discs pulse, and a line is drawn through them. */
+@keyframes four-win {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.84); }
+}
+.four-win {
+  animation: four-win 1s ease-in-out infinite;
+}
+@keyframes four-line {
+  from { transform: rotate(var(--angle)) translateX(var(--back)) scaleX(0); }
+  to { transform: rotate(var(--angle)) translateX(var(--back)) scaleX(1); }
+}
+.four-line {
+  transform-origin: 0 50%;
+  transform: rotate(var(--angle)) translateX(var(--back));
+  animation: four-line 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* The disc waiting above the board glides from column to column, and the
+   column it would go in is lit. */
+.four-glide {
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.four-tint {
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease;
+}
+@keyframes four-dot {
+  0%, 80%, 100% { opacity: 0.25; transform: translate3d(0, 0, 0); }
+  40% { opacity: 1; transform: translate3d(0, -2px, 0); }
+}
+.four-dots > span {
+  animation: four-dot 1.2s ease-in-out infinite;
+}
+.four-dots > span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.four-dots > span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .four-drop,
+  .four-win,
+  .four-line,
+  .four-dots > span {
+    animation: none;
+  }
+  .four-glide,
+  .four-tint {
+    transition: none;
+  }
+}
+
+/* ---------- Pair Programming ---------- */
+/* Each card: a wrapper that pops or shakes, one that lifts on hover, and
+   the card itself, which turns over in 3D (front and back faces). */
+.pp-board {
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  max-width: var(--board-max);
+}
+@media (min-width: 640px) {
+  .pp-board {
+    grid-template-columns: repeat(var(--wide-cols), minmax(0, 1fr));
+    max-width: var(--board-max-wide);
+  }
+}
+.pp-card {
+  perspective: 900px;
+  -webkit-tap-highlight-color: transparent;
+}
+.pp-lift {
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (hover: hover) {
+  .pp-card[data-open="true"]:hover .pp-lift {
+    transform: translate3d(0, -3px, 0);
+  }
+}
+.pp-inner {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 460ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.pp-up {
+  transform: rotateY(180deg);
+}
+.pp-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+.pp-front {
+  transform: rotateY(180deg);
+}
+.pp-back {
+  background:
+    repeating-linear-gradient(135deg, rgb(255 255 255 / 0.07) 0 2px, transparent 2px 11px),
+    radial-gradient(120% 90% at 20% 0%, rgb(255 255 255 / 0.24), transparent 55%),
+    linear-gradient(140deg, var(--g1), var(--g2));
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.18),
+    0 8px 20px -12px rgb(0 0 0 / 0.7);
+}
+.light .pp-back {
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.3),
+    0 8px 18px -12px rgb(60 30 120 / 0.45);
+}
+@keyframes pp-deal {
+  from { transform: translate3d(0, 18px, 0) scale(0.85); opacity: 0; }
+}
+.pp-deal {
+  animation: pp-deal 520ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+@keyframes pp-found {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+.pp-found {
+  animation: pp-found 520ms cubic-bezier(0.2, 0.8, 0.2, 1) 300ms both;
+}
+.pp-miss {
+  animation: gs-shake 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97) 430ms both;
+}
+@keyframes pp-spark {
+  0% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+  100% { transform: translate3d(var(--dx), var(--dy), 0) scale(0.2); opacity: 0; }
+}
+.pp-spark {
+  animation: pp-spark 700ms cubic-bezier(0.2, 0.7, 0.3, 1) 320ms both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pp-inner,
+  .pp-lift {
+    transition: none;
+  }
+  .pp-deal,
+  .pp-found,
+  .pp-miss,
+  .pp-spark {
+    animation: none;
+  }
+  .pp-spark {
+    opacity: 0;
+  }
+}

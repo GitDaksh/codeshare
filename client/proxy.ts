@@ -7,6 +7,8 @@ const isProtectedRoute = createRouteMatcher([
   "/onboarding(.*)",
   // The Interviews page itself is public; making, joining and reading one isn't.
   "/interviews/(.+)",
+  // Games are public to play solo; playing with friends needs an account.
+  "/games/play(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
