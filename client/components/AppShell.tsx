@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronsUpDown,
   ClipboardList,
+  Gamepad2,
   Keyboard,
   LayoutDashboard,
   LogOut,
@@ -34,6 +35,7 @@ const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/practice", label: "Practice", icon: Target },
   { href: "/lens", label: "Lens", icon: ScanEye },
   { href: "/interviews", label: "Interviews", icon: ClipboardList },
+  { href: "/games", label: "Games", icon: Gamepad2 },
   { href: "/profile", label: "Profile", icon: UserRound },
 ];
 

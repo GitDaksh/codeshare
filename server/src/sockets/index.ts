@@ -7,6 +7,7 @@ import { canEdit, openRoom, roleOf, type RoomRole } from "../lib/access";
 import { limiter, type Limiter } from "../lib/rateLimit";
 import { awarenessShared, closeShared, flushShared, helloShared, leaveShared, updateShared } from "./collab";
 import { noteEdit, noteLeave, registerInterviewEvents, sendInterviewOnJoin, setInterviewServer } from "./interview";
+import { leaveGames, registerGameEvents, setGameServer } from "./games";
 
 type PresenceUser = {
   socketId: string;
@@ -257,6 +258,7 @@ export function removeLive(roomId: string, userId: string) {
 export function setupSocket(io: Server) {
   server = io;
   setInterviewServer(io);
+  setGameServer(io);
   io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
 
@@ -280,6 +282,7 @@ export function setupSocket(io: Server) {
   io.on("connection", (socket: Socket) => {
     console.log(`Socket connected: ${socket.id} (user ${socket.data.userId})`);
     registerInterviewEvents(socket);
+    registerGameEvents(socket);
 
     socket.on("room:join", async (data: unknown) => {
       if (!allowed(socket, "room:join")) return;
@@ -613,6 +616,7 @@ export function setupSocket(io: Server) {
       if (socket.data.roomId) {
         removeFromRoom(io, socket, socket.data.roomId);
       }
+      leaveGames(socket);
     });
   });
 }

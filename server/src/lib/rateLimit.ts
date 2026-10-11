@@ -36,6 +36,12 @@ export function limiter(burst: number, perSecond: number): Limiter {
 export const apiRequests = limiter(120, 2);
 // Creating rooms: 10 at once, then one every 30 seconds.
 export const roomCreations = limiter(10, 1 / 30);
+// Game lobbies: 10 at once, then one every 10 seconds.
+export const gameLobbies = limiter(10, 1 / 10);
+// Finished games: 30 at once, then one every 5 seconds.
+export const gameResults = limiter(30, 1 / 5);
+// Public leaderboards (cached, so cheap): 300 at once, then 10 a second.
+export const leaderboardRequests = limiter(300, 10);
 
 // Express middleware (after sign-in is checked): too many requests from one
 // person get a 429.
