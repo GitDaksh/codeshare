@@ -244,6 +244,9 @@ export default function ByteSnake({ match, events, me, mode, now, send, onOver }
     emit("turn", { d, k });
   }, []);
 
+  // Steering. Listening on the window in the capture phase means the snake
+  // hears its keys before anything else on the page can swallow them (browser
+  // extensions often grab single letters like W, A, S and D).
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -252,10 +255,11 @@ export default function ByteSnake({ match, events, me, mode, now, send, onOver }
       const target = e.target as HTMLElement | null;
       if (target?.closest?.("input, textarea, select, [contenteditable='true']")) return;
       e.preventDefault();
+      e.stopPropagation();
       steer(d);
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [steer]);
 
   // Swipes: each 22 px in one direction is a turn (without lifting).

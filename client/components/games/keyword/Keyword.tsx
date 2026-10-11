@@ -32,6 +32,22 @@ const ROWS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
 const BETWEEN_WORDS_MS = 1900;
 const REVEAL_MS = 1300;
 
+// What a key press means to the board: a letter, Enter or Backspace. The
+// letter comes from `key`, so every layout types what it shows; when `key`
+// isn't a plain letter (an input method at work, a non-Latin layout), the
+// key's place on the keyboard decides.
+function boardKey(e: KeyboardEvent): string | null {
+  if (e.key === "Enter" || e.key === "Backspace") return e.key;
+  if (e.key.length === 1) {
+    const letter = e.key.toLowerCase();
+    if (/^[a-z]$/.test(letter)) return letter;
+    // Digits and punctuation are never letters, whatever key typed them.
+    if (/^[\x20-\x7e]$/.test(e.key)) return null;
+  }
+  const code = /^Key([A-Z])$/.exec(e.code);
+  return code ? code[1].toLowerCase() : null;
+}
+
 function Tile({ letter, mark, state, index }: { letter: string; mark?: Mark; state: "empty" | "typed" | "revealed" | "revealing"; index: number }) {
   const shown = state === "revealed" || state === "revealing";
   return (
@@ -230,51 +246,60 @@ export default function Keyword({ match, events, me, mode, now, send, onOver }: 
     []
   );
 
+  // Whether the board took the key.
   const press = useCallback(
-    (key: string) => {
-      if (!canType) return;
+    (key: string): boolean => {
+      if (!canType) return false;
       if (key === "Enter") {
         if (entry.length < WORD_LENGTH) {
           say("Not enough letters");
           setShake((s) => s + 1);
           sfx.wrong();
-          return;
+          return true;
         }
         if (!validGuess(entry)) {
           say("Not in the word list");
           setShake((s) => s + 1);
           sfx.wrong();
-          return;
+          return true;
         }
         send("guess", { w: entry });
         if (entry === shown?.answer) setTimeout(() => sfx.correct(), 750);
         else sfx.flip();
         setEntry("");
-        return;
+        return true;
       }
       if (key === "Backspace") {
         setEntry((e) => e.slice(0, -1));
-        return;
+        return true;
       }
-      if (/^[a-z]$/.test(key) && entry.length < WORD_LENGTH) {
-        setEntry((e) => e + key);
+      if (!/^[a-z]$/.test(key)) return false;
+      if (entry.length < WORD_LENGTH) {
+        setEntry((e) => (e.length < WORD_LENGTH ? e + key : e));
         sfx.key();
       }
+      return true;
     },
     [canType, entry, say, send, shown?.answer]
   );
 
+  // Typing. The board listens on the window in the capture phase, so it hears
+  // a key before anything else on the page can (browser extensions often
+  // listen on the document and swallow single letters); the keys it takes go
+  // no further. While it can't type, keys pass through untouched.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      if (key === "Enter" || key === "Backspace" || /^[a-z]$/.test(key)) {
+      const target = e.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select"))) return;
+      const key = boardKey(e);
+      if (key && press(key)) {
         e.preventDefault();
-        press(key);
+        e.stopPropagation();
       }
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [press]);
 
   if (playedBefore && kwMode === "daily") {
