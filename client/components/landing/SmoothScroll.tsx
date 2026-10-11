@@ -23,10 +23,12 @@ export function SmoothScroll() {
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
+    // Anchor links stop at each section's scroll-margin-top (the sections
+    // set it to clear the navbar); Lenis reads it, so no extra offset here.
     const lenis = new Lenis({
       autoRaf: true,
       lerp: 0.1,
-      anchors: { offset: -80 },
+      anchors: true,
     });
     active = lenis;
 

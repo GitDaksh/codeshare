@@ -194,6 +194,13 @@
   display: grid;
   place-items: center;
 }
+/* The art on a stage of its own (the landing page), without the card's backdrop. */
+.ga.ga-bare {
+  background: none;
+}
+.ga.ga-bare::before {
+  display: none;
+}
 
 /* Code Racer: three racers lapping toward the flag. */
 @keyframes ga-race {

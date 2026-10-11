@@ -167,7 +167,12 @@ export function Navbar() {
 
         {!isOnboarding && (
           <>
-            <nav className="ml-4 hidden items-center md:flex" onMouseLeave={() => setHovered(null)}>
+            {/* Signed out, the links share the bar with Sign in and Get started,
+                so they only fit from lg; until then they're in the menu. */}
+            <nav
+              className={`ml-4 hidden items-center ${isSignedIn ? "md:flex" : "lg:flex"}`}
+              onMouseLeave={() => setHovered(null)}
+            >
               {items.map((item) => renderItem(item, "desktop"))}
             </nav>
 
@@ -181,7 +186,7 @@ export function Navbar() {
                   <ThemeToggleButton className="rounded-lg p-2 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100" />
                   <Link
                     href="/sign-in"
-                    className="hidden rounded-lg px-3 py-1.5 text-sm text-ink-400 transition-colors hover:text-ink-100 md:inline-flex"
+                    className="hidden rounded-lg px-3 py-1.5 text-sm text-ink-400 transition-colors hover:text-ink-100 lg:inline-flex"
                   >
                     Sign in
                   </Link>
@@ -197,7 +202,7 @@ export function Navbar() {
                     onClick={() => setMobileOpen((o) => !o)}
                     aria-label={mobileOpen ? "Close menu" : "Open menu"}
                     aria-expanded={mobileOpen}
-                    className="rounded-md p-2 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 md:hidden"
+                    className="rounded-md p-2 text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100 lg:hidden"
                   >
                     {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
                   </button>
@@ -208,8 +213,9 @@ export function Navbar() {
         )}
       </div>
 
-      {/* Phones, signed out: the rest of the links live in a drop-down panel.
-          Signed-in users get the same links inside the account menu instead. */}
+      {/* Phones and tablets, signed out: the rest of the links live in a
+          drop-down panel. Signed-in users get the same links inside the
+          account menu instead. */}
       <AnimatePresence>
         {mobileOpen && isLoaded && !isSignedIn && (
           <motion.nav
@@ -217,7 +223,7 @@ export function Navbar() {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.22, ease: EASE }}
-            className="overflow-hidden border-t border-ink-800/80 md:hidden"
+            className="overflow-hidden border-t border-ink-800/80 lg:hidden"
           >
             <div className="flex flex-col gap-1 px-4 py-3">
               {items.map((item) => renderItem(item, "mobile"))}

@@ -2,6 +2,7 @@ const ITEMS = [
   "Lens visualizer",
   "100 practice problems",
   "Big-O meter",
+  "9 multiplayer games",
   "Conflict-free editing",
   "Follow mode",
   "Live cursors",
