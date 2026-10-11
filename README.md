@@ -11,7 +11,6 @@
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_v4-000000?style=flat-square&logo=tailwindcss&logoColor=white)
 ![Express](https://img.shields.io/badge/Express_5-000000?style=flat-square&logo=express&logoColor=white)
 ![Socket.IO](https://img.shields.io/badge/Socket.IO-000000?style=flat-square&logo=socketdotio&logoColor=white)
-![Yjs](https://img.shields.io/badge/Yjs-000000?style=flat-square)
 ![MongoDB](https://img.shields.io/badge/MongoDB_Atlas-000000?style=flat-square&logo=mongodb&logoColor=white)
 ![Clerk](https://img.shields.io/badge/Clerk-000000?style=flat-square&logo=clerk&logoColor=white)
 ![Pyodide](https://img.shields.io/badge/Pyodide-000000?style=flat-square&logo=python&logoColor=white)
