@@ -1,71 +1,54 @@
-import express from "express";
-import { createServer } from "http";
-import { Server } from "socket.io";
-import cors from "cors";
-import helmet from "helmet";
-import morgan from "morgan";
 import dotenv from "dotenv";
-import { clerkMiddleware } from "@clerk/express";
+import mongoose from "mongoose";
+import { allowedOriginsFrom, createApp } from "./app";
 import { connectDB } from "./config/db";
-import roomRoutes from "./routes/roomRoutes";
-import profileRoutes from "./routes/profileRoutes";
-import interviewRoutes from "./routes/interviewRoutes";
-import gameRoutes from "./routes/gameRoutes";
-import { errorHandler } from "./middleware/errorHandler";
-import { setupSocket, flushAllPendingCodeSaves } from "./sockets";
+import { flushAllPendingCodeSaves } from "./sockets";
 import { prepareRooms } from "./lib/access";
 import { prepareInterviews } from "./lib/interviews";
 
 dotenv.config();
 
-// CLIENT_URL can hold several comma-separated website addresses, so the API
-// accepts requests from all of them (the custom domain, its www version, and
-// the old vercel.app address). Trailing slashes are stripped, because a
-// browser's Origin header never has one, and a mismatch silently fails CORS.
-const allowedOrigins = (process.env.CLIENT_URL ?? "")
-  .split(",")
-  .map((origin) => origin.trim().replace(/\/+$/, ""))
-  .filter(Boolean);
-
-const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: allowedOrigins,
-    credentials: true,
-  },
-});
+const allowedOrigins = allowedOriginsFrom(process.env.CLIENT_URL);
+const { httpServer, io } = createApp({ allowedOrigins });
 
 const PORT = process.env.PORT || 5001;
 
-app.use(helmet());
-app.use(cors({ origin: allowedOrigins, credentials: true }));
-// Room code can be up to 100,000 characters.
-app.use(express.json({ limit: "512kb" }));
-app.use(morgan("dev"));
-app.use(clerkMiddleware());
+// The most a shutdown may take. Render waits about 30 seconds before it
+// kills the old server, so a stuck save or connection can't hold it longer.
+const SHUTDOWN_DEADLINE_MS = 10_000;
+let shuttingDown = false;
 
-app.get("/", (_req, res) => {
-  res.json({ status: "ok", message: "CodeShare API is running" });
-});
+// On a deploy (SIGTERM) or Ctrl+C (SIGINT): stop taking connections, save the
+// edits still waiting on their debounce timer, close the database, then exit.
+// Browsers reconnect to the new server on their own and sync what they have.
+async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received: shutting down (saving pending code first)...`);
 
-app.use("/api/rooms", roomRoutes);
-app.use("/api/profile", profileRoutes);
-app.use("/api/interviews", interviewRoutes);
-app.use("/api/games", gameRoutes);
+  setTimeout(() => {
+    console.error(`Shutdown took longer than ${SHUTDOWN_DEADLINE_MS / 1000}s; exiting anyway.`);
+    process.exit(1);
+  }, SHUTDOWN_DEADLINE_MS).unref();
 
-app.use(errorHandler);
-
-setupSocket(io);
-
-async function shutdown() {
-  console.log("Shutting down — flushing pending code saves...");
-  await flushAllPendingCodeSaves();
-  process.exit(0);
+  try {
+    // Disconnects every socket and stops new connections; rooms that empty
+    // out start saving as their last socket leaves. Not awaited: the HTTP
+    // server only finishes closing once every client has hung up, and a
+    // client that stopped answering (a laptop asleep) can take 30 seconds.
+    // The saves below don't depend on it.
+    void io.close();
+    await flushAllPendingCodeSaves();
+    await mongoose.disconnect();
+    process.exit(0);
+  } catch (err) {
+    console.error("Error while shutting down:", err);
+    process.exit(1);
+  }
 }
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
 async function start() {
   const connected = await connectDB();
