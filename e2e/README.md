@@ -34,6 +34,8 @@ fails if it fails twice.
 - `E2E_MONGODB_URI=...` points at another database.
 - `E2E_OFFLINE=1` works without internet (local fonts, and the code editor
   from `node_modules` instead of its CDN).
+- `E2E_SUITE_TIMEOUT_MS=...` changes how long one suite may run before it's
+  stopped (4 minutes by default).
 
 Each suite's output goes to `logs/`, and the screenshots taken along the way
 to `shots/`. In CI both are kept with a failed run (the run's "Artifacts").

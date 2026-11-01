@@ -8,7 +8,7 @@
 // Usage: node run.mjs [--dev] [suite ...]    e.g. node run.mjs four snake
 // Needs MongoDB at E2E_MONGODB_URI (default mongodb://127.0.0.1:27017/codeshare-e2e).
 import { spawn } from "node:child_process";
-import { createWriteStream, mkdirSync, writeFileSync } from "node:fs";
+import { createWriteStream, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +24,9 @@ const NEXT = join(REPO, "client/node_modules/next/dist/bin/next");
 const API = process.env.E2E_API_URL || "http://localhost:5055";
 const BASE = process.env.E2E_APP_URL || "http://localhost:3000";
 const MONGODB_URI = process.env.E2E_MONGODB_URI || "mongodb://127.0.0.1:27017/codeshare-e2e";
-const SUITE_TIMEOUT_MS = 240_000;
+// How long one suite may run before it's stopped (each normally takes under
+// two minutes).
+const SUITE_TIMEOUT_MS = Number(process.env.E2E_SUITE_TIMEOUT_MS) || 240_000;
 
 const SUITES = [
   "room-regression",
@@ -113,15 +115,26 @@ async function emptyDatabase() {
 function runSuite(name) {
   return new Promise((resolve) => {
     let output = "";
+    // Its own process group too, so a suite that hangs is stopped together
+    // with the browser it started.
     const child = spawn(process.execPath, [join(E2E, "tests", `${name}.mjs`)], {
       cwd: E2E,
       env: { ...process.env, E2E_API_URL: API, E2E_APP_URL: BASE },
+      detached: true,
     });
+    running.push(child);
     child.stdout.on("data", (d) => (output += d));
     child.stderr.on("data", (d) => (output += d));
-    const timer = setTimeout(() => child.kill("SIGKILL"), SUITE_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        // Already gone.
+      }
+    }, SUITE_TIMEOUT_MS);
     child.on("close", (code) => {
       clearTimeout(timer);
+      running.splice(running.indexOf(child), 1);
       const summary = /(\d+) passed, (\d+) failed/.exec(output);
       const passed = summary ? Number(summary[1]) : 0;
       const failed = summary ? Number(summary[2]) : 0;
@@ -156,6 +169,9 @@ await waitUntilUp(`${API}/health`, "The API", 30_000);
 
 const appEnv = { ...process.env, NEXT_TELEMETRY_DISABLED: "1" };
 const port = new URL(BASE).port || "3000";
+// Always from a clean slate: what an earlier build or dev run left behind can
+// leak stale classes into Tailwind's CSS.
+rmSync(join(APP, ".next"), { recursive: true, force: true });
 if (dev) {
   console.log("Starting the app (next dev)…");
   start("app", process.execPath, [NEXT, "dev", "-p", port], { cwd: APP, env: appEnv });
