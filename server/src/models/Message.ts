@@ -59,5 +59,8 @@ const messageSchema = new Schema<IMessage>(
 
 // "Messages you've sent" and the activity chart on the dashboard.
 messageSchema.index({ senderId: 1, createdAt: -1 });
+// A room's latest messages (GET /api/rooms/:id/messages): found and already
+// sorted by one index walk, instead of fetching them all and sorting.
+messageSchema.index({ roomId: 1, createdAt: -1 });
 
 export const Message = model<IMessage>("Message", messageSchema);

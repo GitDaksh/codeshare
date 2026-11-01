@@ -236,7 +236,7 @@ I built it one feature at a time as a portfolio project, favouring decisions I c
 ### Games
 - **Nine games, two ways to play.** Solo works without an account. With friends, you get a lobby, a code and a link, live play, reactions, a podium and a rematch.
 - **Fair results.** Every browser reports the final standings, and a result only counts when they all agree. Wins only come from games with friends.
-- **Bests and leaderboards.** Personal bests for every game, a leaderboard for each, and a daily Keyword that's the same for everyone.
+- **Bests and leaderboards.** Personal bests for every game, a leaderboard for each, and a daily Keyword that's the same for everyone. Leaderboards say where each score came from: a check mark for one confirmed in a game with friends (at least two browsers agreed), none for a solo score reported by the player's own browser.
 
 ### Dashboard and profiles
 - **Dashboard.** Create, search, sort, filter by language and delete rooms. See practice progress, a 16-week activity map, your streak and the people you've coded with.
@@ -259,6 +259,8 @@ I built it one feature at a time as a portfolio project, favouring decisions I c
 | Right-click | Send selected code to chat |
 
 ## How it works
+
+Why it's built this way (Yjs, Socket.IO, running code in the browser, MongoDB, lockstep games, Clerk) is written up, with the trade-offs, in [docs/decisions](docs/decisions/README.md).
 
 ```mermaid
 flowchart LR
@@ -307,6 +309,7 @@ sequenceDiagram
 ```
 
 - **Isolation.** Code runs in a hidden iframe with `sandbox="allow-scripts"` and **no** `allow-same-origin`. That gives it an opaque origin, so it can't read the app's cookies, storage, session or page.
+- **No network.** The frame also gets its own Content Security Policy (`default-src 'none'`), which its workers inherit. Code someone shares in a room can't make requests from your browser when you run it. The only address it can reach is the one Python is downloaded from.
 - **Hard time limits.** Inside the frame, code runs in a Web Worker. Limits are enforced from outside: if a run doesn't finish in time, the iframe is removed, which kills the worker. `while (true) {}` can never freeze the tab.
 - **JavaScript and TypeScript.** JavaScript gets a fresh sandbox for every run. TypeScript's type annotations are stripped in the browser with Babel first.
 - **Python.** Python runs on **Pyodide 314**, CPython 3.14 compiled to WebAssembly. It's downloaded on first use and kept warm between runs.
@@ -337,7 +340,7 @@ sequenceDiagram
 - **One shared document per room.** Each browser keeps a copy of the room's Yjs document. Edits become small updates that the server merges and passes on, so edits made at the same moment are combined.
 - **Reconnecting is safe.** Joining starts with a handshake in which each side sends only what the other is missing, so edits made while offline merge in too. The server saves the Yjs state as well as the text, so people who reconnect after a restart merge into the same history instead of duplicating it.
 - **Presence and cursors.** Cursors and selections travel as Yjs awareness updates. Each room's presence list lives in memory on the server and is broadcast whenever someone joins or leaves.
-- **Validated and bounded.** Every event payload is validated, room events are only accepted from sockets that joined that room, viewers can't edit, and a room's code is capped at 100,000 characters.
+- **Validated and bounded.** Every event payload is validated, a connection is in one room at a time and its events only count there (with its role in that room), viewers can't edit, and a room's code is capped at 100,000 characters.
 
 ### How games stay in sync
 
@@ -367,7 +370,7 @@ sequenceDiagram
 
 - **An ordered list of moves.** The server doesn't run the games. It gives each match a seed and keeps one numbered list of moves. Every browser runs the same rules over the same list, so all of them show the same board, scores and winner. Your own moves show at once and are matched up when the server's copy arrives.
 - **Clock games settle fairly.** Games that end on the clock wait a moment for moves still on their way, and moves after the end are ignored, so every browser computes the same standings.
-- **Results nobody can fake alone.** Each browser reports the final standings, and the server only records a result when every player's browser agrees.
+- **Results nobody can fake alone.** Each browser reports the final standings, and the server only records a result when every player still in the match agrees. A score shows as verified on the leaderboards only when at least two browsers agreed on it.
 - **Dropping out.** A player who loses connection has 45 seconds to come back. Lobbies, moves and messages are all capped, and old lobbies are swept away.
 
 ### The Practice judge
@@ -381,13 +384,16 @@ sequenceDiagram
 - **Route protection.** Clerk handles sign-up and sign-in. `proxy.ts` (Next.js 16 middleware) protects the dashboard, rooms, profiles, onboarding, interview pages and online game lobbies before any page code runs. Games stay public to play solo.
 - **The backend never trusts the frontend.** Every API route re-verifies the Clerk session from the `Authorization: Bearer` header, and sockets authenticate in the handshake with the same token. The app and API live on different origins, so auth uses tokens, not cookies.
 - **Server-side rules.** Roles are enforced on the server: only the owner can rename, delete or change roles, and only editors can change code. Inputs are validated, including room names, code size, usernames, problem slugs and language allowlists.
+- **One room per connection.** A live connection is in one room at a time, and its role belongs to that room. Every live event is checked against the room it names, so a viewer in one room can never carry the owner role from their own room into it. Rooms you're not in answer 404, not 403, so a guessed id reveals nothing.
+- **Public names stay clean.** Usernames show on public leaderboards, so slurs, profanity (including disguises like `sh1t`) and names that pass for the site (`admin`, `codeshare_team`) are turned away.
 - **Invite links.** Room ids are database ids, which can be predicted (they contain a timestamp and a counter), so an id alone opens nothing. People join with the room's edit or view-only invite link. Each carries a random 16-character code (about 95 bits), and people are remembered after that.
 - **Rate limits.** Every API route and every live event has a per-person rate limit (kept in memory, with no extra service). Each person can own up to 100 rooms, and game lobbies are capped per host, so a script can't flood a room or fill the database.
 - **Locked-down API.** CORS only accepts an allowlist of site origins, and Helmet sets security headers.
 
 ### Keeping a free deployment fast
-- **No cold starts.** The API runs on Render's free tier, which sleeps after 15 idle minutes and takes about a minute to wake. An uptime monitor pings it every 5 minutes, so visitors don't hit a cold start.
-- **Faster sign-up.** New sign-ups go straight to onboarding instead of bouncing through the dashboard, which saves a round trip to the server.
+- **No cold starts.** The API runs on Render's free tier, which sleeps after 15 idle minutes and takes about a minute to wake. An uptime monitor (UptimeRobot) calls its `/health` check every 5 minutes, so visitors don't hit a cold start. The check also reports whether the database is reachable (503 if not), so an outage sends an alert instead of going unnoticed.
+- **Faster sign-up.** New accounts go straight to onboarding (pick a username) instead of loading the dashboard first, only to be sent on from there. A sign-up that started from an invite link still returns to that room.
+- **Clean restarts.** On a redeploy the API stops taking new connections, saves every room's unsaved edits, and closes the database connection before it exits (with a 10-second limit).
 
 ## Tech stack
 
@@ -406,7 +412,8 @@ sequenceDiagram
 | Backend | Node.js, Express 5, TypeScript |
 | Database | MongoDB Atlas, Mongoose |
 | Auth | Clerk |
-| Hosting | Vercel (frontend), Render (API), MongoDB Atlas (database), UptimeRobot (keep-alive) |
+| Testing | Vitest, Supertest, Playwright, GitHub Actions |
+| Hosting | Vercel (frontend), Render (API), MongoDB Atlas (database), UptimeRobot (keep-alive and alerts) |
 
 ## Project structure
 
@@ -443,17 +450,22 @@ codeshare/
 │   │   ├── games/                 # the games' rules, content, lobby and sounds
 │   │   ├── socket.ts              # Socket.IO client
 │   │   └── api.ts                 # authenticated REST client
+│   ├── test/                      # unit tests: game rules, the judge, the sandbox policy
 │   └── proxy.ts                   # Clerk route protection (Next.js 16 middleware)
 ├── server/                        # Express API + Socket.IO → Render
-│   └── src/
-│       ├── server.ts              # app setup, CORS, Clerk, routes, graceful shutdown
-│       ├── routes/                # rooms, profile, interviews, games
-│       ├── controllers/           # rooms, people, messages, profiles, interviews, games
-│       ├── models/                # Room, Message, Profile, Interview, GameScore
-│       ├── sockets/               # presence, chat, runs, Lens · collab (Yjs) · interview · games
-│       ├── middleware/            # requireAuth, errorHandler
-│       ├── lib/                   # access and roles, invite links, rate limits, games
-│       └── config/db.ts           # MongoDB connection
+│   ├── src/
+│   │   ├── app.ts                 # the app: security headers, CORS, Clerk, routes, /health
+│   │   ├── server.ts              # starts it: database, listening, graceful shutdown
+│   │   ├── routes/                # rooms, profile, interviews, games
+│   │   ├── controllers/           # rooms, people, messages, profiles, interviews, games
+│   │   ├── models/                # Room, Message, Profile, Interview, GameScore
+│   │   ├── sockets/               # presence, chat, runs, Lens · collab (Yjs) · interview · games
+│   │   ├── middleware/            # requireAuth, errorHandler
+│   │   ├── lib/                   # access and roles, invite links, rate limits, usernames, games
+│   │   └── config/db.ts           # MongoDB connection
+│   └── test/                      # unit and integration tests (API, sockets, games)
+├── e2e/                           # browser tests (Playwright) of the whole app
+├── docs/decisions/                # why it's built this way (decision records)
 └── package.json                   # `npm run dev` starts both apps
 ```
 
@@ -461,7 +473,7 @@ codeshare/
 
 ## API reference
 
-Every route except the health check requires a signed-in user (`Authorization: Bearer <Clerk token>`).
+Every route except the health checks and the game leaderboards requires a signed-in user (`Authorization: Bearer <Clerk token>`).
 
 <details>
 <summary><b>REST: rooms, people and profiles</b></summary>
@@ -470,7 +482,8 @@ Every route except the health check requires a signed-in user (`Authorization: B
 
 | Method | Route | Description |
 |---|---|---|
-| `GET` | `/` | Health check |
+| `GET` | `/` | Health check (the API is up) |
+| `GET` | `/health` | Health check with the database's status: `200 {"status":"ok"}`, or `503` when the database can't be reached (used by the uptime monitor) |
 | `POST` | `/api/rooms` | Create a room (optionally with starter code and a practice problem) |
 | `GET` | `/api/rooms` | Your rooms (practice rooms excluded) |
 | `GET` | `/api/rooms?problem=<slug>` | Your rooms for one practice problem |
@@ -520,7 +533,7 @@ Every route except the health check requires a signed-in user (`Authorization: B
 | `POST` | `/api/games/lobbies` | Open a lobby to play with friends |
 | `POST` | `/api/games/results` | Record a solo result (personal bests only) |
 | `GET` | `/api/games/stats` | Your bests, plays and wins |
-| `GET` | `/api/games/leaderboard/:game` | A game's leaderboard |
+| `GET` | `/api/games/leaderboard/:game` | A game's top 10 (public), each score marked verified (a game with friends) or not (solo) |
 
 </details>
 
@@ -556,7 +569,7 @@ Sockets authenticate at handshake time with the same Clerk token, verified with 
 
 ## Run it locally
 
-**You'll need:** Node.js 20+, npm, a free [Clerk](https://dashboard.clerk.com) application, and a free [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) cluster.
+**You'll need:** Node.js 22+, npm, a free [Clerk](https://dashboard.clerk.com) application, and a free [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) cluster.
 
 ```bash
 git clone https://github.com/GitDaksh/codeshare.git
@@ -603,16 +616,28 @@ CLERK_SECRET_KEY=sk_test_...
 - Both files must use keys from the **same** Clerk application. Mismatched keys fail as silent 401s.
 - `CLIENT_URL` accepts several comma-separated origins, for example a custom domain and its `www` version.
 
+## Testing
+
+Three layers of tests, all run by CI on every push to `main` and every pull request:
+
+| Layer | What it covers | Where | Run it |
+|---|---|---|---|
+| Server | The API (who may do what, validation, rate limits), the live events (joining rooms, roles, chat, shared editing) and games with friends, against a real MongoDB | `server/test/` | `cd server && npm test` |
+| App | Game rules (Four in a Row and its computer player, Pair Programming, Byte Snake), seeded randomness, the Practice judge, the sandbox's security policy | `client/test/` | `cd client && npm test` |
+| Browser | The real app in Chromium (Playwright): two people in a room, every game solo and with friends, keyboard handling | `e2e/` | `cd e2e && npm test` ([how](e2e/README.md)) |
+
+From the top folder, `npm test` runs the server's and the app's tests, and `npm run test:e2e` the browser tests. The server and browser tests need a MongoDB they can empty (`localhost:27017` by default; set `TEST_MONGODB_URI` or `E2E_MONGODB_URI` for another). With Docker: `docker run -d -p 27017:27017 mongo:7`.
+
 ## Deployment
 
 | Part | Where | Notes |
 |---|---|---|
 | Frontend | Vercel, on [codeshare.tech](https://codeshare.tech) | Production uses Clerk's live keys |
-| API + sockets | Render (free tier) | Kept awake by an uptime monitor |
+| API + sockets | Render (free tier) | Kept awake by an uptime monitor calling `/health` every 5 minutes |
 | Database | MongoDB Atlas (M0) | Separate databases for production and development |
 | Auth | Clerk production instance | Domain verified on codeshare.tech |
 
-CI type-checks and builds both apps on every push to `main` and every pull request.
+CI runs on every push to `main` and every pull request: type-checks, the server's and the app's tests, both builds, and the browser tests.
 
 ## Design
 
@@ -622,8 +647,10 @@ Dark first: soft charcoal surfaces (not pure black) with a full light theme as a
 
 - **C++ and Java can be edited but not run.** Running them needs a server-side sandbox, which doesn't fit a zero-cost deployment.
 - **Python's first run is slower.** Pyodide downloads the first time you run Python, then stays warm between runs.
-- **Live state is in memory.** Presence, game lobbies and rate limits live in the API process, so a restart ends live games (rooms and their code are saved).
-- **No automated test suite in the repo yet.** CI type-checks and builds every push and pull request; adding tests to it is next on the roadmap.
+- **Code can't use the network.** The sandbox blocks `fetch` and the like on purpose, so code shared in a room can't make requests from your browser.
+- **Results are worked out in the browser.** Practice tests and solo game scores are computed in the player's own browser, so someone determined could fake them. That only changes their own profile: leaderboards mark solo scores as unverified, and a game with friends only counts when the browsers agree. A server-side judge would close this, but it doesn't fit a free deployment.
+- **Live state is in memory.** Presence, game lobbies and rate limits live in the API process, so a restart ends live games (rooms and their code are saved), and the API runs as one instance. Running several would need a shared store such as Redis.
+- **Usernames are checked against a word list.** It catches slurs, profanity and simple disguises, but it isn't a full moderation system.
 
 ## Roadmap
 
@@ -640,7 +667,8 @@ Dark first: soft charcoal surfaces (not pure black) with a full light theme as a
 - [x] Interviews: templates, a timer, hints, shared notes, monitoring and scorecards
 - [x] Hotspots: how often every line runs
 - [x] Games: nine games to play solo or with friends
-- [ ] Automated test suite in CI
+- [x] Automated tests in CI: server, app and browser
+- [x] Decision records for the main design choices
 - [ ] A shared whiteboard tab in every room
 - [ ] Google and GitHub sign-in in production
 

@@ -2,7 +2,9 @@
   "name": "codeshare",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm run dev --prefix client\" \"npm run dev --prefix server\""
+    "dev": "concurrently \"npm run dev --prefix client\" \"npm run dev --prefix server\"",
+    "test": "npm test --prefix server && npm test --prefix client",
+    "test:e2e": "npm test --prefix e2e"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"

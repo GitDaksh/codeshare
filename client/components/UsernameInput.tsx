@@ -12,7 +12,7 @@ type UsernameInputProps = {
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
 
-type Status = "idle" | "checking" | "available" | "taken" | "invalid";
+type Status = "idle" | "checking" | "available" | "taken" | "invalid" | "blocked";
 
 export function UsernameInput({ value, onChange, onValidityChange }: UsernameInputProps) {
   const api = useApi();
@@ -39,10 +39,10 @@ export function UsernameInput({ value, onChange, onValidityChange }: UsernameInp
     setStatus("checking");
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await api.get<{ available: boolean }>(
+        const res = await api.get<{ available: boolean; reason?: string }>(
           `/api/profile/username-available?username=${encodeURIComponent(trimmed)}`
         );
-        setStatus(res.data.available ? "available" : "taken");
+        setStatus(res.data.available ? "available" : res.data.reason === "not-allowed" ? "blocked" : "taken");
         onValidityChange(res.data.available);
       } catch {
         setStatus("idle");
@@ -62,6 +62,7 @@ export function UsernameInput({ value, onChange, onValidityChange }: UsernameInp
     available: <Check className="h-4 w-4 text-success" />,
     taken: <X className="h-4 w-4 text-danger" />,
     invalid: <X className="h-4 w-4 text-danger" />,
+    blocked: <X className="h-4 w-4 text-danger" />,
   }[status];
 
   const helper = {
@@ -70,9 +71,10 @@ export function UsernameInput({ value, onChange, onValidityChange }: UsernameInp
     available: "Nice, that username is available.",
     taken: "That username is already taken.",
     invalid: "3-20 characters: lowercase letters, numbers, underscores only.",
+    blocked: "Please choose a different username.",
   }[status];
 
-  const isError = status === "taken" || status === "invalid";
+  const isError = status === "taken" || status === "invalid" || status === "blocked";
 
   const borderClass = isError
     ? "border-danger-line"

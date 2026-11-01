@@ -1,0 +1,6 @@
+node_modules/
+# Made by scripts/prepare.mjs and run.mjs
+.app/
+dist/
+logs/
+shots/

@@ -297,14 +297,17 @@ function agreedStandings(match: Match): Standing[] | null {
 }
 
 // Saves everyone's result once the match is over, then tells the lobby
-// (your new personal best, if it is one).
+// (your new personal best, if it is one). Scores count as verified on the
+// leaderboards only when at least two browsers reported the same result.
 async function recordMatch(lobby: Lobby, match: Match, standings: Standing[]) {
   const winner = standings.length > 1 && standings[0].score > standings[1].score ? standings[0].id : null;
+  const reporters = match.players.filter((p) => !match.left.has(p.id) && match.reports.has(p.id)).length;
+  const verified = reporters >= 2;
   const results: Record<string, SavedResult> = {};
   await Promise.all(
     standings.map(async (s) => {
       try {
-        results[s.id] = await saveResult(s.id, lobby.game, s.stat ?? null, s.id === winner);
+        results[s.id] = await saveResult(s.id, lobby.game, s.stat ?? null, s.id === winner, verified);
       } catch (err) {
         console.error("Could not save a game result:", err);
       }

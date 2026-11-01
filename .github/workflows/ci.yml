@@ -1,11 +1,16 @@
-# Type-checks and builds the server and the app on every push to main and
-# every pull request.
+# Checks every push to main and every pull request: type-checks, the server's
+# and the app's tests, both builds, and the browser tests (e2e/).
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+
+# A newer push to the same branch replaces a run still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   server:
@@ -14,6 +19,19 @@ jobs:
     defaults:
       run:
         working-directory: server
+    # A throwaway database for the integration tests.
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_MONGODB_URI: mongodb://127.0.0.1:27017/codeshare-test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,6 +40,8 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
       - run: npm run build
 
   client:
@@ -44,4 +64,54 @@ jobs:
           cache-dependency-path: client/package-lock.json
       - run: npm ci
       - run: npx tsc --noEmit
+      - run: npm test
       - run: npm run build
+
+  e2e:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      E2E_MONGODB_URI: mongodb://127.0.0.1:27017/codeshare-e2e
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+            e2e/package-lock.json
+      - run: npm ci
+        working-directory: server
+      - run: npm ci
+        working-directory: client
+      - run: npm ci
+        working-directory: e2e
+      - run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      # Builds the test copies of the server and app, starts them, and runs
+      # every suite (see e2e/README.md).
+      - run: npm test
+        working-directory: e2e
+      - name: Keep the logs and screenshots of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: |
+            e2e/logs/
+            e2e/shots/
+          retention-days: 7

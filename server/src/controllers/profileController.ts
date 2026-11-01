@@ -3,9 +3,9 @@ import { getAuth } from "@clerk/express";
 import { Message } from "../models/Message";
 import { Profile } from "../models/Profile";
 import { Room } from "../models/Room";
+import { USERNAME_PATTERN, isAllowedUsername } from "../lib/usernames";
 
 const DEFAULT_AVATAR_ID = "codeshare";
-const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
 const PROBLEM_SLUG_PATTERN = /^[a-z0-9-]{1,80}$/;
 const TESTABLE_LANGUAGES = new Set(["javascript", "typescript", "python"]);
 
@@ -43,6 +43,12 @@ export async function checkUsername(req: Request, res: Response, next: NextFunct
       return res.json({ available: false });
     }
 
+    // Usernames are public (leaderboards, profile cards): slurs and names
+    // that pass for the site are turned away (lib/usernames.ts).
+    if (!isAllowedUsername(username)) {
+      return res.json({ available: false, reason: "not-allowed" });
+    }
+
     const existing = await Profile.findOne({ username, clerkUserId: { $ne: userId } });
     res.json({ available: !existing });
   } catch (err) {
@@ -68,6 +74,10 @@ export async function updateProfile(req: Request, res: Response, next: NextFunct
         return res.status(400).json({
           error: "Username must be 3-20 characters: lowercase letters, numbers, underscores only.",
         });
+      }
+
+      if (!isAllowedUsername(normalized)) {
+        return res.status(400).json({ error: "Please choose a different username." });
       }
 
       const existing = await Profile.findOne({ username: normalized, clerkUserId: { $ne: userId } });

@@ -148,7 +148,9 @@ export async function updateRoom(req: Request, res: Response, next: NextFunction
 
     const room = await Room.findById(id);
 
-    if (!room) {
+    // To anyone who isn't in the room it doesn't exist (like GET), so a
+    // guessed id reveals nothing. People in it who aren't the owner get 403.
+    if (!room || roleOf(room, userId) === null) {
       return res.status(404).json({ error: "Room not found" });
     }
 
@@ -188,7 +190,8 @@ export async function deleteRoom(req: Request, res: Response, next: NextFunction
 
     const room = await Room.findById(id);
 
-    if (!room) {
+    // As for updates: a room you're not in doesn't exist to you.
+    if (!room || roleOf(room, userId) === null) {
       return res.status(404).json({ error: "Room not found" });
     }
 
