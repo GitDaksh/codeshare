@@ -66,6 +66,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body className={`${geist.className} ${geist.variable} ${jetbrainsMono.variable} antialiased`}>
         <ClerkProvider
+          // New accounts go straight to onboarding (pick a username) instead
+          // of loading the dashboard first, only to be sent on from there. A
+          // sign-up that started from a link (redirect_url, such as a room
+          // invite) still goes back to that link.
+          signUpFallbackRedirectUrl="/onboarding"
           appearance={{
             // Dark by default, matched to the app's ink scale (surface =
             // ink-900, text = ink-100). The light theme passes its own to the

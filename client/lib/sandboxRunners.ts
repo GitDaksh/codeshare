@@ -529,9 +529,13 @@ def __cs_run_tests(code, tests_json, fn_name, spec_json):
 __cs_run_tests(__cs_user_code, __cs_tests_json, __cs_fn_name, __cs_spec_json)
 `;
 
+// Where the Python runtime (Pyodide) is downloaded from. The sandbox's
+// Content Security Policy (buildSandboxDocument) allows only this origin.
+export const PYODIDE_BASE = "https://cdn.jsdelivr.net/pyodide/v314.0.6/full/";
+
 export const PYTHON_RUNNER_SOURCE = String.raw`
 function createRunner(post) {
-  var PYODIDE_BASE = "https://cdn.jsdelivr.net/pyodide/v314.0.6/full/";
+  var PYODIDE_BASE = __PYODIDE_BASE__;
   var HARNESS = __HARNESS__;
   var pyodidePromise = null;
   var queue = Promise.resolve();
@@ -632,7 +636,9 @@ function createRunner(post) {
     );
   };
 }
-`.replace("__HARNESS__", () => JSON.stringify(PYTHON_HARNESS));
+`
+  .replace("__PYODIDE_BASE__", () => JSON.stringify(PYODIDE_BASE))
+  .replace("__HARNESS__", () => JSON.stringify(PYTHON_HARNESS));
 
 // Runs inside the sandboxed iframe. Starts the runner in a Web Worker (so a
 // runaway loop can always be stopped by removing the frame), and falls back
@@ -722,13 +728,31 @@ export const HOST_SOURCE = String.raw`
 })(__RUNNER_SOURCE__, __WORKER_OPTIONS__);
 `;
 
+// What code in the sandbox may load or contact. The frame's opaque origin
+// already keeps it away from the app's cookies, storage and page; this keeps
+// it off the network too, so code someone shared in a room can't make
+// requests from your browser when you run it. The only exception is the
+// Python runtime's own download. Workers started from blob: and data: URLs
+// inherit this policy. ('unsafe-eval' runs the code itself; 'wasm-unsafe-eval'
+// lets Python's WebAssembly compile.)
+export const SANDBOX_CSP = [
+  "default-src 'none'",
+  `script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: ${new URL(PYODIDE_BASE).origin}`,
+  "worker-src blob: data:",
+  `connect-src ${new URL(PYODIDE_BASE).origin} blob: data:`,
+  "style-src 'unsafe-inline'",
+  "img-src blob: data:",
+].join("; ");
+
 // The full HTML document loaded into the sandboxed iframe for one runner.
 // moduleWorker starts the runner in a module worker (needed for Python).
 export function buildSandboxDocument(runnerSource: string, options: { moduleWorker?: boolean } = {}): string {
   // "</" is escaped so the embedded source can never close the script tag.
   const embedded = JSON.stringify(runnerSource).replace(/<\//g, "<\\/");
   const workerOptions = JSON.stringify(options.moduleWorker ? { type: "module" } : {});
-  return "<!doctype html><html><head><meta charset=\"utf-8\"></head><body><script>" +
+  return "<!doctype html><html><head><meta charset=\"utf-8\">" +
+    `<meta http-equiv="Content-Security-Policy" content="${SANDBOX_CSP}">` +
+    "</head><body><script>" +
     HOST_SOURCE.replace("__RUNNER_SOURCE__", () => embedded).replace("__WORKER_OPTIONS__", () => workerOptions) +
     "</script></body></html>";
 }
