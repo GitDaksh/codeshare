@@ -4,13 +4,21 @@ export type SavedResult = { best: number; plays: number; wins: number; newBest: 
 
 // Each game's leaderboard as last read (controllers/gameController.ts),
 // cleared when someone's best or wins change.
-export type BoardRow = { userId: string; username: string; avatarId: string; value: number };
+export type BoardRow = { userId: string; username: string; avatarId: string; value: number; verified: boolean };
 export const leaderboards = new Map<string, { at: number; rows: BoardRow[] }>();
 
 // Saves one finished game for one person: counts the play (and the win),
 // and keeps the score if it's a new personal best. Wins only come from
-// online matches, which the server sees end (sockets/games.ts).
-export async function saveResult(userId: string, game: string, stat: number | null, won: boolean): Promise<SavedResult> {
+// online matches, which the server sees end (sockets/games.ts). "verified"
+// says where the score came from: a game with friends whose browsers all
+// agreed (true), or one browser's solo game (false). Leaderboards show which.
+export async function saveResult(
+  userId: string,
+  game: string,
+  stat: number | null,
+  won: boolean,
+  verified: boolean,
+): Promise<SavedResult> {
   const now = new Date();
   const update = { $inc: { plays: 1, wins: won ? 1 : 0 }, $set: { lastPlayedAt: now } };
   let row;
@@ -25,7 +33,10 @@ export async function saveResult(userId: string, game: string, stat: number | nu
   const points = stat === null ? 0 : Math.max(0, Math.round(stat));
   let newBest = false;
   if (row && points > row.best) {
-    const updated = await GameScore.updateOne({ _id: row._id, best: { $lt: points } }, { $set: { best: points, bestAt: now } });
+    const updated = await GameScore.updateOne(
+      { _id: row._id, best: { $lt: points } },
+      { $set: { best: points, bestAt: now, bestVerified: verified } },
+    );
     newBest = updated.modifiedCount > 0;
   }
   if (newBest || won) leaderboards.delete(game);

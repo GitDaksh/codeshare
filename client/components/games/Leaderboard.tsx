@@ -1,6 +1,6 @@
 "use client";
 
-import { Trophy } from "lucide-react";
+import { BadgeCheck, Trophy } from "lucide-react";
 import { AvatarIcon } from "@/components/AvatarIcon";
 import type { GameDef } from "@/lib/games/registry";
 import { useLeaderboard } from "@/lib/games/stats";
@@ -8,10 +8,13 @@ import { ui } from "@/lib/ui";
 
 const MEDALS = ["#fbbf24", "#cbd5e1", "#d97706"];
 
-// The game's top 10 (best scores, or wins for Four in a Row).
+// The game's top 10 (best scores, or wins for Four in a Row). Scores
+// confirmed in a game with friends get a check; solo scores are reported by
+// the player's own browser, and the note under the board says so.
 export function Leaderboard({ game, refreshKey = 0 }: { game: GameDef; refreshKey?: number }) {
   const board = useLeaderboard(game.id, refreshKey);
   const unit = game.rankBy === "wins" ? "wins" : game.unit;
+  const showChecks = game.rankBy !== "wins";
 
   return (
     <section className={`${ui.card} p-5`}>
@@ -48,12 +51,29 @@ export function Leaderboard({ game, refreshKey = 0 }: { game: GameDef; refreshKe
                 @{entry.username}
                 {entry.you && <span className="ml-1.5 text-xs text-ink-500">(you)</span>}
               </span>
-              <span className="text-sm font-medium tabular-nums text-ink-100">
-                {entry.value.toLocaleString()} <span className="text-xs font-normal text-ink-500">{unit}</span>
+              <span className="flex items-center gap-1.5 text-sm font-medium tabular-nums text-ink-100">
+                <span>
+                  {entry.value.toLocaleString()} <span className="text-xs font-normal text-ink-500">{unit}</span>
+                </span>
+                {showChecks && (
+                  <span className="grid w-3.5 place-items-center">
+                    {entry.verified && (
+                      <BadgeCheck className="h-3.5 w-3.5 text-success" aria-label="Confirmed in a game with friends">
+                        <title>Confirmed in a game with friends</title>
+                      </BadgeCheck>
+                    )}
+                  </span>
+                )}
               </span>
             </li>
           ))}
         </ol>
+      )}
+      {showChecks && board !== null && board.entries.length > 0 && (
+        <p className="mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-ink-500">
+          <BadgeCheck className="mt-px h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
+          Confirmed in a game with friends. Other scores are from solo games, reported by the player&apos;s browser.
+        </p>
       )}
     </section>
   );

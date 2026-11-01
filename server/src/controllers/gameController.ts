@@ -4,6 +4,7 @@ import { GameScore } from "../models/GameScore";
 import { Profile } from "../models/Profile";
 import { GAMES, isGame } from "../lib/games";
 import { leaderboards, saveResult } from "../lib/gameResults";
+import { isAllowedUsername } from "../lib/usernames";
 import { createLobby } from "../sockets/games";
 
 const DEFAULT_AVATAR_ID = "codeshare";
@@ -43,7 +44,7 @@ export async function recordResult(req: Request, res: Response, next: NextFuncti
     if (typeof score !== "number" || !Number.isFinite(score) || score < 0 || score > GAMES[game].maxScore) {
       return res.status(400).json({ error: "Invalid score" });
     }
-    res.json(await saveResult(userId, game, score, false));
+    res.json(await saveResult(userId, game, score, false, false));
   } catch (err) {
     next(err);
   }
@@ -77,7 +78,7 @@ export async function getLeaderboard(req: Request, res: Response, next: NextFunc
       const rows = await GameScore.find({ game, [field]: { $gt: 0 } })
         .sort(sort)
         .limit(LEADERBOARD_SIZE)
-        .select("userId best wins")
+        .select("userId best bestVerified wins")
         .lean();
       const profiles = await Profile.find({ clerkUserId: { $in: rows.map((r) => r.userId) } })
         .select("clerkUserId username avatarId")
@@ -89,9 +90,13 @@ export async function getLeaderboard(req: Request, res: Response, next: NextFunc
           const profile = byId.get(row.userId);
           return {
             userId: row.userId,
-            username: profile?.username || "anonymous",
+            // A name from before the username filter that it would now
+            // refuse stays off the public board.
+            username: profile?.username && isAllowedUsername(profile.username) ? profile.username : "anonymous",
             avatarId: profile?.avatarId || DEFAULT_AVATAR_ID,
             value: field === "wins" ? row.wins : row.best,
+            // Wins only come from games with friends; a best may be solo.
+            verified: field === "wins" ? true : row.bestVerified === true,
           };
         }),
       };
@@ -105,6 +110,7 @@ export async function getLeaderboard(req: Request, res: Response, next: NextFunc
         username: row.username,
         avatarId: row.avatarId,
         value: row.value,
+        verified: row.verified,
         you: !!userId && row.userId === userId,
       })),
     });

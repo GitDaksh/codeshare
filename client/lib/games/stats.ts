@@ -13,7 +13,9 @@ import type { GameId } from "@/lib/games/types";
 export type GameStat = { best: number; plays: number; wins: number };
 export type GameStats = Partial<Record<GameId, GameStat>>;
 
-export type LeaderboardEntry = { rank: number; username: string; avatarId: string; value: number; you: boolean };
+// "verified": the score came from a game with friends whose browsers all
+// agreed on it (solo scores are reported by one browser).
+export type LeaderboardEntry = { rank: number; username: string; avatarId: string; value: number; verified?: boolean; you: boolean };
 export type Leaderboard = { rankBy: "best" | "wins"; entries: LeaderboardEntry[] };
 
 const LOCAL_KEY = "codeshare:games:stats";

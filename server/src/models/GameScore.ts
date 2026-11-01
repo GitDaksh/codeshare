@@ -7,6 +7,7 @@ export interface IGameScore extends Document {
   userId: string;
   game: string;
   best: number;
+  bestVerified: boolean;
   bestAt: Date | null;
   plays: number;
   wins: number;
@@ -17,6 +18,9 @@ const gameScoreSchema = new Schema<IGameScore>({
   userId: { type: String, required: true },
   game: { type: String, required: true },
   best: { type: Number, default: 0 },
+  // Whether the best came from a game with friends, where every player's
+  // browser agreed on the result. Solo bests are reported by one browser.
+  bestVerified: { type: Boolean, default: false },
   bestAt: { type: Date, default: null },
   plays: { type: Number, default: 0 },
   wins: { type: Number, default: 0 },
